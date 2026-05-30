@@ -1,0 +1,30 @@
+# LangChain packages (pinned to 0.3.x — langgraph forces 1.x which breaks retrievers)
+langchain>=0.3,<1
+langchain-community>=0.3,<1
+langchain-core>=0.3,<1
+langchain-text-splitters>=0.3,<1
+langsmith
+
+# LLM providers
+langchain-openai
+langchain-anthropic
+langchain-google-genai
+huggingface_hub
+google-generativeai
+google-genai
+anthropic
+openai
+groq
+
+# Other dependencies
+python-dotenv
+notebook
+pypdf
+faiss-cpu
+rank_bm25
+pandas
+sentence-transformers
+
+bs4
+lxml
+playwright
