@@ -28,3 +28,10 @@ sentence-transformers
 bs4
 lxml
 playwright
+
+# Ticker news / candle CLI tools
+requests
+matplotlib
+mplfinance
+pillow
+tqdm
