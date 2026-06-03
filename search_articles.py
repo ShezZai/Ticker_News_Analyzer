@@ -27,12 +27,25 @@ CLI:
     python search_articles.py --like-url "https://..." \
         --statement "nvidia faces chinese ai competition" --months-before 3
 
+    # a JSON file of scoped statements (each run as its own section):
+    python search_articles.py --like-url "https://..." \
+        --statement statements.json --months-before 3
+
+    # statements.json — an array of {statement, scope, value} objects:
+    #   [
+    #     {"statement": "...", "scope": "ticker",  "value": "NVDA"},  # only NVDA-tagged
+    #     {"statement": "...", "scope": "sector"},                     # whole DB
+    #     {"statement": "...", "scope": "segment", "value": "Memory & Storage"}  # by AI segment
+    #   ]
+
 Connection comes from NEWS_DB_DSN / DATABASE_URL, defaulting to ``dbname=news``.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -106,6 +119,7 @@ def _run_search(
     min_similarity: Optional[float],
     exclude_id: Optional[int],
     until_exclusive: bool = False,
+    segment: Optional[str] = None,
 ) -> List[SearchHit]:
     """Execute the ANN query and map rows to SearchHit objects."""
     clauses = ["embedding IS NOT NULL"]
@@ -113,6 +127,11 @@ def _run_search(
     if tickers:
         clauses.append("tickers && %s")
         params.append([t.strip().upper() for t in tickers])
+    if segment:
+        # an article belongs to a segment if it's the primary or a secondary one
+        clauses.append("(primary_segment = %s OR more_segments @> %s)")
+        params.append(segment)
+        params.append([segment])
     if domain:
         clauses.append("source_domain = %s")
         params.append(domain)
@@ -170,6 +189,7 @@ def search(
     until: Optional[str] = None,
     min_similarity: Optional[float] = None,
     until_exclusive: bool = False,
+    segment: Optional[str] = None,
     conn=None,
 ) -> List[SearchHit]:
     """Return the top-`k` articles most similar to `query`.
@@ -183,6 +203,7 @@ def search(
         min_similarity:  drop hits below this cosine similarity.
         until_exclusive: treat `until` as a strict (<) bound on the exact
                          timestamp instead of an inclusive whole-day bound.
+        segment:         keep only articles in this AI segment (primary or more).
         conn:            reuse an existing connection (one is opened otherwise).
     """
     query_vec = embed_query(query)
@@ -192,6 +213,7 @@ def search(
         return _run_search(
             conn, query_vec, k, tickers, domain, since, until,
             min_similarity, exclude_id=None, until_exclusive=until_exclusive,
+            segment=segment,
         )
     finally:
         if own_conn:
@@ -262,6 +284,7 @@ def similar_to(
     until: Optional[str] = None,
     min_similarity: Optional[float] = None,
     until_exclusive: bool = False,
+    segment: Optional[str] = None,
     conn=None,
 ) -> List[SearchHit]:
     """Return the top-`k` articles most similar to an existing article's vector."""
@@ -272,6 +295,7 @@ def similar_to(
         return _run_search(
             conn, embedding, k, tickers, domain, since, until,
             min_similarity, exclude_id=found_id, until_exclusive=until_exclusive,
+            segment=segment,
         )
     finally:
         if own_conn:
@@ -287,6 +311,7 @@ def similar_to_url(
     until: Optional[str] = None,
     min_similarity: Optional[float] = None,
     until_exclusive: bool = False,
+    segment: Optional[str] = None,
     conn=None,
 ) -> List[SearchHit]:
     """Like `similar_to`, but locate the seed article by its URL.
@@ -300,6 +325,7 @@ def similar_to_url(
         return _run_search(
             conn, embedding, k, tickers, domain, since, until,
             min_similarity, exclude_id=found_id, until_exclusive=until_exclusive,
+            segment=segment,
         )
     finally:
         if own_conn:
@@ -336,6 +362,7 @@ def search_with_seed_dates(
     tickers: Optional[Sequence[str]] = None,
     domain: Optional[str] = None,
     min_similarity: Optional[float] = None,
+    segment: Optional[str] = None,
     conn=None,
 ) -> List[SearchHit]:
     """Search articles by similarity to `statement`, dated relative to an article.
@@ -357,11 +384,53 @@ def search_with_seed_dates(
         return search(
             statement, k=k, tickers=tickers, domain=domain,
             since=since, until=until, min_similarity=min_similarity,
-            until_exclusive=exclusive, conn=conn,
+            until_exclusive=exclusive, segment=segment, conn=conn,
         )
     finally:
         if own_conn:
             conn.close()
+
+
+def scope_to_filter(scope: str, value: Optional[str]) -> dict:
+    """Translate a statement item's scope into search() filter kwargs.
+
+      - "sector":  {} (no filter — the entire corpus)
+      - "ticker":  {"tickers": [value]} (articles labelled with that ticker)
+      - "segment": {"segment": value} (articles whose primary or secondary AI
+                   segment is `value`, via the primary_segment/more_segments cols)
+    """
+    kind = (scope or "sector").strip().lower()
+    if kind == "sector":
+        return {}
+    if kind == "ticker":
+        if not value:
+            raise ValueError("ticker scope requires a 'value'")
+        return {"tickers": [value]}
+    if kind == "segment":
+        if not value:
+            raise ValueError("segment scope requires a 'value'")
+        return {"segment": value}
+    raise ValueError(f"unknown scope {kind!r} (expected ticker/segment/sector)")
+
+
+def load_statements(path: str) -> List[dict]:
+    """Load a JSON file: an array of {statement, scope, value?} objects."""
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, list):
+        raise ValueError("statement file must be a JSON array of objects")
+    items: List[dict] = []
+    for i, obj in enumerate(data):
+        if not isinstance(obj, dict) or not obj.get("statement"):
+            raise ValueError(f"item {i}: each entry needs a non-empty 'statement'")
+        items.append(
+            {
+                "statement": obj["statement"],
+                "scope": obj.get("scope", "sector"),
+                "value": obj.get("value"),
+            }
+        )
+    return items
 
 
 def main() -> None:
@@ -378,14 +447,20 @@ def main() -> None:
         help="find articles similar to the article at this URL",
     )
     parser.add_argument(
-        "--statement", default=None, metavar="TEXT",
-        help="search by similarity to this statement text, but anchor the date "
-             "window on the --like/--like-url article (its date + --months-before)",
+        "--statement", default=None, metavar="TEXT|FILE",
+        help="search by similarity to a statement, dated relative to the "
+             "--like/--like-url article. Either a literal string, or a path to a "
+             "JSON file: an array of {statement, scope(ticker|segment|sector), "
+             "value} objects (ticker->that ticker, sector->whole DB, segment->stub)",
     )
     parser.add_argument("-k", "--k", type=int, default=10, help="number of results")
     parser.add_argument(
         "--ticker", action="append", dest="tickers", metavar="SYM",
         help="filter by ticker (repeatable, e.g. --ticker NVDA --ticker AMD)",
+    )
+    parser.add_argument(
+        "--segment", default=None, metavar="NAME",
+        help="filter by AI segment (matches primary_segment or more_segments)",
     )
     parser.add_argument("--domain", help="filter by source_domain")
     parser.add_argument(
@@ -438,23 +513,6 @@ def main() -> None:
         span = f"{args.months_before} months before" if args.months_before else "up to"
         print(f"[window] {since or '(open)'} .. {until} ({span} seed, {edge})")
 
-    common = dict(
-        k=args.k, tickers=args.tickers, domain=args.domain,
-        since=since, until=until, min_similarity=args.min_similarity,
-        until_exclusive=args.exclusive,
-    )
-    try:
-        if args.statement:
-            hits = search(args.statement, **common)
-        elif args.like is not None:
-            hits = similar_to(args.like, **common)
-        elif args.like_url:
-            hits = similar_to_url(args.like_url, **common)
-        else:
-            hits = search(args.query, **common)
-    except ValueError as exc:
-        parser.error(str(exc))
-
     def fmt_meta(h: SearchHit) -> str:
         when = (
             h.published_utc.strftime("%Y-%m-%d %H:%M:%S%z")
@@ -462,6 +520,23 @@ def main() -> None:
         )
         tickers = ",".join(h.tickers) if h.tickers else "-"
         return f"{when} | [{tickers}]"
+
+    def print_hits(hits: List[SearchHit], subject: str) -> None:
+        if not hits:
+            print(f"No matching articles for {subject}.")
+            return
+        print(f"Found {len(hits)} article(s) similar to {subject}:\n")
+        width = len(str(len(hits)))
+        for rank, h in enumerate(hits, 1):
+            # headline first, prominently, then metadata + link beneath it
+            print(f"{rank:>{width}}. {h.title or '(no title)'}")
+            print(f"{'':>{width}}  {h.similarity:.3f} | {fmt_meta(h)}")
+            print(f"{'':>{width}}  {h.url}\n")
+
+    date_common = dict(
+        k=args.k, domain=args.domain, since=since, until=until,
+        min_similarity=args.min_similarity, until_exclusive=args.exclusive,
+    )
 
     # When a seed article is involved, show it first for context.
     if has_seed:
@@ -472,24 +547,52 @@ def main() -> None:
         print(f"  {fmt_meta(seed)}")
         print(f"  {seed.url}")
 
+    # --- statement mode: a literal string or a JSON file of scoped statements ---
     if args.statement:
-        subject = f"statement {args.statement!r}"
-    elif has_seed:
-        subject = "it"
-    else:
-        subject = repr(args.query)
+        if os.path.isfile(args.statement):
+            try:
+                items = load_statements(args.statement)
+            except (ValueError, json.JSONDecodeError) as exc:
+                parser.error(f"statement file: {exc}")
+        else:
+            # a bare statement string uses any --ticker/--segment filter as scope
+            items = [{"statement": args.statement, "_literal": True}]
 
-    if not hits:
-        print(f"\nNo matching articles for {subject}.")
+        for idx, item in enumerate(items, 1):
+            if item.get("_literal"):      # literal-string case
+                scope_filter = {"tickers": args.tickers, "segment": args.segment}
+                scope_label = "statement"
+            else:
+                try:
+                    scope_filter = scope_to_filter(item["scope"], item.get("value"))
+                except ValueError as exc:
+                    parser.error(f"statement file item {idx}: {exc}")
+                kind = (item["scope"] or "sector").lower()
+                scope_label = kind if kind == "sector" else f"{kind} {item['value']}"
+
+            print(f"\n=== [{idx}] {scope_label} ===")
+            print(f"statement: {item['statement']!r}")
+            try:
+                hits = search(item["statement"], **scope_filter, **date_common)
+            except ValueError as exc:
+                parser.error(str(exc))
+            print_hits(hits, repr(item["statement"]))
         return
 
-    print(f"\nFound {len(hits)} article(s) similar to {subject}:\n")
-    width = len(str(len(hits)))
-    for rank, h in enumerate(hits, 1):
-        # headline first, prominently, then metadata + link beneath it
-        print(f"{rank:>{width}}. {h.title or '(no title)'}")
-        print(f"{'':>{width}}  {h.similarity:.3f} | {fmt_meta(h)}")
-        print(f"{'':>{width}}  {h.url}\n")
+    # --- plain similarity / text-query mode ---
+    scope = dict(tickers=args.tickers, segment=args.segment)
+    try:
+        if args.like is not None:
+            hits = similar_to(args.like, **scope, **date_common)
+        elif args.like_url:
+            hits = similar_to_url(args.like_url, **scope, **date_common)
+        else:
+            hits = search(args.query, **scope, **date_common)
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    print()
+    print_hits(hits, "it" if has_seed else repr(args.query))
 
 
 if __name__ == "__main__":
