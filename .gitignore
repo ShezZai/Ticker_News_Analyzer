@@ -7,3 +7,8 @@ venv/
 *.csv
 *.jpg
 *.dump
+
+# Scraper tooling
+.pytest_cache/
+*.egg-info/
+scraped_dump/
