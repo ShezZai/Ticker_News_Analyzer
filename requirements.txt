@@ -35,3 +35,7 @@ matplotlib
 mplfinance
 pillow
 tqdm
+
+# Article embedding into Postgres/pgvector (embed_articles.py)
+psycopg[binary]>=3.1
+pgvector
