@@ -1,0 +1,21 @@
+[
+  {
+    "statement": "DeepSeek's low-cost AI model triggers a sell-off in Nvidia and the broader AI trade",
+    "scope": "ticker",
+    "value": "NVDA"
+  },
+  {
+    "statement": "Cheaper, more efficient AI models raise doubts about massive AI infrastructure spending",
+    "scope": "sector"
+  },
+  {
+    "statement": "More efficient model training could reduce demand for high-end AI GPUs and accelerators",
+    "scope": "segment",
+    "value": "AI Compute Silicon & Semiconductor IP"
+  },
+  {
+    "statement": "Open-source and lower-cost foundation models disrupt the AI software landscape",
+    "scope": "segment",
+    "value": "AI Software Infrastructure & Foundation Models"
+  }
+]
