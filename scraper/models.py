@@ -17,6 +17,7 @@ class RawPage:
     status: int
     html: str
     method: str  # 'http' | 'playwright'
+    retry_after: float | None = None  # seconds, parsed from a Retry-After header
 
 
 @dataclass

@@ -25,6 +25,26 @@ def http_looks_bad(raw: RawPage | None) -> bool:
     return any(marker in head for marker in _CHALLENGE_MARKERS)
 
 
+def is_throttled(raw: RawPage | None) -> bool:
+    """True for rate-limit / overload responses (429, 503).
+
+    These are IP-level throttles: a browser fallback shares the same IP and
+    can't help, so the pipeline treats them differently from other bad pages.
+    """
+    return raw is not None and raw.status in (429, 503)
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """Parse a Retry-After header. Only the delta-seconds form is honored;
+    the HTTP-date form returns None (we fall back to our own backoff)."""
+    if not value:
+        return None
+    try:
+        return float(int(value.strip()))
+    except (TypeError, ValueError):
+        return None
+
+
 class Fetcher:
     """HTTP-first fetcher with a lazily-launched, reused Playwright browser."""
 
@@ -46,7 +66,8 @@ class Fetcher:
         except httpx.HTTPError:
             return None
         return RawPage(url=url, final_url=str(resp.url), status=resp.status_code,
-                       html=resp.text, method="http")
+                       html=resp.text, method="http",
+                       retry_after=_parse_retry_after(resp.headers.get("retry-after")))
 
     async def _ensure_browser(self) -> None:
         # Lock so concurrent workers don't double-launch (which would leak a

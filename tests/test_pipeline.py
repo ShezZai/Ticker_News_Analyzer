@@ -104,7 +104,9 @@ def test_process_job_records_error_when_all_fail(monkeypatch):
     store = FakeStore()
     limiter = DomainLimiter(per_domain=2, delay=0.0)
 
-    res = asyncio.run(process_job(job, fetcher, store, Settings(respect_robots=False), limiter, robots=None))
+    # Fast backoff so the retry loop doesn't sleep through real seconds.
+    settings = Settings(respect_robots=False, http_max_retries=2, http_backoff_base=0.0)
+    res = asyncio.run(process_job(job, fetcher, store, settings, limiter, robots=None))
     assert res == "error"
     assert store.saved[0]["status"] == "error"
     assert store.saved[0]["error"] == "fetch_failed"

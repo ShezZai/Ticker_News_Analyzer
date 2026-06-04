@@ -1,7 +1,10 @@
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
 import psycopg
+
+from ..models import ArticleJob
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
@@ -48,6 +51,17 @@ class Store:
         for statement in (s.strip() for s in sql.split(";")):
             if statement:
                 self.conn.execute(statement)
+
+    def iter_failed_jobs(self) -> Iterator[ArticleJob]:
+        """Yield jobs for rows previously parked as a retryable rate-limit, so a
+        re-run can drain the backlog without re-reading the whole CSV."""
+        cur = self.conn.execute(
+            "SELECT url, tickers, published_utc, publisher FROM articles "
+            "WHERE status = 'error' AND error = 'rate_limited'"
+        )
+        for url, tickers, published_utc, publisher in cur:
+            yield ArticleJob(url=url, tickers=list(tickers or []),
+                             published_utc=published_utc, publisher=publisher)
 
     def exists_ok(self, url: str) -> bool:
         row = self.conn.execute(
