@@ -1,4 +1,4 @@
-"""Semantic search over the embedded articles (BAAI/bge-m3 + pgvector).
+"""Semantic search over the embedded articles (text-embedding-3-small + pgvector).
 
 Embeds a text query with the same model used for indexing and returns the most
 similar articles by cosine similarity, using the HNSW index on
@@ -47,15 +47,50 @@ import argparse
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Sequence
 
-# Reuse the model name, embedding dim and connection helper from the embedder so
-# query vectors are produced exactly like the stored ones.
-from embed_articles import EMBED_DIM, MODEL_NAME, get_conn
+# embed_articles lives in the sibling scripts/embedding dir; put it on the path
+# so this tool runs directly (without needing PYTHONPATH=scripts/embedding set).
+sys.path.insert(
+    0,
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "embedding"),
+)
 
-_model = None  # lazily-loaded SentenceTransformer singleton
+# Reuse the model name, embedding dim, query embedder and connection helper from
+# the embedder so query vectors are produced exactly like the stored ones.
+from embed_articles import EMBED_DIM, MODEL_NAME, embed_query, get_conn  # noqa: E402
+
+# HNSW ANN tuning (pgvector >= 0.8.0). The index returns its ~ef_search nearest
+# rows *before* the WHERE filters apply, so a selective filter (a date window, a
+# ticker) used to post-filter the candidate set down to nothing. We now enable
+# `hnsw.iterative_scan`, which keeps scanning the index until it has enough rows
+# satisfying the filter, so a small ef_search is fine. Override with --ef-search
+# or the HNSW_EF_SEARCH env var.
+EF_SEARCH = int(os.getenv("HNSW_EF_SEARCH", "40"))
+# "relaxed_order" is faster and may return rows slightly out of distance order;
+# we re-sort hits by similarity in Python so the displayed ranking is exact.
+ITERATIVE_SCAN = os.getenv("HNSW_ITERATIVE_SCAN", "relaxed_order")
+# Default cosine-similarity floor: drop weak matches below this score.
+DEFAULT_MIN_SIMILARITY = 0.7
+
+
+def _apply_ann_gucs(cur) -> None:
+    """Set the per-query HNSW GUCs (ef_search + iterative scan) on a cursor.
+
+    Tolerates an older pgvector where `hnsw.iterative_scan` doesn't exist by
+    rolling back the failed SET and continuing with just ef_search.
+    """
+    cur.execute(f"SET hnsw.ef_search = {int(EF_SEARCH)};")
+    if ITERATIVE_SCAN and ITERATIVE_SCAN.lower() != "off":
+        try:
+            cur.execute(f"SET hnsw.iterative_scan = {ITERATIVE_SCAN};")
+        except Exception:
+            cur.connection.rollback()
+            cur.execute(f"SET hnsw.ef_search = {int(EF_SEARCH)};")
+
 _DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -80,32 +115,6 @@ class SearchHit:
     def __repr__(self) -> str:  # concise, useful in a REPL
         title = (self.title or "")[:70]
         return f"<{self.similarity:.3f} #{self.id} {title!r}>"
-
-
-def _get_model():
-    """Load BAAI/bge-m3 once (fp16 on GPU) for encoding queries."""
-    global _model
-    if _model is None:
-        import torch
-        from sentence_transformers import SentenceTransformer
-
-        use_cuda = torch.cuda.is_available()
-        model_kwargs = {"torch_dtype": torch.float16} if use_cuda else None
-        _model = SentenceTransformer(
-            MODEL_NAME,
-            device="cuda" if use_cuda else "cpu",
-            model_kwargs=model_kwargs,
-        )
-    return _model
-
-
-def embed_query(text: str):
-    """Return the L2-normalized query embedding (numpy array of EMBED_DIM)."""
-    if not text or not text.strip():
-        raise ValueError("query text is empty")
-    return _get_model().encode(
-        text.strip(), normalize_embeddings=True, show_progress_bar=False
-    )
 
 
 def _run_search(
@@ -165,6 +174,7 @@ def _run_search(
     args = [query_vec, *params, query_vec, k]
 
     with conn.cursor() as cur:
+        _apply_ann_gucs(cur)  # ef_search + iterative scan so filters still match
         cur.execute(sql, args)
         rows = cur.fetchall()
 
@@ -175,6 +185,8 @@ def _run_search(
         )
         for r in rows
     ]
+    # relaxed_order may return rows slightly out of order; sort for an exact rank
+    hits.sort(key=lambda h: h.similarity, reverse=True)
     if min_similarity is not None:
         hits = [h for h in hits if h.similarity >= min_similarity]
     return hits
@@ -434,8 +446,9 @@ def load_statements(path: str) -> List[dict]:
 
 
 def main() -> None:
+    global EF_SEARCH
     parser = argparse.ArgumentParser(
-        description="Semantic search over embedded articles (bge-m3 + pgvector)."
+        description="Semantic search over embedded articles (text-embedding-3-small + pgvector)."
     )
     parser.add_argument("query", nargs="?", help="free-text search query")
     parser.add_argument(
@@ -477,8 +490,9 @@ def main() -> None:
              "article's own publish date (sets --after/--before automatically)",
     )
     parser.add_argument(
-        "--min-similarity", type=float, default=None,
-        help="drop results below this cosine similarity",
+        "--min-similarity", type=float, default=DEFAULT_MIN_SIMILARITY,
+        help=f"drop results below this cosine similarity (default "
+             f"{DEFAULT_MIN_SIMILARITY}; pass 0 to show all)",
     )
     parser.add_argument(
         "--exclusive", action="store_true",
@@ -486,7 +500,13 @@ def main() -> None:
              "--months-before this anchors the window on the seed's exact "
              "publish time (excludes same-day articles published after it)",
     )
+    parser.add_argument(
+        "--ef-search", type=int, default=EF_SEARCH, metavar="N",
+        help=f"HNSW ANN candidate breadth (default {EF_SEARCH}); raise it if a "
+             "selective filter returns too few/no results",
+    )
     args = parser.parse_args()
+    EF_SEARCH = args.ef_search  # apply the requested ANN breadth for this run
 
     has_seed = args.like is not None or args.like_url
     if not has_seed and not args.query and not args.statement:

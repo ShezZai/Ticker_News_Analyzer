@@ -40,6 +40,12 @@ tqdm
 psycopg[binary]>=3.2
 pgvector
 
+# Insight extraction with Gemini 2.5 Flash-Lite (extract_insights.py) +
+# OpenAI text-embedding-3-small embeddings (extract_insights.py, embed_articles.py)
+google-genai
+openai
+numpy
+
 # News scraper (scraper/ package, run_scrape.py)
 httpx>=0.27
 trafilatura>=1.12
