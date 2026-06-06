@@ -68,6 +68,12 @@ load_dotenv()
 DB_DSN = os.getenv("NEWS_DB_DSN") or os.getenv("DATABASE_URL") or "dbname=news"
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
+# flash-lite + response_schema can hang server-side (504 DEADLINE_EXCEEDED) on
+# some articles; fall back to the sturdier non-lite model for those.
+GEMINI_FALLBACK_MODEL = "gemini-2.5-flash"
+# google-genai has NO default request timeout — without this a single stuck call
+# blocks the whole run indefinitely. Milliseconds.
+GEMINI_TIMEOUT_MS = 120_000
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_DIM = 1536
 
@@ -254,39 +260,60 @@ def load_gemini():
                 "required": ["boxes"],
             },
             thinking_config=types.ThinkingConfig(thinking_budget=0),
+            # bound every request so a hung call can't freeze the run
+            http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS),
         )
     return _gemini_client, _gemini_config
 
 
+def _is_retryable_server_error(exc: Exception) -> bool:
+    """True for server deadline / unavailable / timeout errors worth a model swap."""
+    s = str(exc).lower()
+    return any(k in s for k in (
+        "deadline_exceeded", "504", "503", "unavailable", "timeout", "timed out",
+    ))
+
+
 def generate_boxes(
     client, config, article_text: str, retries: int = 5
-) -> Tuple[List[str], int, int]:
+) -> Tuple[List[str], int, int, str]:
     """Run the analyst prompt over one article.
 
-    Returns (boxes, input_tokens, output_tokens). Retries with exponential
-    backoff both on transient API errors (rate limits, 5xx) AND when the model
-    fails to answer usably — an empty/blocked response or output that doesn't
-    contain a valid ``{"boxes": [...]}`` object. A *valid* empty list (the
+    Returns (boxes, input_tokens, output_tokens, model_used). Retries with
+    exponential backoff both on transient API errors (rate limits, 5xx) AND when
+    the model fails to answer usably — an empty/blocked response or output that
+    doesn't contain a valid ``{"boxes": [...]}`` object. A *valid* empty list (the
     correct result for boilerplate-only articles) is returned without retry.
+
+    On a server deadline/timeout (flash-lite + response_schema can 504 on certain
+    inputs), or after a repeated parse failure, it switches to GEMINI_FALLBACK_MODEL
+    for the remaining attempts. ``model_used`` reflects which model actually
+    answered, so callers can record accurate provenance.
     """
     import time
 
     prompt = PROMPT_TEMPLATE.format(article=article_text[:MAX_ARTICLE_CHARS])
     last_reason = "no response"
+    cur_model = GEMINI_MODEL
     for attempt in range(retries):
         try:
             resp = client.models.generate_content(
-                model=GEMINI_MODEL, contents=prompt, config=config
+                model=cur_model, contents=prompt, config=config
             )
             um = getattr(resp, "usage_metadata", None)
             in_tok = getattr(um, "prompt_token_count", 0) or 0
             out_tok = getattr(um, "candidates_token_count", 0) or 0
             boxes = _extract_boxes(resp.text or "")
             if boxes is not None:  # valid answer (possibly an intentional [])
-                return boxes, in_tok, out_tok
+                return boxes, in_tok, out_tok, cur_model
             last_reason = "no parseable boxes in response"
-        except Exception as exc:  # network / rate-limit / 5xx
+            # an unparseable response on the primary model: try the fallback next
+            if cur_model != GEMINI_FALLBACK_MODEL and attempt >= 1:
+                cur_model = GEMINI_FALLBACK_MODEL
+        except Exception as exc:  # network / rate-limit / 5xx / timeout
             last_reason = repr(exc)
+            if cur_model != GEMINI_FALLBACK_MODEL and _is_retryable_server_error(exc):
+                cur_model = GEMINI_FALLBACK_MODEL  # swap models for remaining tries
         if attempt < retries - 1:
             time.sleep(2 ** attempt)  # 1s, 2s, 4s, 8s, ...
     raise RuntimeError(f"model did not answer after {retries} tries: {last_reason}")
@@ -516,6 +543,7 @@ def annotate_box(stored_box: str, annotate: Optional[Callable[[str], str]]) -> s
 
 def _store_article_boxes(
     conn, aid, url, title, content, boxes, reprocess, quote_threshold, annotate=None,
+    model=GEMINI_MODEL,
 ) -> Tuple[int, int]:
     """Verbatimize quotes and write one article's boxes. Returns (n_boxes, dropped)."""
     payload = []
@@ -528,7 +556,7 @@ def _store_article_boxes(
         stored_box = annotate_box(with_headline(box_text, title), annotate)
         payload.append(
             (aid, url, title, idx, topic, insight, quotes or None,
-             stored_box, GEMINI_MODEL)
+             stored_box, model)
         )
 
     with conn.cursor() as cur:
@@ -592,7 +620,7 @@ def extract_all(
             for fut in pbar:
                 aid, url, title, content = futures[fut]
                 try:
-                    boxes, a_in, a_out = fut.result()
+                    boxes, a_in, a_out, model_used = fut.result()
                 except Exception as exc:  # exhausted retries on a single article
                     n_failed += 1
                     print(f"  article {aid}: {exc}")
@@ -602,7 +630,7 @@ def extract_all(
                 if boxes:
                     n_boxes, dropped = _store_article_boxes(
                         conn, aid, url, title, content, boxes, do_reprocess,
-                        quote_threshold, annotate=annotate,
+                        quote_threshold, annotate=annotate, model=model_used,
                     )
                     total_boxes += n_boxes
                     total_dropped += dropped
