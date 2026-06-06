@@ -240,9 +240,19 @@ def load_gemini():
         print(f"Using {GEMINI_MODEL} via google-genai ...")
         _gemini_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
         # Force clean JSON and disable "thinking" for speed/cost determinism.
+        # A response_schema constrains generation to {"boxes": [<string>, ...]}
+        # so the SDK returns guaranteed-valid JSON — without it, flash-lite emits
+        # degenerate {"<box text>"} objects with unescaped quotes that won't parse.
         _gemini_config = types.GenerateContentConfig(
             temperature=0.0,
             response_mime_type="application/json",
+            response_schema={
+                "type": "OBJECT",
+                "properties": {
+                    "boxes": {"type": "ARRAY", "items": {"type": "STRING"}}
+                },
+                "required": ["boxes"],
+            },
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         )
     return _gemini_client, _gemini_config
@@ -299,6 +309,13 @@ def _extract_boxes(completion: str) -> Optional[List[str]]:
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.DOTALL).strip()
 
     obj = _first_json_object(text)
+    if obj is None or not isinstance(obj.get("boxes"), list):
+        # Fallback for gemini JSON mode emitting each box as a bare single-string
+        # object with no value -- {"TOPIC: ...\nINSIGHT: ...\nQUOTES:\n..."} --
+        # which is invalid JSON. Collapse those wrappers back to the string and
+        # re-parse once before giving up.
+        repaired = re.sub(r'\{\s*("(?:[^"\\]|\\.)*")\s*\}', r"\1", text)
+        obj = _first_json_object(repaired) if repaired != text else obj
     if obj is None or not isinstance(obj.get("boxes"), list):
         return None
 
