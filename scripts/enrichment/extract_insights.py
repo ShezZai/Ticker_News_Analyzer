@@ -25,10 +25,13 @@ Each box's text is embedded with OpenAI text-embedding-3-small into a
 insights and full articles are mutually searchable. An HNSW cosine index is
 built at the end.
 
-Re-runnable: by default only articles with no insight rows yet are processed
-(``--only-missing`` is the default). Use ``--reprocess`` to delete and rebuild an
-article's insights. Embeddings fill any rows whose embedding is still NULL, so
-the embed pass is independently resumable.
+Re-runnable: by default only articles not yet processed are handled. An article
+is "processed" once it has insight rows OR it has been stamped with
+``articles.insights_extracted_at`` — the latter covers articles the model judged
+to be pure boilerplate (zero boxes), so they are not re-sent to the LLM on every
+run. Use ``--reprocess`` to delete and rebuild an article's insights. Embeddings
+fill any rows whose embedding is still NULL, so the embed pass is independently
+resumable.
 
 Usage:
     python extract_insights.py --limit 5        # smoke test on a few articles
@@ -190,6 +193,14 @@ def ensure_schema(conn: psycopg.Connection) -> None:
             "CREATE INDEX IF NOT EXISTS article_insights_article_id_idx "
             "ON public.article_insights (article_id);"
         )
+        # Marker stamped once an article has been through extraction, INCLUDING
+        # articles that yielded zero boxes (pure boilerplate). Absence of insight
+        # rows alone can't tell "processed, empty" from "never processed", so
+        # without this such articles would be re-sent to the LLM on every run.
+        cur.execute(
+            "ALTER TABLE public.articles "
+            "ADD COLUMN IF NOT EXISTS insights_extracted_at timestamptz"
+        )
     conn.commit()
 
 
@@ -202,9 +213,11 @@ def articles_to_process(
 ) -> List[Tuple[int, str, str, str]]:
     """Return (id, url, title, content) for articles needing insight extraction.
 
-    By default skips articles that already have rows in article_insights;
-    ``reprocess`` includes them (their old rows are deleted before re-inserting).
-    ``ids`` restricts to specific article ids (implies reprocess for those rows).
+    By default skips articles already processed -- those with rows in
+    article_insights OR stamped with ``insights_extracted_at`` (the boilerplate
+    "zero boxes" case). ``reprocess`` includes them (their old rows are deleted
+    before re-inserting). ``ids`` restricts to specific article ids (implies
+    reprocess for those rows).
     """
     clauses = ["content IS NOT NULL", "char_length(content) > 0"]
     params: List[object] = []
@@ -213,7 +226,8 @@ def articles_to_process(
         params.append(list(ids))
     elif not reprocess:
         clauses.append(
-            "NOT EXISTS (SELECT 1 FROM public.article_insights ai "
+            "a.insights_extracted_at IS NULL "
+            "AND NOT EXISTS (SELECT 1 FROM public.article_insights ai "
             "WHERE ai.article_id = a.id)"
         )
     where = " AND ".join(clauses)
@@ -575,6 +589,10 @@ def _store_article_boxes(
             "  model = EXCLUDED.model, embedding = NULL",
             payload,
         )
+        cur.execute(
+            "UPDATE public.articles SET insights_extracted_at = now() WHERE id = %s",
+            (aid,),
+        )
     conn.commit()
     return len(payload), dropped_total
 
@@ -636,14 +654,20 @@ def extract_all(
                     total_dropped += dropped
                 else:
                     n_empty += 1  # valid empty result — nothing worth storing
-                    if do_reprocess:
-                        # the article is now judged boilerplate; clear any stale rows
-                        with conn.cursor() as cur:
+                    with conn.cursor() as cur:
+                        if do_reprocess:
+                            # now judged boilerplate; clear any stale rows
                             cur.execute(
                                 "DELETE FROM public.article_insights WHERE article_id = %s",
                                 (aid,),
                             )
-                        conn.commit()
+                        # stamp it processed so it isn't re-sent to the LLM next run
+                        cur.execute(
+                            "UPDATE public.articles SET insights_extracted_at = now() "
+                            "WHERE id = %s",
+                            (aid,),
+                        )
+                    conn.commit()
 
                 if tqdm:
                     cost = in_tok * GEMINI_INPUT_COST + out_tok * GEMINI_OUTPUT_COST

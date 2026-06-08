@@ -17,12 +17,13 @@ market-universe CSV. It derives four columns on ``public.articles``:
 ticker's symbol (in cashtag/parenthesis/exchange context, plus bare uppercase
 for unambiguous symbols) and its company name.
 
-Re-runnable: by default every row is recomputed; pass --only-missing to fill
-just the rows that don't have a primary_ticker yet.
+Re-runnable: by default only rows that don't have a primary_ticker yet are
+filled, so the job is resumable and a re-run won't re-tag already-tagged rows.
+Pass --not-only-missing to recompute every row (e.g. after a ticker_data change).
 
 Usage:
-    python tag_segments.py
-    python tag_segments.py --only-missing
+    python tag_segments.py                  # tag only un-tagged rows (default)
+    python tag_segments.py --not-only-missing  # recompute every row
     python tag_segments.py --no-index
 
 Connection comes from NEWS_DB_DSN / DATABASE_URL, defaulting to ``dbname=news``.
@@ -331,7 +332,7 @@ def create_indexes(conn: psycopg.Connection) -> None:
 
 
 def tag_all(
-    only_missing: bool = False,
+    only_missing: bool = True,
     build_index: bool = True,
 ) -> int:
     """Populate the segment columns for every (or only untagged) article."""
@@ -410,8 +411,8 @@ def main() -> None:
         description="Tag articles with primary/secondary tickers and AI segments."
     )
     parser.add_argument(
-        "--only-missing", action="store_true",
-        help="only tag rows that don't have a primary_ticker yet",
+        "--not-only-missing", dest="only_missing", action="store_false",
+        help="recompute every row (default: only tag rows without a primary_ticker)",
     )
     parser.add_argument(
         "--no-index", dest="build_index", action="store_false",
