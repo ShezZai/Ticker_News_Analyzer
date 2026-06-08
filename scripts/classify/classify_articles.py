@@ -1,19 +1,29 @@
-"""Classify each article into a content category with Gemini 2.5 Flash-Lite.
+"""Classify each article into a content category with a two-pass Gemini pipeline.
 
-For every article this sends the title + content to gemini-2.5-flash-lite (via the
-google-genai API) and asks for exactly one of these categories:
+Every article is first sent to gemini-2.5-flash-lite (fast, cheap). If the result
+is "real news", the same prompt is re-run on gemini-2.5-flash to confirm: the
+stronger model either keeps the label or reclassifies it. All other categories are
+accepted as-is from the lite model without a second call.
+
+Categories:
 
     conference-PR        announcement of a company sponsoring/speaking/exhibiting
                          at a conference, trade show, or awards event; event promo
     marketing fluff      promotional / advertorial / vendor self-promotion, product
                          marketing, newsletter or subscription promos -- no
                          decision-useful financial substance
-    real news            substantive company/market news: earnings, guidance, deals,
-                         products, management/regulatory/legal events, analyst
-                         actions, concrete developments
-    recap/review         opinion / educational / retrospective pieces reviewing a
-                         stock or the market ("Should you buy X?", "3 stocks to buy"),
-                         with no new primary news
+    real news            first-hand reporting of a concrete company/market event:
+                         earnings results, guidance, deals (M&A/partnerships/
+                         contracts), product launches, management/regulatory/legal
+                         events, analyst actions -- the article IS the primary
+                         source breaking the event, not a commentary written after
+                         the fact explaining why a stock moved
+    recap/review         opinion, educational, or retrospective pieces -- including
+                         "why X stock rose/fell/plummeted/skyrocketed today/this
+                         week", performance explainers, "should you buy X?",
+                         "3 stocks to watch", market-wrap summaries -- any article
+                         whose main purpose is to explain or analyse a move that
+                         already happened, rather than to report a new event
     market speculation   forward-looking conjecture: predictions, "will X hit $Y",
                          speculative outlooks driven by guesswork
     legal solicitation   law-firm / class-action / securities-fraud solicitations,
@@ -65,18 +75,19 @@ load_dotenv()
 
 DB_DSN = os.getenv("NEWS_DB_DSN") or os.getenv("DATABASE_URL") or "dbname=news"
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"
-# flash-lite can occasionally hang server-side (504 DEADLINE_EXCEEDED); fall back
-# to the sturdier non-lite model for those calls.
-GEMINI_FALLBACK_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash-lite"   # initial pass (all articles)
+GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite"
+CONFIRM_MODEL = "gemini-2.5-flash"       # confirmation pass (real news only)
 # google-genai has NO default request timeout -- without this a single stuck call
 # blocks the whole run. Milliseconds.
 GEMINI_TIMEOUT_MS = 60_000
 
 # Approximate published $/token rates for the running cost readout (verify against
 # your billing console; rates change).
-GEMINI_INPUT_COST = 0.10 / 1e6   # gemini-2.5-flash-lite input
-GEMINI_OUTPUT_COST = 0.40 / 1e6  # gemini-2.5-flash-lite output
+GEMINI_INPUT_COST   = 0.10 / 1e6   # flash-lite input
+GEMINI_OUTPUT_COST  = 0.40 / 1e6   # flash-lite output
+CONFIRM_INPUT_COST  = 0.30 / 1e6   # flash input  (confirmation pass)
+CONFIRM_OUTPUT_COST = 2.50 / 1e6   # flash output (confirmation pass)
 
 # Classification needs only the lede, not the whole article; cap to keep it cheap.
 MAX_ARTICLE_CHARS = 6_000
@@ -104,13 +115,18 @@ Classify the article below into EXACTLY ONE of these categories:
 - "marketing fluff": promotional / advertorial / vendor self-promotion, product
   marketing copy, newsletter or subscription promos, "about the company" filler --
   no decision-useful financial substance.
-- "real news": substantive company or market news -- earnings, guidance, demand/
-  supply signals, deals (M&A, partnerships, contracts), product launches,
-  management/regulatory/legal events, analyst rating/price-target actions, concrete
-  developments that materially inform a view on a company or ticker.
-- "recap/review": opinion, educational, or retrospective pieces that review a stock
-  or the market ("Should you buy X?", "3 stocks to buy now", "why X stock rose")
-  without reporting new primary news.
+- "real news": first-hand reporting of a concrete, newly-occurring company or
+  market event -- earnings results, guidance updates, demand/supply signals, deals
+  (M&A, partnerships, contracts), product launches, management changes, regulatory
+  or legal events, analyst rating/price-target actions. The article must BE the
+  primary source breaking the event. Do NOT use this for articles that merely
+  explain or analyse a price move that has already happened.
+- "recap/review": opinion, educational, or retrospective content -- this includes
+  "why X stock rose/fell/plummeted/skyrocketed today/this week", performance
+  explainers written after the fact, "should you buy X?", "3 stocks to buy now",
+  "here's what [event] means for investors", market-wrap or listicle articles.
+  Any piece whose primary purpose is to explain a move that already happened, rather
+  than to report a new event, belongs here even if it contains factual detail.
 - "market speculation": forward-looking conjecture -- predictions, "will X hit $Y",
   speculative outlooks, scenario pieces driven mainly by guesswork.
 - "legal solicitation": law-firm / class-action / securities-fraud solicitations,
@@ -213,7 +229,7 @@ def load_gemini():
 
         if not os.getenv("GOOGLE_API_KEY"):
             raise SystemExit("GOOGLE_API_KEY is not set (put it in .env).")
-        print(f"Using {GEMINI_MODEL} via google-genai ...")
+        print(f"Using {GEMINI_MODEL} via google-genai …")
         _client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
         _config = types.GenerateContentConfig(
             temperature=0.0,
@@ -256,32 +272,38 @@ def _parse(text: str) -> Optional[Tuple[str, str]]:
 
 def classify_one(
     client, config, title: Optional[str], content: str, retries: int = 4
-) -> Tuple[str, str, int, int, str]:
-    """Classify one article.
+) -> Tuple[str, str, int, int, int, int]:
+    """Classify one article with a two-pass strategy.
 
-    Returns (category, reason, input_tokens, output_tokens, model_used). Retries
-    with exponential backoff on API errors / unparseable answers, and swaps to
-    GEMINI_FALLBACK_MODEL on a server deadline/timeout. Raises after exhausting
-    retries.
+    First pass: gemini-2.5-flash-lite (all articles).
+    Second pass: gemini-2.5-flash only when the first pass returns "real news",
+    to confirm or correct the label.
+
+    Returns (category, reason, lite_in_tok, lite_out_tok, confirm_in_tok,
+    confirm_out_tok). Confirm tokens are 0 when no confirmation was needed.
     """
     import time
 
     prompt = PROMPT_TEMPLATE.format(
         title=(title or "").strip()[:300], body=(content or "")[:MAX_ARTICLE_CHARS]
     )
+
+    # ── first pass: flash-lite ─────────────────────────────────────────────────
     last_reason = "no response"
     cur_model = GEMINI_MODEL
+    lite_in = lite_out = 0
     for attempt in range(retries):
         try:
             resp = client.models.generate_content(
                 model=cur_model, contents=prompt, config=config
             )
             um = getattr(resp, "usage_metadata", None)
-            in_tok = getattr(um, "prompt_token_count", 0) or 0
-            out_tok = getattr(um, "candidates_token_count", 0) or 0
+            lite_in  = getattr(um, "prompt_token_count",     0) or 0
+            lite_out = getattr(um, "candidates_token_count", 0) or 0
             parsed = _parse(resp.text or "")
             if parsed is not None:
-                return parsed[0], parsed[1], in_tok, out_tok, cur_model
+                category, reason = parsed
+                break
             last_reason = "no valid category in response"
             if cur_model != GEMINI_FALLBACK_MODEL and attempt >= 1:
                 cur_model = GEMINI_FALLBACK_MODEL
@@ -290,8 +312,37 @@ def classify_one(
             if cur_model != GEMINI_FALLBACK_MODEL and _is_retryable_server_error(exc):
                 cur_model = GEMINI_FALLBACK_MODEL
         if attempt < retries - 1:
-            time.sleep(2 ** attempt)  # 1s, 2s, 4s, ...
-    raise RuntimeError(f"model did not answer after {retries} tries: {last_reason}")
+            time.sleep(2 ** attempt)
+        else:
+            raise RuntimeError(f"model did not answer after {retries} tries: {last_reason}")
+
+    # ── second pass: flash confirmation (real news only) ──────────────────────
+    if category != "real news":
+        return category, reason, lite_in, lite_out, 0, 0
+
+    conf_in = conf_out = 0
+    for attempt in range(retries):
+        try:
+            resp = client.models.generate_content(
+                model=CONFIRM_MODEL, contents=prompt, config=config
+            )
+            um = getattr(resp, "usage_metadata", None)
+            conf_in  = getattr(um, "prompt_token_count",     0) or 0
+            conf_out = getattr(um, "candidates_token_count", 0) or 0
+            parsed = _parse(resp.text or "")
+            if parsed is not None:
+                return parsed[0], parsed[1], lite_in, lite_out, conf_in, conf_out
+            last_reason = "no valid category in confirmation response"
+        except Exception as exc:
+            last_reason = repr(exc)
+            if _is_retryable_server_error(exc) and attempt < retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+        if attempt < retries - 1:
+            time.sleep(2 ** attempt)
+
+    # confirmation failed: keep the flash-lite "real news" result
+    return category, reason, lite_in, lite_out, conf_in, conf_out
 
 
 # --------------------------------------------------------------------------- #
@@ -317,12 +368,13 @@ def classify_all(
             print("Nothing to classify.")
             return 0
 
-        print(f"Classifying {len(rows)} article(s) with {workers} worker(s) ...")
+        print(f"Classifying {len(rows)} article(s) with {workers} worker(s) "
+              f"(lite first-pass; flash confirmation for real news) …")
         client, config = load_gemini()
 
         done = 0
         n_failed = 0
-        in_tok = out_tok = 0
+        lite_in = lite_out = conf_in = conf_out = 0
         counts = {c: 0 for c in CATEGORIES}
         pending: List[tuple] = []  # (category, reason, id) awaiting UPDATE
 
@@ -349,31 +401,38 @@ def classify_all(
             for fut in pbar:
                 aid, _title = futures[fut]
                 try:
-                    category, reason, a_in, a_out, _model = fut.result()
+                    category, reason, a_lite_in, a_lite_out, a_conf_in, a_conf_out = fut.result()
                 except Exception as exc:  # exhausted retries on a single article
                     n_failed += 1
                     print(f"  article {aid}: {exc}")
                     continue
-                in_tok += a_in
-                out_tok += a_out
+                lite_in  += a_lite_in
+                lite_out += a_lite_out
+                conf_in  += a_conf_in
+                conf_out += a_conf_out
                 counts[category] += 1
                 done += 1
                 pending.append((category, reason or None, aid))
                 if len(pending) >= batch_size:
                     flush()
                 if tqdm:
-                    cost = in_tok * GEMINI_INPUT_COST + out_tok * GEMINI_OUTPUT_COST
+                    cost = (lite_in  * GEMINI_INPUT_COST  + lite_out  * GEMINI_OUTPUT_COST
+                          + conf_in  * CONFIRM_INPUT_COST + conf_out  * CONFIRM_OUTPUT_COST)
                     pbar.set_postfix_str(
-                        f"${cost:.2f} | {(in_tok + out_tok) / 1e6:.2f}M tok | {n_failed} failed"
+                        f"${cost:.2f} | {(lite_in+lite_out+conf_in+conf_out)/1e6:.2f}M tok "
+                        f"| {n_failed} failed"
                     )
             flush()
 
-        cost = in_tok * GEMINI_INPUT_COST + out_tok * GEMINI_OUTPUT_COST
+        lite_cost = lite_in * GEMINI_INPUT_COST + lite_out * GEMINI_OUTPUT_COST
+        conf_cost = conf_in * CONFIRM_INPUT_COST + conf_out * CONFIRM_OUTPUT_COST
         print(f"Classified {done} article(s); {n_failed} failed.")
         for c in CATEGORIES:
             print(f"  {c:<20} {counts[c]}")
-        print(f"Gemini usage: {in_tok/1e6:.2f}M input + {out_tok/1e6:.2f}M output "
-              f"tokens ~ ${cost:.2f}")
+        print(f"flash-lite: {lite_in/1e6:.2f}M in + {lite_out/1e6:.2f}M out ~ ${lite_cost:.2f}")
+        if conf_in or conf_out:
+            print(f"flash conf: {conf_in/1e6:.2f}M in + {conf_out/1e6:.2f}M out ~ ${conf_cost:.2f}")
+        print(f"total cost: ~${lite_cost + conf_cost:.2f}")
         return done
     finally:
         conn.close()
