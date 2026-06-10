@@ -46,6 +46,9 @@ google-genai
 openai
 numpy
 
+# Ticker overview from Yahoo Finance (load_ticker_overview.py)
+yfinance
+
 # News scraper (scraper/ package, run_scrape.py)
 httpx>=0.27
 trafilatura>=1.12
