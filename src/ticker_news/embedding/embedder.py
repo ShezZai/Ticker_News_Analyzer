@@ -10,7 +10,7 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
-from ticker_news.shared.llm import EMBED_DIM, EMBED_MODEL, openai_embeddings
+from ticker_news.shared.llm import openai_embeddings
 
 MAX_INPUT_TOKENS = 8000  # model hard-caps at 8192; trim just under
 
@@ -49,9 +49,11 @@ def build_text(title: Optional[str], content: Optional[str]) -> str:
     return "\n\n".join(parts)[: MAX_INPUT_TOKENS * 8]
 
 
-def embed_texts(texts: Sequence[str], *, embeddings=None) -> List[np.ndarray]:
+def embed_texts(
+    texts: Sequence[str], *, embeddings=None, batch_size: int = 256
+) -> List[np.ndarray]:
     """One float32 vector per input, index-aligned (empty inputs sent as ' ')."""
-    client = embeddings if embeddings is not None else openai_embeddings()
+    client = embeddings if embeddings is not None else openai_embeddings(batch_size=batch_size)
     cleaned = [truncate_tokens(t) for t in texts]
     vectors = client.embed_documents(cleaned)
     return [np.asarray(v, dtype=np.float32) for v in vectors]

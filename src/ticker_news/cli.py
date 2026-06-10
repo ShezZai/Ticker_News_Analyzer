@@ -35,7 +35,7 @@ def scrape(
 
 @app.command()
 def embed(
-    batch_size: int = typer.Option(256, min=1, help="Inputs per embeddings API request."),
+    batch_size: int = typer.Option(256, min=1, help="Rows per DB batch and inputs per embeddings API request."),
     limit: int | None = typer.Option(None, help="Only process the first N pending rows."),
     reembed: bool = typer.Option(False, "--reembed", help="Recompute embeddings for every row."),
     no_index: bool = typer.Option(False, "--no-index", help="Skip building the HNSW index."),

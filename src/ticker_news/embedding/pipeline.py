@@ -11,8 +11,8 @@ from typing import List, Optional, Sequence
 
 import psycopg
 
-from ticker_news.embedding.embedder import EMBED_DIM, build_text, embed_texts
-from ticker_news.shared.llm import EMBED_MODEL
+from ticker_news.embedding.embedder import build_text, embed_texts
+from ticker_news.shared.llm import EMBED_DIM, EMBED_MODEL
 
 try:  # optional progress bar
     from tqdm import tqdm
@@ -109,7 +109,7 @@ def embed_all(
 
             if not texts:
                 continue
-            embeddings = embed_texts(texts)
+            embeddings = embed_texts(texts, batch_size=batch_size)
             with conn.cursor() as cur:
                 cur.executemany(
                     "UPDATE public.articles SET embedding = %s WHERE id = %s",

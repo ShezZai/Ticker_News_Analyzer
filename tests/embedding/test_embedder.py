@@ -38,6 +38,7 @@ def test_truncate_caps_long_text():
     long = "word " * (MAX_INPUT_TOKENS * 2)
     out = truncate_tokens(long)
     assert len(out) < len(long)
+    assert len(out.split()) <= MAX_INPUT_TOKENS
 
 
 def test_build_text_joins_title_and_content():
