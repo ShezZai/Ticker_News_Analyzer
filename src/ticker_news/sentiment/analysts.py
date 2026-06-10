@@ -43,7 +43,7 @@ list is empty or weak, say so. 3-6 sentences, no preamble.""",
 }
 
 SYNTHESIS_PROMPT = ARTICLE_BLOCK + """
-Three analysts examined this article for {ticker}:
+The following analysts examined this article for {ticker}:
 
 {analyses}
 

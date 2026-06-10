@@ -24,7 +24,7 @@ def run_batch(*, limit: int | None = None, reprocess: bool = False) -> int:
         urls = [r[0] for r in conn.execute(
             f"SELECT a.url FROM public.articles a "
             f"WHERE a.category = 'real news' AND a.primary_ticker IS NOT NULL "
-            f"AND a.content IS NOT NULL {not_done} ORDER BY a.published_utc {lim}"
+            f"AND a.content IS NOT NULL AND a.content <> '' {not_done} ORDER BY a.published_utc {lim}"
         ).fetchall()]
         conn.commit()
         if reprocess:
