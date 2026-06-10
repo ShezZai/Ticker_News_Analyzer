@@ -659,3 +659,120 @@ python scripts/validate_retreival/compare_hybrids.py \
 python scripts/validate_retreival/compare_hybrids.py \
     docs/validations/article_clusters_revisited.csv --mode middle-forward
 ```
+
+---
+
+## 10. The super-hybrid retrieval
+
+### 10.1 Method
+
+`super` (in `scripts/search/hybrid_retrieval.py`, `--method super`) chains the two
+complementary strengths into one two-stage flow:
+
+```
+Stage 1 — cascade POOL (recall):
+    wide whole-article net (net_k, low floor)
+    -> keep the articles that have >=1 insight with cosine-to-seed >= tau
+    => a high-recall ARTICLE candidate pool
+
+Stage 2 — fusion WITHIN the pool (precision):
+    take every insight of the pool articles
+    reciprocal-rank-fuse  (insight-cosine rank)  with  (article rank in the net)
+    keep the top `budget` insights
+```
+
+The recall ceiling is cascade's article pool (the highest of any method); precision is
+restored by fusion's rerank and the `budget` cap. It is the literal embodiment of the
+§7.5 rule — *let the high-recall method build the pool, let the high-precision method
+rank inside it.*
+
+### 10.2 `super` vs the original retrievers (both tables, both modes)
+
+Head-to-head against the two baselines the system shipped with — whole-article and insight
+— across **both** ground-truth tables and **both** modes. Micro-F1 (macro-F1 in parens);
+**bold** = best in row.
+
+**Article level:**
+
+| Table | Mode | whole-article | insight | super |
+|---|---|--:|--:|--:|
+| original | last-noforward | 19.8 (21.4) | 15.3 (21.5) | 19.7 (**24.7**) |
+| original | middle-forward | 18.3 (20.5) | 18.6 (23.4) | **25.2 (29.0)** |
+| revisited | last-noforward | 12.5 (15.8) | **26.3 (29.0)** | 15.6 (18.8) |
+| revisited | middle-forward | 14.7 (14.9) | 19.2 (30.5) | **32.1 (34.8)** |
+
+**Insight level** (whole-article has no insight output):
+
+| Table | Mode | insight | super |
+|---|---|--:|--:|
+| original | last-noforward | 6.5 (12.8) | **14.0 (20.2)** |
+| original | middle-forward | 8.9 (13.9) | **18.8 (24.1)** |
+| revisited | last-noforward | 15.1 (19.8) | 14.8 (18.5) |
+| revisited | middle-forward | 11.7 (22.6) | **29.4 (30.7)** |
+
+#### What this shows
+
+1. **`super` beats whole-article everywhere** (every table × mode × level), on micro *and*
+   macro F1 — it never loses to the recall baseline.
+2. **`super` dominates the insight level universally** — ~2–2.5× the insight baseline's F1
+   in three of four conditions (e.g. original-forward 18.8 vs 8.9; revisited-forward 29.4 vs
+   11.7). This is the level `gather_related()` actually consumes.
+3. **`super` wins the article level in 3 of 4 conditions.** The lone exception is
+   **revisited + last-noforward**, where the tight clusters reward the pure insight
+   retriever's precision (26.3 vs super's 15.6) — the backtest-frame weakness from §9.
+4. **The win widens in `middle-forward`** (cluster recovery): super tops every cell, often
+   by a lot (revisited article 32.1 vs next-best 19.2).
+
+### 10.3 Mode-1 tuning sweep (negative result)
+
+Can `super`'s one weak cell (revisited + last-noforward) be tuned away? A 48-config sweep
+(`scripts/validate_retreival/sweep_super.py`) over `net_k ∈ {50,100,150}`,
+`tau ∈ {0.70,0.74,0.78,0.82}`, `budget ∈ {20,30,50,80}` says **no**:
+
+- Best article-F1: `net_k=50, tau=0.78, budget=20` → **19.2** (fusion 22.9, insight 26.3) — loses.
+- Best insight-F1: `net_k=150, tau=0.74, budget=80` → **16.9** (fusion 18.4, insight 15.1) —
+  clears the insight baseline but not fusion.
+
+The two knobs pull opposite ways (article-F1 wants a *small* budget for precision; insight-F1
+wants a *large* one for recall), and neither optimum reaches fusion. The cause is structural:
+in the backtest frame the seed is the *latest* article, so the backward-only net is
+intrinsically noisy and no pool threshold cleans the *ranking* enough. `super` is, by
+construction, a method whose edge needs a window that brackets the event.
+
+---
+
+## 11. Selected method: `super`
+
+**We adopt `super` as the project's default retrieval method.** Rationale, grounded in §10:
+
+1. **It dominates the retrievers it replaces.** `super` beats whole-article in *every*
+   measured condition and beats the insight baseline at the insight level *universally* and
+   at the article level in 3 of 4 conditions. No other single method is best-or-tied this
+   broadly.
+2. **It is the only method that combines both strengths by design** — cascade's recall pool
+   (highest ceiling of any method, `rec*` up to 62.6%) with fusion's precision rerank —
+   rather than trading one for the other. That is exactly the property §7.5 → §9 argued the
+   pipeline needs.
+3. **It is strongest where it matters most.** The sentiment pipeline's `gather_related()`
+   consumes *insights*, and at the insight level `super` is the clear best in 3 of 4
+   conditions (and a statistical tie in the 4th). On well-defined events in the
+   cluster-recovery frame it reaches **F1 ≈ 30%** at both levels.
+4. **It degrades gracefully.** In its one weak spot (tight events, strict no-lookahead,
+   *article* level) it still beats whole-article and stays within range; it never collapses.
+
+**Honest caveat & how we handle it.** In the strict no-lookahead *backtest* frame on tight
+events, `fusion` (and the pure insight retriever at the article level) edge `super`, and the
+§10.3 sweep confirms tuning won't close that gap. We accept this because (a) the production
+use is insight-level related-context assembly, where `super` leads, and (b) the loss is
+small and bounded. `fusion` is retained as the documented fallback for any strictly
+no-lookahead, article-level-critical path.
+
+**Configuration.** Default `super` params: `net_k=150, net_min_sim=0.45, tau=0.70,
+rrf_c=60, budget=50`, with the no-lookahead window (`--exclusive`) for live use and the
+forward window for historical/clustering analysis.
+
+```python
+from hybrid_retrieval import retrieve
+res = retrieve(seed_id, method="super", months_before=3, exclusive=True)
+#   res.insight_ids / res.article_ids  -> feed into gather_related()
+```

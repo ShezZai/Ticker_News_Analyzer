@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hybrid insight retrieval: combine whole-article recall with insight precision.
 
-Validation (see docs/validations/validate_retrival.md) showed the two retrievers
+Validation (see docs/validations/validate_retrieval.md) showed the two retrievers
 are complementary at a tight operating point:
 
     whole-article  (articles.embedding)        -> higher RECALL, lower precision
@@ -73,7 +73,7 @@ DEF_TAU_INS = 0.70      # cascade: keep net insights with max-cos to a seed >= t
 DEF_RRF_C = 60          # fusion: reciprocal-rank-fusion constant
 DEF_BUDGET = 50         # fusion: how many insights to keep
 
-METHODS = ("intersection", "cascade", "fusion")
+METHODS = ("intersection", "cascade", "fusion", "super")
 
 
 @dataclass
@@ -224,6 +224,61 @@ def retrieve_fusion(conn, seed_id, *, since, until, exclusive,
     )
 
 
+def retrieve_super(conn, seed_id, *, since, until, exclusive,
+                   net_k, net_min_sim, tau_ins, rrf_c, budget,
+                   k=DEF_K, min_sim=DEF_MIN_SIM) -> HybridResult:
+    """Two-stage 'super-hybrid':
+
+      Stage 1 (cascade pool): a WIDE whole-article net -> keep the articles that
+        have at least one insight with max-cosine-to-seed >= tau. This is the
+        high-recall article candidate POOL (cascade's recall, ~50-60%).
+      Stage 2 (fusion within the pool): reciprocal-rank fusion of (a) each pool
+        insight's cosine-to-seed rank and (b) its article's rank in the net,
+        keeping the top `budget`. Restores precision and caps volume.
+
+    Recall ceiling = the cascade pool (high); precision = fusion's rerank + budget.
+    """
+    whole = similar_to(seed_id, k=net_k, since=since, until=until,
+                       min_similarity=net_min_sim, until_exclusive=exclusive, conn=conn)
+    art_rank = {h.id: r for r, h in enumerate(whole, 1)}
+    net_ids = list(art_rank)
+    S, _seeds = _seed_matrix(conn, seed_id)
+    if not net_ids or S.shape[0] == 0:
+        return HybridResult("super", seed_id, set(), set(), [], len(net_ids))
+
+    rows = _insights_for_articles(conn, net_ids)
+    if not rows:
+        return HybridResult("super", seed_id, set(), set(), [], len(net_ids))
+    iids = [r[0] for r in rows]
+    aids = [r[1] for r in rows]
+    E = _norm_rows(np.vstack([np.asarray(r[2], dtype=np.float32) for r in rows]))
+    icos = (E @ S.T).max(axis=1)  # each net insight's max cosine to a seed insight
+
+    # Stage 1 pool: articles with >= 1 insight clearing tau (cascade's article set)
+    pool = {aids[i] for i in range(len(iids)) if icos[i] >= tau_ins}
+    if not pool:
+        return HybridResult("super", seed_id, set(), set(), [], len(net_ids))
+
+    # Stage 2: fusion over ALL insights of the pool articles
+    cand = [(iids[i], aids[i], float(icos[i])) for i in range(len(iids)) if aids[i] in pool]
+    order = sorted(range(len(cand)), key=lambda j: cand[j][2], reverse=True)
+    rank1 = {cand[j][0]: r for r, j in enumerate(order, 1)}  # insight-cosine rank
+    ann = {iid for iid, _a, _s in _insight_hits(conn, seed_id, k, min_sim,
+                                                since, until, exclusive)}
+    scored = []
+    for iid, aid, _ic in cand:
+        s = 1.0 / (rrf_c + rank1[iid]) + 1.0 / (rrf_c + art_rank[aid])
+        scored.append((iid, aid, s))
+    scored.sort(key=lambda t: t[2], reverse=True)
+    kept = scored[:budget]
+    return HybridResult(
+        method="super", seed_id=seed_id,
+        insight_ids={t[0] for t in kept}, article_ids={t[1] for t in kept},
+        scored=kept, net_size=len(net_ids),
+        mutual={iid for iid, _a, _s in kept if iid in ann},
+    )
+
+
 def retrieve(seed_id: int, method: str = "cascade", *,
              months_before: Optional[int] = 3, exclusive: bool = True,
              k: int = DEF_K, min_sim: float = DEF_MIN_SIM,
@@ -255,6 +310,11 @@ def retrieve(seed_id: int, method: str = "cascade", *,
                                    exclusive=exclusive, k=k, min_sim=min_sim,
                                    net_k=net_k, net_min_sim=net_min_sim,
                                    rrf_c=rrf_c, budget=budget)
+        if method == "super":
+            return retrieve_super(conn, seed_id, since=since, until=until,
+                                  exclusive=exclusive, net_k=net_k,
+                                  net_min_sim=net_min_sim, tau_ins=tau_ins,
+                                  rrf_c=rrf_c, budget=budget, k=k, min_sim=min_sim)
         raise SystemExit(f"unknown method {method!r}; choose from {METHODS}")
     finally:
         if own:
