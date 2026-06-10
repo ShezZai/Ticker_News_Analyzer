@@ -1,9 +1,9 @@
 import asyncio
 import pytest
 
-from scraper.config import Settings
-from scraper.models import ArticleJob, RawPage, Article
-from scraper.pipeline import DomainLimiter, process_job
+from ticker_news.scraping.config import Settings
+from ticker_news.scraping.models import ArticleJob, RawPage, Article
+from ticker_news.scraping.pipeline import DomainLimiter, process_job
 
 
 def test_domain_limiter_serializes_per_domain():
@@ -66,7 +66,7 @@ def _good_raw(html="x" * 2000):
 
 def test_process_job_ok_via_http(monkeypatch):
     monkeypatch.setattr(
-        "scraper.pipeline.extract",
+        "ticker_news.scraping.pipeline.extract",
         lambda raw, min_words: Article("T", "lots of words " * 60, None, None, "en"),
     )
     job = ArticleJob(url="https://fool.com/a", tickers=["NVDA"], published_utc=None, publisher="Fool")
@@ -82,7 +82,7 @@ def test_process_job_ok_via_http(monkeypatch):
 
 def test_process_job_escalates_to_browser_when_http_bad(monkeypatch):
     monkeypatch.setattr(
-        "scraper.pipeline.extract",
+        "ticker_news.scraping.pipeline.extract",
         lambda raw, min_words: Article("T", "lots of words " * 60, None, None, "en"),
     )
     job = ArticleJob(url="https://fool.com/a", tickers=[], published_utc=None, publisher="Fool")
@@ -98,7 +98,7 @@ def test_process_job_escalates_to_browser_when_http_bad(monkeypatch):
 
 
 def test_process_job_records_error_when_all_fail(monkeypatch):
-    monkeypatch.setattr("scraper.pipeline.extract", lambda raw, min_words: None)
+    monkeypatch.setattr("ticker_news.scraping.pipeline.extract", lambda raw, min_words: None)
     job = ArticleJob(url="https://fool.com/a", tickers=[], published_utc=None, publisher="Fool")
     fetcher = FakeFetcher(http=None, browser=None)
     store = FakeStore()
@@ -125,7 +125,7 @@ def test_process_job_blocked_by_robots():
 
 def test_process_job_empty_when_extract_returns_empty(monkeypatch):
     monkeypatch.setattr(
-        "scraper.pipeline.extract",
+        "ticker_news.scraping.pipeline.extract",
         lambda raw, min_words: Article("T", "", None, None, None),
     )
     job = ArticleJob(url="https://fool.com/a", tickers=[], published_utc=None, publisher="Fool")
@@ -143,7 +143,7 @@ def test_process_job_keeps_http_when_browser_result_is_bad(monkeypatch):
     # http body is weak (2 words) so we escalate, but the browser returns a 403
     # challenge -> we must keep the original HTTP response, not the bad page.
     monkeypatch.setattr(
-        "scraper.pipeline.extract",
+        "ticker_news.scraping.pipeline.extract",
         lambda raw, min_words: Article("T", "short body", None, None, "en"),
     )
     job = ArticleJob(url="https://fool.com/a", tickers=[], published_utc=None, publisher="Fool")

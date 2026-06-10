@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from scraper.models import ArticleJob, RawPage, Article
+from ticker_news.scraping.models import ArticleJob, RawPage, Article
 
 
 def test_article_word_count_and_weakness():

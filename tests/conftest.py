@@ -1,19 +1,10 @@
-import os
 import pytest
-import psycopg
 
-DSN = os.environ.get("SCRAPER_DB_DSN", "postgresql://scraper:scraper@localhost:5432/news")
+from ticker_news.shared.config import get_settings
 
 
-@pytest.fixture
-def store():
-    from scraper.store.db import Store
-    try:
-        s = Store(DSN)
-    except psycopg.OperationalError:
-        pytest.skip("Postgres not reachable; run `docker compose up -d`")
-    s.init_schema()
-    s.conn.execute("TRUNCATE articles")
-    yield s
-    s.conn.execute("TRUNCATE articles")
-    s.close()
+@pytest.fixture(autouse=True)
+def _clear_settings_cache():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from scraper.csv_source import read_jobs
+from ticker_news.scraping.csv_source import read_jobs
 
 CSV = (
     "﻿tickers,article_url,published_utc,publisher_name\n"

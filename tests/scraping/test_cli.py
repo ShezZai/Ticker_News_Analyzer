@@ -1,4 +1,4 @@
-from scraper.cli import build_settings, parse_args
+from ticker_news.scraping.cli import build_settings, parse_args
 
 
 def test_ignore_robots_flag_overrides_settings():

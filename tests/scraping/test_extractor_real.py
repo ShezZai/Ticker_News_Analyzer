@@ -1,8 +1,8 @@
 from pathlib import Path
 import pytest
 
-from scraper.models import RawPage
-from scraper.extract.extractor import extract
+from ticker_news.scraping.models import RawPage
+from ticker_news.scraping.extract.extractor import extract
 
 FIX = Path(__file__).parent / "fixtures"
 PUBLISHERS = ["fool.com", "globenewswire.com", "benzinga.com",

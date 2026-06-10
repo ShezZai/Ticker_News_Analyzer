@@ -1,4 +1,4 @@
-from scraper.urls import domain_of, canonicalize_url
+from ticker_news.scraping.urls import domain_of, canonicalize_url
 
 
 def test_domain_strips_www_and_lowercases():

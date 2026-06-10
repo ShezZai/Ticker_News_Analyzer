@@ -1,5 +1,5 @@
-from scraper.fetch import http_looks_bad
-from scraper.models import RawPage
+from ticker_news.scraping.fetch import http_looks_bad
+from ticker_news.scraping.models import RawPage
 
 
 def _raw(status=200, html="x" * 2000):

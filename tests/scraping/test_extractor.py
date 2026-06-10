@@ -1,5 +1,5 @@
-from scraper.models import RawPage
-from scraper.extract.extractor import extract, register, SITE_OVERRIDES
+from ticker_news.scraping.models import RawPage
+from ticker_news.scraping.extract.extractor import extract, register, SITE_OVERRIDES
 
 ARTICLE_HTML = """
 <html><head><title>NVDA soars on AI demand</title></head><body>

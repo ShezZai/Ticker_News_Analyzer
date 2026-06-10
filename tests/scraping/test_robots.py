@@ -1,4 +1,4 @@
-from scraper.robots import RobotsCache
+from ticker_news.scraping.robots import RobotsCache
 
 
 def test_parses_rules_without_network(monkeypatch):
