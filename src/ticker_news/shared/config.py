@@ -24,6 +24,12 @@ class AppSettings(BaseSettings):
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     google_api_key: str | None = Field(default=None, validation_alias="GOOGLE_API_KEY")
 
+    langfuse_public_key: str | None = Field(default=None, validation_alias="LANGFUSE_PUBLIC_KEY")
+    langfuse_secret_key: str | None = Field(default=None, validation_alias="LANGFUSE_SECRET_KEY")
+    langfuse_host: str = Field(
+        default="https://cloud.langfuse.com", validation_alias="LANGFUSE_HOST"
+    )
+
     # Scraper knobs — legacy SCRAPER_* env names preserved on purpose.
     scraper_concurrency: int = Field(default=8, validation_alias="SCRAPER_CONCURRENCY")
     scraper_per_domain: int = Field(default=2, validation_alias="SCRAPER_PER_DOMAIN")

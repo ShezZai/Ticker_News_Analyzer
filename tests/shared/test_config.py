@@ -1,4 +1,4 @@
-from ticker_news.shared.config import AppSettings
+from ticker_news.shared.config import AppSettings, get_settings
 
 
 def test_default_database_url_matches_docker_compose(monkeypatch):
@@ -47,3 +47,12 @@ def test_database_url_wins_over_scraper_db_dsn(monkeypatch):
     monkeypatch.setenv("SCRAPER_DB_DSN", "postgresql://legacy:x@oldhost:5432/news")
     s = AppSettings(_env_file=None)
     assert s.database_url == "postgresql://new:x@newhost:5432/news"
+
+
+def test_langfuse_disabled_by_default(monkeypatch):
+    for var in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    s = AppSettings(_env_file=None)
+    assert s.langfuse_public_key is None
+    assert s.langfuse_secret_key is None
+    assert s.langfuse_host == "https://cloud.langfuse.com"
