@@ -46,6 +46,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import warnings
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Sequence
@@ -62,9 +63,29 @@ from ticker_news.shared.db import connect
 # satisfying the filter, so a small ef_search is fine. Override with --ef-search
 # or the HNSW_EF_SEARCH env var.
 EF_SEARCH = int(os.getenv("HNSW_EF_SEARCH", "40"))
+
 # "relaxed_order" is faster and may return rows slightly out of distance order;
 # we re-sort hits by similarity in Python so the displayed ranking is exact.
-ITERATIVE_SCAN = os.getenv("HNSW_ITERATIVE_SCAN", "relaxed_order")
+_ITERATIVE_SCAN_DEFAULT = "relaxed_order"
+_ITERATIVE_SCAN_ALLOWED = {"off", "strict_order", "relaxed_order"}
+
+
+def _validated_iterative_scan(value: Optional[str]) -> str:
+    """Validate an hnsw.iterative_scan value; fall back to the default on junk."""
+    candidate = (value or "").strip().lower()
+    if candidate in _ITERATIVE_SCAN_ALLOWED:
+        return candidate
+    warnings.warn(
+        f"HNSW_ITERATIVE_SCAN={value!r} is not one of "
+        f"{sorted(_ITERATIVE_SCAN_ALLOWED)}; using {_ITERATIVE_SCAN_DEFAULT!r}",
+        stacklevel=2,
+    )
+    return _ITERATIVE_SCAN_DEFAULT
+
+
+ITERATIVE_SCAN = _validated_iterative_scan(
+    os.getenv("HNSW_ITERATIVE_SCAN", _ITERATIVE_SCAN_DEFAULT)
+)
 # Default cosine-similarity floor: drop weak matches below this score.
 DEFAULT_MIN_SIMILARITY = 0.7
 
@@ -76,19 +97,30 @@ def _get_conn():
     return connect(vector=True)
 
 
-def _apply_ann_gucs(cur) -> None:
+def _apply_ann_gucs(cur, ef_search: Optional[int] = None) -> None:
     """Set the per-query HNSW GUCs (ef_search + iterative scan) on a cursor.
 
+    Uses ``set_config(name, value, true)`` — the bound-parameter, SET LOCAL
+    equivalent — so values are never interpolated into SQL and the settings are
+    scoped to the current transaction, never leaking onto a reused connection.
+
     Tolerates an older pgvector where `hnsw.iterative_scan` doesn't exist by
-    rolling back the failed SET and continuing with just ef_search.
+    rolling back to a savepoint around just that statement — the caller's
+    transaction (and any pending writes on a shared connection) is untouched.
     """
-    cur.execute(f"SET hnsw.ef_search = {int(EF_SEARCH)};")
-    if ITERATIVE_SCAN and ITERATIVE_SCAN.lower() != "off":
+    ef = EF_SEARCH if ef_search is None else int(ef_search)
+    cur.execute("SELECT set_config('hnsw.ef_search', %s, true)", (str(ef),))
+    if ITERATIVE_SCAN and ITERATIVE_SCAN != "off":
+        cur.execute("SAVEPOINT guc")
         try:
-            cur.execute(f"SET hnsw.iterative_scan = {ITERATIVE_SCAN};")
+            cur.execute(
+                "SELECT set_config('hnsw.iterative_scan', %s, true)",
+                (ITERATIVE_SCAN,),
+            )
         except Exception:
-            cur.connection.rollback()
-            cur.execute(f"SET hnsw.ef_search = {int(EF_SEARCH)};")
+            cur.execute("ROLLBACK TO SAVEPOINT guc")
+        else:
+            cur.execute("RELEASE SAVEPOINT guc")
 
 
 def _is_date_only(value: str) -> bool:
@@ -176,6 +208,7 @@ def _run_search(
     exclude_id: Optional[int],
     until_exclusive: bool = False,
     segment: Optional[str] = None,
+    ef_search: Optional[int] = None,
 ) -> List[SearchHit]:
     """Execute the ANN query and map rows to SearchHit objects."""
     extra, params = build_filters(
@@ -193,7 +226,8 @@ def _run_search(
     args = [query_vec, *params, query_vec, k]
 
     with conn.cursor() as cur:
-        _apply_ann_gucs(cur)  # ef_search + iterative scan so filters still match
+        # ef_search + iterative scan so filters still match
+        _apply_ann_gucs(cur, ef_search=ef_search)
         cur.execute(sql, args)
         rows = cur.fetchall()
 
@@ -222,6 +256,7 @@ def search(
     until_exclusive: bool = False,
     segment: Optional[str] = None,
     conn=None,
+    ef_search: Optional[int] = None,
 ) -> List[SearchHit]:
     """Return the top-`k` articles most similar to `query`.
 
@@ -236,6 +271,8 @@ def search(
                          timestamp instead of an inclusive whole-day bound.
         segment:         keep only articles in this AI segment (primary or more).
         conn:            reuse an existing connection (one is opened otherwise).
+        ef_search:       HNSW ANN candidate breadth for this query (defaults to
+                         the module-level EF_SEARCH).
     """
     query_vec = embed_query(query)
     own_conn = conn is None
@@ -244,7 +281,7 @@ def search(
         return _run_search(
             conn, query_vec, k, tickers, domain, since, until,
             min_similarity, exclude_id=None, until_exclusive=until_exclusive,
-            segment=segment,
+            segment=segment, ef_search=ef_search,
         )
     finally:
         if own_conn:
@@ -317,6 +354,7 @@ def similar_to(
     until_exclusive: bool = False,
     segment: Optional[str] = None,
     conn=None,
+    ef_search: Optional[int] = None,
 ) -> List[SearchHit]:
     """Return the top-`k` articles most similar to an existing article's vector.
 
@@ -331,7 +369,7 @@ def similar_to(
         return _run_search(
             conn, embedding, k, tickers, domain, since, until,
             min_similarity, exclude_id=found_id, until_exclusive=until_exclusive,
-            segment=segment,
+            segment=segment, ef_search=ef_search,
         )
     finally:
         if own_conn:
@@ -349,6 +387,7 @@ def similar_to_url(
     until_exclusive: bool = False,
     segment: Optional[str] = None,
     conn=None,
+    ef_search: Optional[int] = None,
 ) -> List[SearchHit]:
     """Like `similar_to`, but locate the seed article by its URL.
 
@@ -361,7 +400,7 @@ def similar_to_url(
         return _run_search(
             conn, embedding, k, tickers, domain, since, until,
             min_similarity, exclude_id=found_id, until_exclusive=until_exclusive,
-            segment=segment,
+            segment=segment, ef_search=ef_search,
         )
     finally:
         if own_conn:
@@ -400,6 +439,7 @@ def search_with_seed_dates(
     min_similarity: Optional[float] = None,
     segment: Optional[str] = None,
     conn=None,
+    ef_search: Optional[int] = None,
 ) -> List[SearchHit]:
     """Search articles by similarity to `statement`, dated relative to an article.
 
@@ -421,6 +461,7 @@ def search_with_seed_dates(
             statement, k=k, tickers=tickers, domain=domain,
             since=since, until=until, min_similarity=min_similarity,
             until_exclusive=exclusive, segment=segment, conn=conn,
+            ef_search=ef_search,
         )
     finally:
         if own_conn:
@@ -515,10 +556,6 @@ def run_cli(
     Raises ValueError for every user-input problem; the typer command turns
     those into clean CLI errors.
     """
-    global EF_SEARCH
-    if ef_search is not None:
-        EF_SEARCH = ef_search  # apply the requested ANN breadth for this run
-
     has_seed = like is not None or bool(like_url)
     if not has_seed and not query and not statement:
         raise ValueError("provide a query string, --like ID, or --like-url URL")
@@ -541,6 +578,7 @@ def run_cli(
     date_common = dict(
         k=k, domain=domain, since=since, until=until,
         min_similarity=min_similarity, until_exclusive=exclusive,
+        ef_search=ef_search,  # None -> module default; no global mutation
     )
 
     # When a seed article is involved, show it first for context.
