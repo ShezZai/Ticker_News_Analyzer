@@ -202,3 +202,60 @@ def test_insights_no_embed_skips_embedding(monkeypatch):
     result = runner.invoke(cli.app, ["insights", "--no-embed"])
     assert result.exit_code == 0, result.output
     assert called == {"extract": True}
+
+
+def test_backfill_command_enqueues_csv(monkeypatch):
+    captured = {}
+
+    class FakeSource:
+        def __init__(self, csv_path, limit=None):
+            captured["csv"] = csv_path
+            captured["limit"] = limit
+
+    async def fake_serve(source, *, workers, poll_interval_s, drain):
+        captured["drain"] = drain
+        captured["workers"] = workers
+        return {"done": 0, "failed": 0}
+
+    monkeypatch.setattr("ticker_news.ingestion.csv_backfill.CsvBackfillSource", FakeSource)
+    monkeypatch.setattr("ticker_news.service.worker.serve", fake_serve)
+    result = runner.invoke(cli.app, ["backfill", "--csv", "x.csv", "--workers", "2"])
+    assert result.exit_code == 0, result.output
+    assert captured == {"csv": "x.csv", "limit": None, "drain": True, "workers": 2}
+
+
+def test_serve_command_uses_massive_source(monkeypatch):
+    captured = {}
+
+    class FakeSource:
+        def __init__(self, tickers, *, poll_interval_s, lookback, **kw):
+            captured["tickers"] = list(tickers)
+            captured["poll"] = poll_interval_s
+
+    async def fake_serve(source, *, workers, poll_interval_s, drain):
+        captured["drain"] = drain
+        return {"done": 0, "failed": 0}
+
+    monkeypatch.setattr("ticker_news.ingestion.massive_rest.MassiveRestSource", FakeSource)
+    monkeypatch.setattr("ticker_news.service.worker.serve", fake_serve)
+    monkeypatch.setattr(
+        "ticker_news.cli._universe_tickers", lambda: ["NVDA", "AMD"]
+    )
+    result = runner.invoke(cli.app, ["serve", "--poll-interval", "30"])
+    assert result.exit_code == 0, result.output
+    assert captured["tickers"] == ["NVDA", "AMD"]
+    assert captured["poll"] == 30.0
+    assert captured["drain"] is False
+
+
+def test_jobs_status_command(monkeypatch):
+    monkeypatch.setattr("ticker_news.service.jobs.counts", lambda conn: {"pending": 2, "done": 5})
+    monkeypatch.setattr("ticker_news.shared.db.connect", lambda **kw: _FakeConn())
+    result = runner.invoke(cli.app, ["jobs", "status"])
+    assert result.exit_code == 0, result.output
+    assert "pending" in result.output and "2" in result.output
+
+
+class _FakeConn:
+    def close(self):
+        pass

@@ -122,3 +122,98 @@ def insights(
                         quote_threshold=quote_threshold, ids=id_list, workers=workers)
     if embed_only or not no_embed:
         mod.embed_missing(build_index=not no_index)
+
+
+@app.command()
+def serve(
+    workers: int = typer.Option(4, min=1, help="Concurrent pipeline workers."),
+    poll_interval: float = typer.Option(60.0, help="Feed poll interval, seconds."),
+    lookback_hours: float = typer.Option(24.0, help="How far back the first poll reaches."),
+    tickers: str | None = typer.Option(None, help="Comma-separated tickers (default: ticker_data table)."),
+) -> None:
+    """Run the live pipeline: poll the news feed, process articles end to end."""
+    import asyncio
+    from datetime import timedelta
+
+    from ticker_news.ingestion.massive_rest import MassiveRestSource
+    from ticker_news.service.worker import serve as run_service
+
+    universe = (
+        [t.strip().upper() for t in tickers.split(",") if t.strip()]
+        if tickers else _universe_tickers()
+    )
+    source = MassiveRestSource(
+        universe, poll_interval_s=poll_interval, lookback=timedelta(hours=lookback_hours)
+    )
+    try:
+        asyncio.run(run_service(source, workers=workers,
+                                poll_interval_s=5.0, drain=False))
+    except KeyboardInterrupt:
+        typer.echo("stopped.")
+
+
+def _universe_tickers() -> list[str]:
+    from ticker_news.shared import db
+
+    conn = db.connect()
+    try:
+        rows = conn.execute("SELECT ticker FROM public.ticker_data ORDER BY ticker").fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        raise SystemExit(
+            "ticker_data is empty - run `ticker-news load-universe` first or pass --tickers."
+        )
+    return [r[0] for r in rows]
+
+
+@app.command()
+def backfill(
+    csv: str = typer.Option(..., help="News CSV to enqueue and process."),
+    limit: int | None = typer.Option(None, help="Enqueue at most N rows."),
+    workers: int = typer.Option(4, min=1, help="Concurrent pipeline workers."),
+) -> None:
+    """Enqueue a news CSV and process it to completion (drain mode)."""
+    import asyncio
+
+    from ticker_news.ingestion.csv_backfill import CsvBackfillSource
+    from ticker_news.service.worker import serve as run_service
+
+    source = CsvBackfillSource(csv, limit=limit)
+    counts = asyncio.run(run_service(source, workers=workers,
+                                     poll_interval_s=1.0, drain=True))
+    typer.echo(f"backfill complete: {counts}")
+
+
+jobs_app = typer.Typer(help="Inspect and manage the pipeline job queue.")
+app.add_typer(jobs_app, name="jobs")
+
+
+@jobs_app.command("status")
+def jobs_status() -> None:
+    """Show queue counts by status."""
+    from ticker_news.service import jobs as jobs_mod
+    from ticker_news.shared import db
+
+    conn = db.connect()
+    try:
+        for status, n in sorted(jobs_mod.counts(conn).items()):
+            typer.echo(f"{status:>8}  {n}")
+    finally:
+        conn.close()
+
+
+@jobs_app.command("retry")
+def jobs_retry(
+    url: str | None = typer.Option(None, help="Requeue one failed URL (default: all failed)."),
+) -> None:
+    """Requeue failed jobs."""
+    from ticker_news.service import jobs as jobs_mod
+    from ticker_news.shared import db
+
+    conn = db.connect()
+    try:
+        n = jobs_mod.requeue_failed(conn, url)
+        typer.echo(f"requeued {n} job(s).")
+    finally:
+        conn.close()
