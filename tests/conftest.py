@@ -9,6 +9,10 @@ AppSettings.model_config["env_file"] = None
 
 @pytest.fixture(autouse=True)
 def _clear_settings_cache():
+    from ticker_news.shared import observability
+
     get_settings.cache_clear()
+    observability.client.cache_clear()
     yield
     get_settings.cache_clear()
+    observability.client.cache_clear()

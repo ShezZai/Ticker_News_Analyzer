@@ -9,8 +9,8 @@ SDK notes (langfuse >=4,<5):
 - create_trace_id is a @staticmethod on Langfuse; callable on instance or class.
 - Spans expose .update(input=...) — there is no .update_trace() on span objects.
 - propagate_attributes is a standalone function from `langfuse`, not a client method.
-- Langfuse() construction does NOT make network calls; it is safe to construct with
-  fake keys in tests.
+- Langfuse() construction makes no blocking network call (it does start background
+  daemon export threads); safe in tests since only the disabled path is exercised.
 """
 
 from __future__ import annotations
@@ -67,9 +67,8 @@ def article_trace(url: str, *, ticker: str | None = None):
     Deterministic trace id seeded from the URL so re-runs correlate.
     Yields the root span (or None when disabled).
 
-    Adaptation: the plan sketch calls root.update_trace(input=...) but in the
-    installed SDK (v4.7.1) there is no update_trace() on span objects. The correct
-    call is root.update(input=...) which sets the span's input attribute.
+    Trace-level input is set at construction to materialize in Langfuse Cloud
+    eval datasets.
     """
     c = client()
     if c is None:
@@ -82,8 +81,8 @@ def article_trace(url: str, *, ticker: str | None = None):
         as_type="span",
         name="process-article",
         trace_context={"trace_id": trace_id},
+        input={"url": url},
     ) as root:
-        root.update(input={"url": url})
         metadata = {"url": url[:200]}
         if ticker:
             metadata["ticker"] = ticker
