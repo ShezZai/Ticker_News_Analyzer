@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27",
     "trafilatura>=1.12",
-    "playwright",
+    "playwright>=1.40",
     "psycopg[binary]>=3.2",
     "pgvector",
     "pydantic-settings>=2.6",
