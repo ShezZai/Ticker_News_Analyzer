@@ -15,3 +15,6 @@ venv/
 .pytest_cache/
 *.egg-info/
 scraped_dump/
+
+# Tracked exceptions (kept despite the broad *.csv ignore above)
+!docs/validations/article_clusters.csv
