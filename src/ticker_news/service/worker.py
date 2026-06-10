@@ -53,10 +53,11 @@ async def process_article(
     queue=jobs,
     *,
     conn,
-) -> None:
+) -> bool:
     """Drive one article through its remaining stages, advancing after each.
 
     This is the single seam for the per-article Langfuse trace (Plan 5).
+    Returns True on success, False on failure.
     """
     stage = job.stage
     try:
@@ -65,13 +66,15 @@ async def process_article(
             result = await _run_stage(runner, job)
             if stage == "scrape" and result == "empty":
                 # Nothing extracted — no content for downstream stages.
-                queue.advance(conn, job.article_url, DONE)
-                return
+                await asyncio.to_thread(queue.advance, conn, job.article_url, DONE)
+                return True
             stage = jobs.next_stage(stage)
-            queue.advance(conn, job.article_url, stage)
+            await asyncio.to_thread(queue.advance, conn, job.article_url, stage)
+        return True
     except Exception as exc:
         logger.warning("article %s failed at stage %s: %r", job.article_url, stage, exc)
-        queue.fail(conn, job.article_url, repr(exc))
+        await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc))
+        return False
 
 
 async def _listen_for_jobs(dsn: str, wake: asyncio.Event) -> None:
@@ -81,6 +84,8 @@ async def _listen_for_jobs(dsn: str, wake: asyncio.Event) -> None:
         await aconn.execute(f"LISTEN {NOTIFY_CHANNEL}")
         async for _notice in aconn.notifies():
             wake.set()
+    except Exception:
+        logger.warning("LISTEN connection lost; relying on poll fallback", exc_info=True)
     finally:
         await aconn.close()
 
@@ -144,6 +149,8 @@ async def serve(
                 new = await asyncio.to_thread(jobs.enqueue, feed_conn, item)
                 if new:
                     wake.set()
+        except Exception:
+            logger.exception("feed task failed")
         finally:
             feed_conn.close()
             feed_done.set()
@@ -170,14 +177,12 @@ async def serve(
                             return
                     wake.clear()
                     try:
-                        await asyncio.wait_for(
-                            asyncio.shield(wake.wait()), timeout=poll_interval_s
-                        )
+                        await asyncio.wait_for(wake.wait(), timeout=poll_interval_s)
                     except asyncio.TimeoutError:
                         pass
                     continue
-                await process_article(job, runner_map, conn=conn)
-                processed["done"] += 1
+                ok = await process_article(job, runner_map, conn=conn)
+                processed["done" if ok else "failed"] += 1
         finally:
             conn.close()
 
@@ -188,8 +193,6 @@ async def serve(
 
     try:
         await asyncio.gather(*pool)
-    except Exception:
-        raise
     finally:
         for task in (listener, feed):
             task.cancel()

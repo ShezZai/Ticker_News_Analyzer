@@ -180,8 +180,12 @@ def backfill(
     from ticker_news.service.worker import serve as run_service
 
     source = CsvBackfillSource(csv, limit=limit)
-    counts = asyncio.run(run_service(source, workers=workers,
-                                     poll_interval_s=1.0, drain=True))
+    try:
+        counts = asyncio.run(run_service(source, workers=workers,
+                                         poll_interval_s=1.0, drain=True))
+    except KeyboardInterrupt:
+        typer.echo("stopped.")
+        return
     typer.echo(f"backfill complete: {counts}")
 
 
