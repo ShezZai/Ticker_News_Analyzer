@@ -116,10 +116,10 @@ def _box_chain():
     return lite_chain.with_fallbacks([flash_chain])
 
 
-def generate_boxes(article_text: str, *, chain=None) -> tuple[list[str], str]:
+def generate_boxes(article_text: str, *, chain=None, config=None) -> tuple[list[str], str]:
     """Run the analyst prompt over one article. Returns (boxes, model_used)."""
     chain = chain if chain is not None else _box_chain()
-    result = chain.invoke(PROMPT_TEMPLATE.format(article=article_text[:MAX_ARTICLE_CHARS]))
+    result = chain.invoke(PROMPT_TEMPLATE.format(article=article_text[:MAX_ARTICLE_CHARS]), config=config)
     return result["boxes"], result["model"]
 
 
@@ -320,8 +320,10 @@ def extract_all(
         n_failed = 0      # articles the model never answered for, even after retries
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
+            from ticker_news.shared import observability as obs
+            _cfg = obs.chain_config() or None
             futures = {
-                pool.submit(generate_boxes, content or ""):
+                pool.submit(generate_boxes, content or "", config=_cfg):
                     (aid, url, title, content)
                 for aid, url, title, content in rows
             }

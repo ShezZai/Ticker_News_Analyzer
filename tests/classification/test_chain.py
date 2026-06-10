@@ -56,3 +56,15 @@ def test_inputs_are_truncated():
 def test_invalid_category_rejected_by_schema():
     with pytest.raises(ValidationError):
         Classification(category="not a real category")
+
+
+def test_config_passes_through_to_chains():
+    captured = {}
+
+    class CfgChain:
+        def invoke(self, inputs, config=None):
+            captured["config"] = config
+            return Classification(category="other")
+
+    classify_article("T", "body", lite=CfgChain(), config={"callbacks": []})
+    assert captured["config"] == {"callbacks": []}

@@ -59,13 +59,13 @@ def build_graph(*, analyst_llm=None, judge=None):
 
     def analyst(payload: dict) -> dict:
         prompt = render_analyst(payload["role"], payload["article"])
-        message = analyst_llm.invoke(prompt)
+        message = analyst_llm.invoke(prompt, config={"run_name": f"analyst:{payload['role']}"})
         text = getattr(message, "content", None) or str(message)
         return {"analyses": [{"role": payload["role"], "analysis": text}]}
 
     def synthesize(state: SentimentState) -> dict:
         prompt = render_synthesis(state["article"], state["analyses"])
-        return {"verdict": judge.invoke(prompt)}
+        return {"verdict": judge.invoke(prompt, config={"run_name": "synthesize"})}
 
     g = StateGraph(SentimentState)
     g.add_node("analyst", analyst)
@@ -81,8 +81,8 @@ def _default_graph():
     return build_graph()
 
 
-def judge_article(article: dict, *, graph=None) -> tuple[Verdict, list[dict]]:
+def judge_article(article: dict, *, graph=None, config=None) -> tuple[Verdict, list[dict]]:
     """Run the full analyst panel + synthesis for one article/ticker."""
     graph = graph if graph is not None else _default_graph()
-    result = graph.invoke({"article": article, "analyses": [], "verdict": None})
+    result = graph.invoke({"article": article, "analyses": [], "verdict": None}, config=config)
     return result["verdict"], result["analyses"]

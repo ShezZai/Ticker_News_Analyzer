@@ -99,6 +99,7 @@ def classify_article(
     *,
     lite=None,
     confirm=None,
+    config=None,
 ) -> Tuple[Classification, bool]:
     """Returns (verdict, confirmation_ran). Two-pass semantics preserved."""
     lite = lite if lite is not None else _default_lite()
@@ -106,13 +107,13 @@ def classify_article(
         "title": (title or "").strip()[:300],
         "body": (content or "")[:MAX_ARTICLE_CHARS],
     }
-    first = lite.invoke(inputs)
+    first = lite.invoke(inputs, config=config)
     if first.category != "real news":
         return first, False
 
     confirm = confirm if confirm is not None else _default_confirm()
     try:
-        return confirm.invoke(inputs), True
+        return confirm.invoke(inputs, config=config), True
     except Exception as exc:
         # confirmation exhausted its retries: keep the lite "real news" verdict
         logger.warning("confirmation pass failed (%r); keeping lite verdict", exc)

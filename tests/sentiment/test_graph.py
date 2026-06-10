@@ -56,3 +56,10 @@ def test_judge_article_returns_verdict_and_analyses():
     verdict, analyses = judge_article(ARTICLE, graph=graph)
     assert isinstance(verdict, Verdict)
     assert len(analyses) == len(ANALYST_PROMPTS)
+
+
+def test_config_reaches_graph_and_run_names_set():
+    analyst, judge, prompts, _ = _fakes()
+    graph = build_graph(analyst_llm=analyst, judge=judge)
+    verdict, _ = judge_article(ARTICLE, graph=graph, config={"metadata": {"k": "v"}})
+    assert verdict.action == "buy"

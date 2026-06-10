@@ -31,6 +31,7 @@ from ticker_news.scraping.pipeline import process_job
 from ticker_news.sentiment import store as sentiment_store
 from ticker_news.sentiment.graph import judge_article
 from ticker_news.service.jobs import Job
+from ticker_news.shared import observability as obs
 from ticker_news.shared.llm import GEMINI_FLASH
 
 logger = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ def classify_stage(conn: psycopg.Connection, url: str) -> None:
     if not (content or "").strip():
         conn.rollback()
         return
-    verdict, _confirmed = classify_article(title, content or "")
+    verdict, _confirmed = classify_article(title, content or "", config=obs.chain_config() or None)
     conn.execute(
         "UPDATE public.articles SET category = %s, category_reason = %s WHERE id = %s",
         (verdict.category, verdict.reason or None, aid),
@@ -195,7 +196,7 @@ def insights_stage(conn: psycopg.Connection, url: str, tag_ctx: TagContext) -> N
         )
         conn.commit()
         return
-    boxes, model = generate_boxes(content)
+    boxes, model = generate_boxes(content, config=obs.chain_config() or None)
     # _store_article_boxes commits internally; no second commit needed for the
     # box insert, but the embedding updates below require their own commit.
     _store_article_boxes(
@@ -281,5 +282,6 @@ def sentiment_stage(conn: psycopg.Connection, url: str) -> None:
         "precedents": precedents,
     }
     conn.rollback()  # release the read transaction; LLM calls can take minutes
-    verdict, analyses = judge_article(article)
+    _cfg = obs.chain_config() or None
+    verdict, analyses = judge_article(article) if _cfg is None else judge_article(article, config=_cfg)
     sentiment_store.save_verdict(conn, aid, ticker, verdict, analyses, GEMINI_FLASH)

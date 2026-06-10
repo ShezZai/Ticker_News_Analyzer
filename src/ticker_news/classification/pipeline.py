@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover
 
 from ticker_news.classification.chain import classify_article
 from ticker_news.classification.schemas import CATEGORIES
+from ticker_news.shared import observability as obs
 from ticker_news.shared.db import connect
 
 
@@ -105,8 +106,9 @@ def classify_all(
             pending.clear()
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
+            _cfg = obs.chain_config() or None
             futures = {
-                pool.submit(classify_article, title, content or ""):
+                pool.submit(classify_article, title, content or "", config=_cfg):
                     (aid, title)
                 for aid, title, content in rows
             }
