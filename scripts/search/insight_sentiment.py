@@ -50,7 +50,7 @@ from search_articles_by_insights import (  # noqa: E402
     InsightHit, SeedInsight, _seed_window, get_conn, insights_of, search_by_insights,
 )
 from hybrid_retrieval import (  # noqa: E402
-    DEF_BUDGET, DEF_NET_K, DEF_NET_MIN_SIM, DEF_TAU_INS, retrieve,
+    DEF_NET_K, DEF_SUPER_BUDGET, DEF_SUPER_NET_MIN_SIM, DEF_SUPER_TAU_INS, retrieve,
 )
 
 load_dotenv()
@@ -328,15 +328,15 @@ def main() -> None:
     p.add_argument("--net-k", type=int, default=DEF_NET_K,
                    help=f"[--retrieval super] whole-article net size "
                         f"(default {DEF_NET_K})")
-    p.add_argument("--net-min-similarity", type=float, default=DEF_NET_MIN_SIM,
-                   help=f"[--retrieval super] cosine floor for the wide article "
-                        f"net (default {DEF_NET_MIN_SIM})")
-    p.add_argument("--tau-insight", type=float, default=DEF_TAU_INS,
-                   help=f"[--retrieval super] keep net insights with max cosine-to-"
-                        f"seed >= this (default {DEF_TAU_INS})")
-    p.add_argument("--budget", type=int, default=DEF_BUDGET,
+    p.add_argument("--net-min-similarity", type=float, default=DEF_SUPER_NET_MIN_SIM,
+                   help=f"[--retrieval super] article-level cosine floor for the "
+                        f"net (default {DEF_SUPER_NET_MIN_SIM})")
+    p.add_argument("--tau-insight", type=float, default=DEF_SUPER_TAU_INS,
+                   help=f"[--retrieval super] insight-level cosine-to-seed floor: "
+                        f"keep insights >= this (default {DEF_SUPER_TAU_INS})")
+    p.add_argument("--budget", type=int, default=DEF_SUPER_BUDGET,
                    help=f"[--retrieval super] how many reranked insights to keep "
-                        f"(default {DEF_BUDGET})")
+                        f"(default {DEF_SUPER_BUDGET})")
     p.add_argument("--model", default=GEMINI_MODEL, help=f"Gemini model (default {GEMINI_MODEL})")
     p.add_argument("--show-context", action="store_true",
                    help="print the full prompt context sent to the model")

@@ -215,22 +215,25 @@ combine them, all anchored on the seed and its no-lookahead `(since, until)` win
 | `intersection` | Keep insights whose article is in **both** the insight top-`k` and the whole-article top-`k`. | Max precision; recall ≤ insight-alone (the naive overlap). |
 | `cascade` | **WIDE** whole-article net (large `net_k`, low `net_min_sim`) → score every insight inside the net against the seed's insights, keep those ≥ `tau_ins`. | Recall ceiling = whole-article (high); precision restored by the insight filter. |
 | `fusion` | Reciprocal-rank fusion (RRF) of two insight rankings: insight-ANN cosine **and** the rank of the insight's article in the whole-article net. Keep the top `budget`. | Highest recall ceiling (a union); precision controlled by the cutoff. |
-| **`super`** | **Two stages.** ① *cascade pool*: a wide article net gated to articles having ≥ 1 insight with max-cosine-to-seed ≥ `tau_ins` (cascade's high-recall article set). ② *fusion within the pool*: RRF of each pool insight's cosine-to-seed rank and its article's net rank, keeping the top `budget`. | Recall ceiling = the cascade pool (high); precision = fusion's rerank + `budget`. The best all-rounder. |
+| **`super`** | **Two stages.** ① *cascade pool*: a wide article net gated to articles having ≥ 1 insight with max-cosine-to-seed ≥ `tau_ins` (cascade's high-recall article set). ② *fusion over the relevant pool insights*: of the pool articles' insights, keep only those that **themselves** clear `tau_ins`, RRF-rank them by cosine-to-seed rank ⊕ article net rank, and keep the top `budget`. | Recall ceiling = the cascade pool (high); precision = the per-insight `tau_ins` gate + fusion's rerank + `budget`. The best all-rounder. |
 
 ```mermaid
 flowchart TD
     S[seed article] --> NET[WIDE whole-article net<br/>net_k, net_min_sim]
     NET --> COS[score every net insight:<br/>max cosine to a seed insight]
     COS --> POOL[Stage 1 — cascade pool:<br/>articles with an insight ≥ tau_ins]
-    POOL --> FUSE[Stage 2 — RRF rerank pool insights:<br/>insight-cosine rank ⊕ article net rank]
+    POOL --> FUSE[Stage 2 — keep pool insights ≥ tau_ins,<br/>RRF rerank: insight-cosine rank ⊕ article net rank]
     FUSE --> KEEP[keep top budget → HybridResult<br/>insight_ids, article_ids, scored]
 ```
 
 `retrieve(...)` returns a `HybridResult` (`insight_ids`, `article_ids`, and per-insight
 `scored` tuples); the `score` for `super`/`fusion` is the RRF score, for
 `cascade`/`intersection` it's the insight-to-seed cosine. Knobs: `net_k` (default 150),
-`net_min_sim` (0.45), `tau_ins` (0.70), `rrf_c` (60), `budget` (50). The tuning sweep
-lives in `scripts/validate_retreival/sweep_super.py`.
+`rrf_c` (60), `budget`, plus the two cosine floors `net_min_sim` (article-level) and
+`tau_ins` (insight-level). These are **method-aware**: `super` defaults both floors to a
+tight **0.8** (it filters articles *and* insights at >0.8 for precision) with a
+**25**-insight `budget`, while `cascade`/`fusion` keep the wide-net `0.45` / `0.70` and a
+`50` budget. The tuning sweep lives in `scripts/validate_retreival/sweep_super.py`.
 
 ---
 

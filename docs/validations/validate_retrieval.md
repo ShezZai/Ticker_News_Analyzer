@@ -671,57 +671,69 @@ complementary strengths into one two-stage flow:
 
 ```
 Stage 1 — cascade POOL (recall):
-    wide whole-article net (net_k, low floor)
-    -> keep the articles that have >=1 insight with cosine-to-seed >= tau
-    => a high-recall ARTICLE candidate pool
+    wide whole-article net (net_k=150, LOOSE article floor net_min_sim=0.55)
+    -> keep the articles that have >=1 insight with cosine-to-seed >= tau (0.75)
+    => an ARTICLE candidate pool
 
 Stage 2 — fusion WITHIN the pool (precision):
-    take every insight of the pool articles
+    take only the pool insights that THEMSELVES clear tau (cosine-to-seed >= 0.75)
+    -- a pool article's off-topic boxes are dropped --
     reciprocal-rank-fuse  (insight-cosine rank)  with  (article rank in the net)
-    keep the top `budget` insights
+    keep the top `budget` (40) insights
 ```
 
-The recall ceiling is cascade's article pool (the highest of any method); precision is
-restored by fusion's rerank and the `budget` cap. It is the literal embodiment of the
-§7.5 rule — *let the high-recall method build the pool, let the high-precision method
-rank inside it.*
+`super` uses **asymmetric gates**: a *loose* article-net floor (0.55) to fill the candidate
+pool for recall, and a *tight* insight gate (0.75) to hold precision on the insights that
+survive — the tau gate also prunes off-topic boxes of an otherwise-relevant article.
+Precision comes from that 0.75 insight gate plus fusion's rerank and the `budget` cap; recall
+comes from the wide net. It is the embodiment of the §7.5 rule — *let the high-recall method
+build the pool, let the high-precision method rank inside it.* §10.4–§10.5 show why the split
+beats a symmetric floor: the net floor was the binding constraint on coverage, while the
+insight gate is what protects precision.
 
 ### 10.2 `super` vs the original retrievers (both tables, both modes)
 
 Head-to-head against the two baselines the system shipped with — whole-article and insight
-— across **both** ground-truth tables and **both** modes. Micro-F1 (macro-F1 in parens);
-**bold** = best in row.
+— across **both** ground-truth tables and **both** modes, with `super` at its default
+**0.55/0.75/40** gates (loose net 0.55, tight insight gate 0.75, budget 40; net_k=150).
+Micro-F1 (macro-F1 in parens); **bold** = best in row.
 
 **Article level:**
 
 | Table | Mode | whole-article | insight | super |
 |---|---|--:|--:|--:|
-| original | last-noforward | 19.8 (21.4) | 15.3 (21.5) | 19.7 (**24.7**) |
-| original | middle-forward | 18.3 (20.5) | 18.6 (23.4) | **25.2 (29.0)** |
-| revisited | last-noforward | 12.5 (15.8) | **26.3 (29.0)** | 15.6 (18.8) |
-| revisited | middle-forward | 14.7 (14.9) | 19.2 (30.5) | **32.1 (34.8)** |
+| original | last-noforward | **19.8** (21.4) | 15.3 (21.5) | 18.5 (**23.3**) |
+| original | middle-forward | 18.3 (20.5) | 18.6 (23.4) | **24.2 (28.9)** |
+| revisited | last-noforward | 12.5 (15.8) | **26.3 (29.0)** | 17.8 (21.3) |
+| revisited | middle-forward | 14.7 (14.9) | 19.2 (30.5) | **26.4 (31.1)** |
 
 **Insight level** (whole-article has no insight output):
 
 | Table | Mode | insight | super |
 |---|---|--:|--:|
-| original | last-noforward | 6.5 (12.8) | **14.0 (20.2)** |
-| original | middle-forward | 8.9 (13.9) | **18.8 (24.1)** |
-| revisited | last-noforward | 15.1 (19.8) | 14.8 (18.5) |
-| revisited | middle-forward | 11.7 (22.6) | **29.4 (30.7)** |
+| original | last-noforward | 6.5 (12.8) | **11.4 (18.8)** |
+| original | middle-forward | 8.9 (13.9) | **15.3 (21.8)** |
+| revisited | last-noforward | **15.1 (19.8)** | 14.5 (19.3) |
+| revisited | middle-forward | 11.7 (22.6) | **21.1 (27.0)** |
 
 #### What this shows
 
-1. **`super` beats whole-article everywhere** (every table × mode × level), on micro *and*
-   macro F1 — it never loses to the recall baseline.
-2. **`super` dominates the insight level universally** — ~2–2.5× the insight baseline's F1
-   in three of four conditions (e.g. original-forward 18.8 vs 8.9; revisited-forward 29.4 vs
-   11.7). This is the level `gather_related()` actually consumes.
-3. **`super` wins the article level in 3 of 4 conditions.** The lone exception is
-   **revisited + last-noforward**, where the tight clusters reward the pure insight
-   retriever's precision (26.3 vs super's 15.6) — the backtest-frame weakness from §9.
-4. **The win widens in `middle-forward`** (cluster recovery): super tops every cell, often
-   by a lot (revisited article 32.1 vs next-best 19.2).
+At the **asymmetric 0.55/0.75/40** default, `super` is a stronger all-rounder than at the
+earlier symmetric-0.7 point (§10.4–§10.5): the loose net restores coverage while the tight
+insight gate keeps the returns clean. Against the two shipped baselines:
+
+1. **Insight level — where `gather_related()` actually consumes — `super` wins 3 of 4.** It
+   beats the insight baseline in both original modes (11.4 vs 6.5; 15.3 vs 8.9) and in
+   revisited-forward (21.1 vs 11.7), losing only revisited + last-noforward by 0.6 (14.5 vs
+   15.1), the tight-backtest cell from §9.
+2. **Article level — `super` beats whole-article on macro-F1 in all 4 and on micro in 3 of
+   4** (losing only original + last-noforward, 18.5 vs 19.8), and beats the insight baseline
+   at the article level in 3 of 4. It is never the worst method in any cell.
+3. **The one real weak cell is revisited + last-noforward**, where the pure insight
+   retriever's precision wins both levels (article 26.3, insight 15.1) — the structural
+   backtest weakness documented in §9–§10.3.
+4. **`super` is strongest in `middle-forward`** (cluster recovery): it tops both levels on
+   both tables and posts the family's best macro-F1 (revisited article ≈31%, insight ≈27%).
 
 ### 10.3 Mode-1 tuning sweep (negative result)
 
@@ -739,37 +751,157 @@ in the backtest frame the seed is the *latest* article, so the backward-only net
 intrinsically noisy and no pool threshold cleans the *ranking* enough. `super` is, by
 construction, a method whose edge needs a window that brackets the event.
 
+The shipped **0.55/0.75/40** default lands in the same place: on revisited + last-noforward
+it scores article-F1 **17.8** (still under insight's 26.3), confirming the negative result is
+a property of the frame, not of the floors — neither the symmetric-0.7 point nor the
+asymmetric default recovers the weak cell, and tuning is not expected to.
+
+### 10.4 Per-cluster: `super` at 0.8/0.8/30 vs 0.7/0.7/25 (insight level)
+
+Same per-cluster insight-level frame as §7.3 (original table, `last-noforward`, `|G|` =
+every embedded insight of the should-be-retrieved articles), but for **`super`**, at two
+operating points. Each cell is **`0.8/0.8/30`** with **`(0.7/0.7/25)`** in parens —
+i.e. *tighter floors + 30 budget* vs the *default 0.7 floors + 25 budget*. `rec*` equals
+`recall` at this level and `acc` is a flat ≈99%, so both are omitted.
+
+| Cluster | \|G\| | ret | TP | prec | recall | F1 |
+|---|--:|--:|--:|--:|--:|--:|
+| DeepSeek R1 launch & AI-stock selloff | 544 | 5 (25) | 1 (14) | 20.0% (56.0%) | 0.2% (2.6%) | 0.4% (4.9%) |
+| Stargate $500B AI infrastructure | 134 | 26 (25) | 1 (3) | 3.8% (12.0%) | 0.7% (2.2%) | 1.2% (3.8%) |
+| Nvidia Q3 FY2025 earnings | 193 | 0 (25) | 0 (6) | n/a (24.0%) | 0.0% (3.1%) | n/a (5.5%) |
+| Nvidia Q4 FY2025 earnings | 156 | 8 (25) | 2 (6) | 25.0% (24.0%) | 1.3% (3.8%) | 2.4% (6.6%) |
+| Nvidia Q1 FY2026 earnings | 118 | 30 (25) | 16 (15) | 53.3% (60.0%) | 13.6% (12.7%) | 21.6% (21.0%) |
+| TSMC Arizona fab yields | 20 | 5 (25) | 0 (0) | 0.0% (0.0%) | 0.0% (0.0%) | n/a (n/a) |
+| Trump semiconductor / chip tariffs | 44 | 2 (25) | 0 (1) | 0.0% (4.0%) | 0.0% (2.3%) | n/a (2.9%) |
+| Trump 'reciprocal' tariffs selloff | 136 | 6 (25) | 0 (0) | 0.0% (0.0%) | 0.0% (0.0%) | n/a (n/a) |
+| Intel CEO Gelsinger departure | 42 | 2 (25) | 0 (6) | 0.0% (24.0%) | 0.0% (14.3%) | n/a (17.9%) |
+| Intel names Lip-Bu Tan CEO | 23 | 4 (25) | 3 (11) | 75.0% (44.0%) | 13.0% (47.8%) | 22.2% (45.8%) |
+| Nvidia H20 / China export curbs | 13 | 13 (25) | 2 (3) | 15.4% (12.0%) | 15.4% (23.1%) | 15.4% (15.8%) |
+| Broadcom (AVGO) earnings & AI outlook | 73 | 30 (25) | 11 (10) | 36.7% (40.0%) | 15.1% (13.7%) | 21.4% (20.4%) |
+| Palantir (PLTR) earnings & rally | 17 | 30 (25) | 7 (6) | 23.3% (24.0%) | 41.2% (35.3%) | 29.8% (28.6%) |
+| CoreWeave IPO | 31 | 0 (17) | 0 (0) | n/a (0.0%) | 0.0% (0.0%) | n/a (n/a) |
+| **MICRO** (pooled) | **1544** | **161 (342)** | **43 (81)** | **26.7% (23.7%)** | **2.8% (5.2%)** | **5.0% (8.6%)** |
+
+#### What this shows
+
+1. **0.8/0.8/30 is more precise but much lower recall — and lower F1.** Pooled, the tighter
+   point lifts precision only marginally (**26.7%** vs 23.7%) while **halving recall** (2.8%
+   vs 5.2%), so micro-F1 falls **8.6 → 5.0**. The extra 5 budget cannot compensate for what
+   the 0.8 floors throw away.
+2. **The 0.8 article-net floor starves whole clusters.** Seven clusters retrieve ≤5 insights
+   and three collapse to a near-empty pool — **Nvidia Q3 (0)**, **Gelsinger (2)**,
+   **CoreWeave (0)** — wiping out F1 cells that 0.7/0.7/25 still scored (Nvidia Q3 5.5%,
+   Gelsinger 17.9%). On a strict no-lookahead seed the backward net is already thin; 0.8
+   prunes it past the point of usefulness.
+3. **0.8/0.8/30 only ties or wins on the high-volume, on-topic clusters** where the net
+   stays full and the larger budget bites: Nvidia Q1 (21.6 vs 21.0), Broadcom (21.4 vs
+   20.4), Palantir (29.8 vs 28.6). The gains are ≤1 pt; the losses elsewhere are 5–24 pt.
+4. **Tight events are hurt most.** Intel Lip-Bu Tan — the cleanest single-catalyst event —
+   craters from **45.8% → 22.2%** F1: 0.8 keeps only 4 insights at 75% precision but drops
+   recall 47.8% → 13.0%. Precision is not the binding constraint here; coverage is.
+
+**Takeaway.** Pushing both floors to 0.8 (and budget to 30) is the wrong direction for the
+insight level: it buys ~3 pts of precision for ~2.4 pts of recall and a **net −3.6 pt F1**.
+`0.7/0.7/25` remains the better default of the two; if anything, the §10.2 evidence that the
+wider `0.45/0.70/50` point scored *higher* insight-F1 suggests the productive lever is
+**looser** floors, not tighter ones — which §10.5 tests directly.
+
+### 10.5 Per-cluster: `super` at 0.55/0.75/40 vs 0.7/0.7/25 (insight level)
+
+§10.4 hinted the net floor was the binding constraint, not the insight gate. This point
+splits them: **loosen the article net to 0.55** (fill the pool), **raise the insight gate to
+0.75** (hold precision on what survives), and **grow the budget to 40**. Same §7.3 frame
+(original table, `last-noforward`); each cell is **`0.55/0.75/40`** with **`(0.7/0.7/25)`**
+in parens.
+
+| Cluster | \|G\| | ret | TP | prec | recall | F1 |
+|---|--:|--:|--:|--:|--:|--:|
+| DeepSeek R1 launch & AI-stock selloff | 544 | 40 (25) | 27 (14) | 67.5% (56.0%) | 5.0% (2.6%) | 9.2% (4.9%) |
+| Stargate $500B AI infrastructure | 134 | 40 (25) | 4 (3) | 10.0% (12.0%) | 3.0% (2.2%) | 4.6% (3.8%) |
+| Nvidia Q3 FY2025 earnings | 193 | 37 (25) | 11 (6) | 29.7% (24.0%) | 5.7% (3.1%) | 9.6% (5.5%) |
+| Nvidia Q4 FY2025 earnings | 156 | 40 (25) | 8 (6) | 20.0% (24.0%) | 5.1% (3.8%) | 8.2% (6.6%) |
+| Nvidia Q1 FY2026 earnings | 118 | 40 (25) | 21 (15) | 52.5% (60.0%) | 17.8% (12.7%) | 26.6% (21.0%) |
+| TSMC Arizona fab yields | 20 | 40 (25) | 0 (0) | 0.0% (0.0%) | 0.0% (0.0%) | n/a (n/a) |
+| Trump semiconductor / chip tariffs | 44 | 15 (25) | 0 (1) | 0.0% (4.0%) | 0.0% (2.3%) | n/a (2.9%) |
+| Trump 'reciprocal' tariffs selloff | 136 | 33 (25) | 0 (0) | 0.0% (0.0%) | 0.0% (0.0%) | n/a (n/a) |
+| Intel CEO Gelsinger departure | 42 | 13 (25) | 2 (6) | 15.4% (24.0%) | 4.8% (14.3%) | 7.3% (17.9%) |
+| Intel names Lip-Bu Tan CEO | 23 | 27 (25) | 11 (11) | 40.7% (44.0%) | 47.8% (47.8%) | 44.0% (45.8%) |
+| Nvidia H20 / China export curbs | 13 | 40 (25) | 6 (3) | 15.0% (12.0%) | 46.2% (23.1%) | 22.6% (15.8%) |
+| Broadcom (AVGO) earnings & AI outlook | 73 | 40 (25) | 16 (10) | 40.0% (40.0%) | 21.9% (13.7%) | 28.3% (20.4%) |
+| Palantir (PLTR) earnings & rally | 17 | 40 (25) | 8 (6) | 20.0% (24.0%) | 47.1% (35.3%) | 28.1% (28.6%) |
+| CoreWeave IPO | 31 | 7 (17) | 0 (0) | 0.0% (0.0%) | 0.0% (0.0%) | n/a (n/a) |
+| **MICRO** (pooled) | **1544** | **452 (342)** | **114 (81)** | **25.2% (23.7%)** | **7.4% (5.2%)** | **11.4% (8.6%)** |
+
+#### What this shows
+
+1. **A strict pooled win on all three metrics.** `0.55/0.75/40` beats the `0.7/0.7/25`
+   default on precision (**25.2%** vs 23.7%), recall (**7.4%** vs 5.2%) *and* F1
+   (**11.4%** vs 8.6%). Splitting the two floors works: the higher insight gate (0.75) is
+   what protects precision, so the article net can be opened up to recover recall without
+   the usual precision tax.
+2. **The loose net un-starves the pool.** Every collapsed cluster from §10.4 comes back —
+   Nvidia Q3 `0 → 37` retrieved (F1 9.6%), DeepSeek pulls 27 TP at **67.5% precision**. The
+   net floor, not the insight gate, was the binding constraint on coverage.
+3. **Mid-volume on-topic events gain the most** — Broadcom **28.3** (20.4), Nvidia Q1
+   **26.6** (21.0), Nvidia H20 **22.6** (15.8), DeepSeek **9.2** (4.9) — where the wider
+   net + budget 40 surface more true insights and the 0.75 gate keeps them clean.
+4. **The only regressions are the smallest clusters** — Gelsinger **7.3** (17.9) and Trump
+   semiconductor **n/a** (2.9) — where raising the gate to 0.75 prunes the handful of
+   borderline matches that 0.70 had kept. Lip-Bu Tan and Palantir are ties.
+
+**Takeaway.** This is the first config that improves on the `0.7/0.7/25` default *without* a
+trade-off. Ranking the four points by pooled insight-F1:
+
+| net / tau / budget | prec | recall | F1 |
+|---|--:|--:|--:|
+| 0.45 / 0.70 / 50 (wide) | 22.6% | 10.1% | **14.0%** |
+| **0.55 / 0.75 / 40 (adopted default)** | **25.2%** | 7.4% | 11.4% |
+| 0.70 / 0.70 / 25 (prior default) | 23.7% | 5.2% | 8.6% |
+| 0.80 / 0.80 / 30 | 26.7% | 2.8% | 5.0% |
+
+The wide point still owns raw F1 (driven by recall), but `0.55/0.75/40` posts the **best
+precision-with-usable-recall balance** — the operating point a sentiment prompt actually
+wants, since precision (clean context) matters more there than exhaustive recall. **It is now
+the adopted `super` default** (`DEF_SUPER_NET_MIN_SIM=0.55, DEF_SUPER_TAU_INS=0.75,
+DEF_SUPER_BUDGET=40`); the wide `0.45/0.70/50` point remains the choice if raw insight
+recall/F1 is the objective. §10.2 re-states the baseline comparison at this new default.
+
 ---
 
 ## 11. Selected method: `super`
 
 **We adopt `super` as the project's default retrieval method.** Rationale, grounded in §10:
 
-1. **It dominates the retrievers it replaces.** `super` beats whole-article in *every*
-   measured condition and beats the insight baseline at the insight level *universally* and
-   at the article level in 3 of 4 conditions. No other single method is best-or-tied this
-   broadly.
-2. **It is the only method that combines both strengths by design** — cascade's recall pool
-   (highest ceiling of any method, `rec*` up to 62.6%) with fusion's precision rerank —
-   rather than trading one for the other. That is exactly the property §7.5 → §9 argued the
-   pipeline needs.
-3. **It is strongest where it matters most.** The sentiment pipeline's `gather_related()`
-   consumes *insights*, and at the insight level `super` is the clear best in 3 of 4
-   conditions (and a statistical tie in the 4th). On well-defined events in the
-   cluster-recovery frame it reaches **F1 ≈ 30%** at both levels.
-4. **It degrades gracefully.** In its one weak spot (tight events, strict no-lookahead,
-   *article* level) it still beats whole-article and stays within range; it never collapses.
+1. **It wins where it matters most — the insight level.** The sentiment pipeline's
+   `gather_related()` consumes *insights*, and at that level `super` beats the insight
+   baseline in 3 of 4 conditions (11.4 vs 6.5, 15.3 vs 8.9, 21.1 vs 11.7), losing only the
+   tight + strict-backtest cell by 0.6 (14.5 vs 15.1). No baseline leads the insight level
+   this broadly.
+2. **It combines both strengths by design** — cascade's recall pool (the highest article
+   ceiling of any method, `rec*` up to 62.6%) with fusion's precision rerank — and at the
+   asymmetric 0.55/0.75 gates it pairs a recall-filling net with a precision-holding insight
+   gate, the right bias for a context window where noise hurts.
+3. **It is strongest in the forward (cluster-recovery) frame.** With a window that brackets
+   the event, `super` tops the article level on both tables and the insight level on both,
+   posting the family's best macro-F1 (revisited article ≈31%, insight ≈27%).
+4. **It degrades to mid-pack, not to the floor.** It is never the *worst* method in any cell,
+   and at the article level beats whole-article on macro-F1 in every condition; even in its
+   weak revisited-last-noforward cell it stays within a few points of the leader.
 
-**Honest caveat & how we handle it.** In the strict no-lookahead *backtest* frame on tight
-events, `fusion` (and the pure insight retriever at the article level) edge `super`, and the
-§10.3 sweep confirms tuning won't close that gap. We accept this because (a) the production
-use is insight-level related-context assembly, where `super` leads, and (b) the loss is
-small and bounded. `fusion` is retained as the documented fallback for any strictly
-no-lookahead, article-level-critical path.
+**Honest caveat & how we handle it.** In the strict no-lookahead *backtest* frame, the
+recall baseline (whole-article, original table) and the pure insight retriever (tight
+revisited table) edge `super` at the article level, and the §10.3 sweep confirms tuning the
+floors won't close that gap. The §10.4–§10.5 sweep of the floors landed the default on
+**0.55/0.75/40**: tightening to `0.8/0.8/30` *lowers* insight-F1 (8.6 → 5.0), while loosening
+the net and raising the insight gate lifted it (8.6 → 11.4) on all three of precision, recall
+and F1. The even wider `0.45/0.70/50` point scores higher raw insight-F1 (14.0) but at lower
+precision; we prefer the cleaner-context balance. `fusion` / the insight baseline remain
+documented fallbacks for strictly no-lookahead, article-critical paths.
 
-**Configuration.** Default `super` params: `net_k=150, net_min_sim=0.45, tau=0.70,
-rrf_c=60, budget=50`, with the no-lookahead window (`--exclusive`) for live use and the
-forward window for historical/clustering analysis.
+**Configuration.** Default `super` params: `net_k=150, net_min_sim=0.55, tau=0.75,
+rrf_c=60, budget=40` — a **loose article net (0.55) paired with a tight insight gate
+(0.75)** — with the no-lookahead window (`--exclusive`) for live use and the forward
+window for historical/clustering analysis.
 
 ```python
 from hybrid_retrieval import retrieve

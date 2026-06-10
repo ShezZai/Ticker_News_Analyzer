@@ -73,6 +73,14 @@ DEF_TAU_INS = 0.70      # cascade: keep net insights with max-cos to a seed >= t
 DEF_RRF_C = 60          # fusion: reciprocal-rank-fusion constant
 DEF_BUDGET = 50         # fusion: how many insights to keep
 
+# `super` splits its two gates: a LOOSE article-net floor (0.55) fills the pool for
+# recall, while a TIGHTER insight gate (0.75) holds precision on what survives. This
+# precision-with-usable-recall balance beat the symmetric-0.7 point at the insight
+# level (see docs/validations/validate_retrieval.md §10.5).
+DEF_SUPER_NET_MIN_SIM = 0.55  # article-level cosine floor for super's net (loose: fill pool)
+DEF_SUPER_TAU_INS = 0.75      # insight-level cosine-to-seed floor for super (tight: precision)
+DEF_SUPER_BUDGET = 40         # super: how many reranked insights to keep
+
 METHODS = ("intersection", "cascade", "fusion", "super")
 
 
@@ -232,11 +240,14 @@ def retrieve_super(conn, seed_id, *, since, until, exclusive,
       Stage 1 (cascade pool): a WIDE whole-article net -> keep the articles that
         have at least one insight with max-cosine-to-seed >= tau. This is the
         high-recall article candidate POOL (cascade's recall, ~50-60%).
-      Stage 2 (fusion within the pool): reciprocal-rank fusion of (a) each pool
-        insight's cosine-to-seed rank and (b) its article's rank in the net,
-        keeping the top `budget`. Restores precision and caps volume.
+      Stage 2 (fusion over the RELEVANT pool insights): reciprocal-rank fusion of
+        (a) each insight's cosine-to-seed rank and (b) its article's rank in the
+        net, keeping the top `budget`. Only insights that themselves clear
+        ``tau_ins`` (cosine-to-seed >= tau) are candidates -- off-topic boxes of a
+        pool article are dropped -- which restores precision and caps volume.
 
-    Recall ceiling = the cascade pool (high); precision = fusion's rerank + budget.
+    Recall ceiling = the cascade pool (high); precision = the per-insight tau gate
+    + fusion's rerank + budget.
     """
     whole = similar_to(seed_id, k=net_k, since=since, until=until,
                        min_similarity=net_min_sim, until_exclusive=exclusive, conn=conn)
@@ -259,8 +270,10 @@ def retrieve_super(conn, seed_id, *, since, until, exclusive,
     if not pool:
         return HybridResult("super", seed_id, set(), set(), [], len(net_ids))
 
-    # Stage 2: fusion over ALL insights of the pool articles
-    cand = [(iids[i], aids[i], float(icos[i])) for i in range(len(iids)) if aids[i] in pool]
+    # Stage 2: fusion over the pool insights that THEMSELVES clear tau (the
+    # relevant ones); a pool article's off-topic boxes (cosine < tau) are dropped.
+    cand = [(iids[i], aids[i], float(icos[i]))
+            for i in range(len(iids)) if aids[i] in pool and icos[i] >= tau_ins]
     order = sorted(range(len(cand)), key=lambda j: cand[j][2], reverse=True)
     rank1 = {cand[j][0]: r for r, j in enumerate(order, 1)}  # insight-cosine rank
     ann = {iid for iid, _a, _s in _insight_hits(conn, seed_id, k, min_sim,
@@ -283,10 +296,22 @@ def retrieve(seed_id: int, method: str = "cascade", *,
              months_before: Optional[int] = 3, exclusive: bool = True,
              k: int = DEF_K, min_sim: float = DEF_MIN_SIM,
              article_k: int = DEF_ARTICLE_K, net_k: int = DEF_NET_K,
-             net_min_sim: float = DEF_NET_MIN_SIM, tau_ins: float = DEF_TAU_INS,
-             rrf_c: int = DEF_RRF_C, budget: int = DEF_BUDGET,
+             net_min_sim: Optional[float] = None, tau_ins: Optional[float] = None,
+             rrf_c: int = DEF_RRF_C, budget: Optional[int] = None,
              conn=None) -> HybridResult:
-    """Dispatch to a hybrid method. Resolves the no-lookahead window from the seed."""
+    """Dispatch to a hybrid method. Resolves the no-lookahead window from the seed.
+
+    ``net_min_sim``/``tau_ins``/``budget`` default per method when left as None:
+    ``super`` uses a LOOSE article net (0.55) with a TIGHT insight gate (0.75) and
+    a 40-insight budget; the others use the wide-net defaults (0.45 / 0.70) and a
+    50 budget.
+    """
+    if net_min_sim is None:
+        net_min_sim = DEF_SUPER_NET_MIN_SIM if method == "super" else DEF_NET_MIN_SIM
+    if tau_ins is None:
+        tau_ins = DEF_SUPER_TAU_INS if method == "super" else DEF_TAU_INS
+    if budget is None:
+        budget = DEF_SUPER_BUDGET if method == "super" else DEF_BUDGET
     own = conn is None
     conn = conn or get_conn()
     try:
@@ -333,10 +358,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--min-similarity", type=float, default=DEF_MIN_SIM)
     p.add_argument("--article-k", type=int, default=DEF_ARTICLE_K)
     p.add_argument("--net-k", type=int, default=DEF_NET_K)
-    p.add_argument("--net-min-similarity", type=float, default=DEF_NET_MIN_SIM)
-    p.add_argument("--tau-insight", type=float, default=DEF_TAU_INS)
+    p.add_argument("--net-min-similarity", type=float, default=None,
+                   help=f"article net cosine floor (default {DEF_NET_MIN_SIM}; "
+                        f"{DEF_SUPER_NET_MIN_SIM} for --method super)")
+    p.add_argument("--tau-insight", type=float, default=None,
+                   help=f"insight cosine-to-seed floor (default {DEF_TAU_INS}; "
+                        f"{DEF_SUPER_TAU_INS} for --method super)")
     p.add_argument("--rrf-c", type=int, default=DEF_RRF_C)
-    p.add_argument("--budget", type=int, default=DEF_BUDGET)
+    p.add_argument("--budget", type=int, default=None,
+                   help=f"insights to keep (default {DEF_BUDGET}; "
+                        f"{DEF_SUPER_BUDGET} for --method super)")
     args = p.parse_args(argv)
 
     res = retrieve(
