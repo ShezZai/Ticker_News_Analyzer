@@ -1013,3 +1013,35 @@ Two things about these insight-level scores are easy to misread:
   content-reading model agrees almost all retrieved insights are coherent and relevant is
   strong evidence the *true* precision is far higher than 22.6% — the gates are returning
   clean context; the metric is simply penalising relevance the ground truth never enumerated.
+
+---
+
+## 13. Scripts & provenance
+
+Which script produced which result/set in this document, and what was run.
+
+**Validation-set generation** (the ground truth this doc scores against)
+
+| Set | How produced | Used by |
+|---|---|---|
+| [`article_clusters.csv`](article_clusters.csv) | **Hand-labelled** — real events + their related article ids (curated, not scripted). | §7 (original-table results) |
+| [`article_clusters_revisited.csv`](article_clusters_revisited.csv) | [`build_revisited_clusters.py`](../../scripts/validate_retreival/build_revisited_clusters.py) — rebuilt from the DB with keyword + window + title-anchor queries into 11 tight single-catalyst events. | §8–§10 (revisited-table results) |
+
+**Validation runs** (each section's numbers)
+
+| Script | What it does | Produced |
+|---|---|---|
+| [`validate_retrieval.py`](../../scripts/validate_retreival/validate_retrieval.py) | Core precision / recall / accuracy harness at the article and insight levels, both modes (`--mode last-noforward` / `middle-forward`). | §7.1–§7.4 (original), §8 (revisited) |
+| [`compare_hybrids.py`](../../scripts/validate_retreival/compare_hybrids.py) | Leaderboard of the six retrievers (whole-article, insight, intersection, cascade, fusion, two-phase-similarity) at both levels; `--two-phase-*` flags carry that method's own gates. | §7.5, §9, §10.2, §10.4–§10.5 |
+| [`sweep_two_phase.py`](../../scripts/validate_retreival/sweep_two_phase.py) | Pre-fetches the net + cosines once per cluster, then sweeps `net_k × tau × budget` in numpy. | §10.3 (the negative tuning result) |
+| [`eval_screen.py`](../../scripts/validate_retreival/eval_screen.py) | Runs two-phase-similarity then applies the `--remove-unuseful` screen, scoring retrieved vs screened at the insight level. | §12 |
+
+**Subjects under test** (not validators — the code being measured)
+
+| Script | Role |
+|---|---|
+| [`hybrid_retrieval.py`](../../scripts/search/hybrid_retrieval.py) | The retrievers themselves (`retrieve(method=…)`); `two-phase-similarity` defaults `0.55/0.75/40` live here. |
+| [`show_two_phase_insights.py`](../../scripts/search/show_two_phase_insights.py) | Manual spot-check helper — prints the kept insights for one seed. |
+
+All runs use `NEWS_DB_DSN` (content-rich DB) + `OPENAI_API_KEY` (no re-embedding needed for
+seeds); `eval_screen.py` also needs `GOOGLE_API_KEY` for the screen.

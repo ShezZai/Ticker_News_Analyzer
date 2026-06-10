@@ -290,3 +290,32 @@ python scripts/validate_retreival/validate_sentiment.py \
 toward coin-flip in a downtrend, while the model only reaches for SELL when the tape is weak.
 This is precisely why §6 runs on the peaceful-day pool — holding the market direction roughly
 flat is what lets a BUY hit-rate be read as *article* signal rather than market beta.
+
+---
+
+## 8. Scripts & provenance
+
+Which script produced which set/result in this document, and what was run.
+
+**Validation-set generation**
+
+| Set | How produced | Used by |
+|---|---|---|
+| [`peaceful_days_articles.csv`](peaceful_days_articles.csv) | [`peaceful_days.py`](../../scripts/search/peaceful_days.py) — VIX (FRED `VIXCLS`) + S&P/NASDAQ daily moves (Massive `SPY`/`I:COMP`) gate every trading day; real-news articles on peaceful days are emitted. | §2 (the pool), §6 (sampled from it) |
+
+**Validation runs**
+
+| Script | What it does | Produced |
+|---|---|---|
+| [`validate_sentiment.py`](../../scripts/validate_retreival/validate_sentiment.py) | Samples articles (from the pool CSV, or from the DB via `--db-range`), runs `insight_sentiment` on the primary ticker under both retrievers, pairs each verdict with the buy→close return, and scores correctness. | §6 (50 peaceful-day articles), §7 (15 bearish-window articles via `--db-range 2025-01-02 2025-03-30`) |
+
+**Subjects under test / dependencies** (the pipeline being measured, not validators)
+
+| Script | Role |
+|---|---|
+| [`insight_sentiment.py`](../../scripts/search/insight_sentiment.py) | The sentiment pipeline itself — retrieval (`--retrieval insight` / `two-phase-similarity`), optional `--remove-unuseful` screen, and the BUY/SELL/HOLD + confidence verdict. |
+| [`catalyst_returns.py`](../../scripts/ticker_scan/catalyst_returns.py) | The returns engine (`simulate`) — buy-at-publish minute bar → sell-at-(next)-close, via Massive. |
+| [`backtest_top2.py`](../../scripts/search/backtest_top2.py) | The earlier DB-range verdict↔return harness; `validate_sentiment.py` is its pool-driven successor. |
+
+Runs require `NEWS_DB_DSN` (articles/insights), `MASSIVE_API_KEY` (returns), and
+`GOOGLE_API_KEY` (Gemini verdicts); `peaceful_days.py` additionally hits FRED (no key).
