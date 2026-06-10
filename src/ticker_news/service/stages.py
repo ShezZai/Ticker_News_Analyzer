@@ -28,7 +28,10 @@ from ticker_news.enrichment.tagging import (
 )
 from ticker_news.scraping.models import ArticleJob
 from ticker_news.scraping.pipeline import process_job
+from ticker_news.sentiment import store as sentiment_store
+from ticker_news.sentiment.graph import judge_article
 from ticker_news.service.jobs import Job
+from ticker_news.shared.llm import GEMINI_FLASH
 
 logger = logging.getLogger(__name__)
 
@@ -214,3 +217,63 @@ def insights_stage(conn: psycopg.Connection, url: str, tag_ctx: TagContext) -> N
                 (vec, bid),
             )
     conn.commit()
+
+
+def similar_past_articles(conn: psycopg.Connection, article_id: int, k: int = 5) -> list[str]:
+    """Cosine-nearest earlier real-news articles, using the stored embedding.
+
+    No new embedding call — the article was embedded in the embed stage.
+    Returns display lines for the historical-precedent analyst.
+    """
+    rows = conn.execute(
+        """
+        SELECT to_char(b.published_utc, 'YYYY-MM-DD'), b.primary_ticker, b.title
+        FROM public.articles a
+        JOIN public.articles b
+          ON b.id != a.id
+         AND b.embedding IS NOT NULL
+         AND b.category = 'real news'
+         AND b.published_utc < a.published_utc
+        WHERE a.id = %s AND a.embedding IS NOT NULL
+        ORDER BY b.embedding <=> a.embedding
+        LIMIT %s
+        """,
+        (article_id, k),
+    ).fetchall()
+    return [f"{d} [{t or '?'}] {title}" for d, t, title in rows]
+
+
+def sentiment_stage(conn: psycopg.Connection, url: str) -> None:
+    """Judge buy/sell/hold for the article's primary ticker.
+
+    Policy: only 'real news' articles with a tagged primary_ticker are judged;
+    everything else skips (cheap, idempotent).
+    """
+    row = conn.execute(
+        "SELECT id, title, content, category, primary_ticker, published_utc, "
+        "provider_sentiments FROM public.articles WHERE url = %s", (url,),
+    ).fetchone()
+    if row is None:
+        raise StageError(f"article row missing for {url}")
+    aid, title, content, category, ticker, published, provider = row
+    if category != "real news" or not ticker or not (content or "").strip():
+        conn.rollback()
+        return
+    if sentiment_store.has_verdict(conn, aid, ticker):
+        conn.rollback()
+        return
+    precedents = similar_past_articles(conn, aid)
+    provider_sentiment = ""
+    if provider and isinstance(provider, dict):
+        entry = provider.get(ticker) or {}
+        provider_sentiment = entry.get("sentiment") or ""
+    article = {
+        "ticker": ticker,
+        "title": title,
+        "content": content,
+        "published_utc": published,
+        "provider_sentiment": provider_sentiment,
+        "precedents": precedents,
+    }
+    verdict, analyses = judge_article(article)
+    sentiment_store.save_verdict(conn, aid, ticker, verdict, analyses, GEMINI_FLASH)

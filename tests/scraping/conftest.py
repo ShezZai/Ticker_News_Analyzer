@@ -48,7 +48,7 @@ def store():
     except psycopg.OperationalError:
         pytest.skip("Postgres not reachable; run `docker compose up -d`")
     s.init_schema()
-    s.conn.execute("TRUNCATE articles")
+    s.conn.execute("TRUNCATE articles CASCADE")
     yield s
-    s.conn.execute("TRUNCATE articles")
+    s.conn.execute("TRUNCATE articles CASCADE")
     s.close()

@@ -131,3 +131,77 @@ async def test_scrape_persists_provider_sentiments(monkeypatch):
     job.source_meta = {"sentiments": {"NVDA": {"sentiment": "positive"}}}
     assert await stages.scrape_stage(job, res) == "ok"
     assert writes["params"][1] == "https://example.com/a"
+
+
+# ---------------------------------------------------------------------------
+# sentiment_stage offline tests
+# ---------------------------------------------------------------------------
+
+
+class _Row:
+    def __init__(self, row):
+        self._row = row
+
+    def fetchone(self):
+        return self._row
+
+    def fetchall(self):
+        return self._row
+
+
+class _StubConn:
+    """Returns queued rows in order; records rollbacks."""
+
+    def __init__(self, rows):
+        self.rows = list(rows)
+        self.rolled_back = 0
+
+    def execute(self, sql, params=None):
+        return _Row(self.rows.pop(0))
+
+    def rollback(self):
+        self.rolled_back += 1
+
+    def commit(self):
+        pass
+
+
+async def test_sentiment_skips_non_real_news(monkeypatch):
+    conn = _StubConn([(1, "T", "body", "marketing fluff", "NVDA", None, None)])
+    called = {}
+    monkeypatch.setattr(stages, "judge_article", lambda a: called.setdefault("x", True))
+    stages.sentiment_stage(conn, "https://example.com/a")
+    assert "x" not in called
+    assert conn.rolled_back == 1
+
+
+async def test_sentiment_skips_untagged(monkeypatch):
+    conn = _StubConn([(1, "T", "body", "real news", None, None, None)])
+    monkeypatch.setattr(stages, "judge_article", lambda a: (_ for _ in ()).throw(AssertionError))
+    stages.sentiment_stage(conn, "https://example.com/a")
+    assert conn.rolled_back == 1
+
+
+async def test_sentiment_judges_real_news(monkeypatch):
+    from ticker_news.sentiment.schemas import Verdict
+
+    conn = _StubConn([
+        (1, "T", "body", "real news", "NVDA", None, {"NVDA": {"sentiment": "positive"}}),
+    ])
+    seen = {}
+    monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: False)
+    monkeypatch.setattr(stages, "similar_past_articles", lambda c, a, k=5: ["p1"])
+    monkeypatch.setattr(
+        stages, "judge_article",
+        lambda article: (seen.update(article) or
+                         (Verdict(action="hold", confidence=0.5, reasoning=""), [])),
+    )
+    saved = {}
+    monkeypatch.setattr(
+        stages.sentiment_store, "save_verdict",
+        lambda c, aid, t, v, an, m: saved.update(aid=aid, ticker=t, action=v.action),
+    )
+    stages.sentiment_stage(conn, "https://example.com/a")
+    assert seen["provider_sentiment"] == "positive"
+    assert seen["precedents"] == ["p1"]
+    assert saved == {"aid": 1, "ticker": "NVDA", "action": "hold"}
