@@ -138,3 +138,18 @@ def test_load_overviews_command(monkeypatch):
     result = runner.invoke(cli.app, ["load-overviews", "--tickers", "NVDA,AMD", "--refresh"])
     assert result.exit_code == 0, result.output
     assert captured == {"tickers": ["NVDA", "AMD"], "refresh": True, "delay": 0.5}
+
+
+def test_insights_command_passes_args(monkeypatch):
+    captured = {}
+
+    def fake_extract_all(*, reprocess, limit, quote_threshold, ids, workers):
+        captured.update(reprocess=reprocess, limit=limit,
+                        quote_threshold=quote_threshold, ids=ids, workers=workers)
+        return 0
+
+    monkeypatch.setattr("ticker_news.enrichment.insights.extract_all", fake_extract_all)
+    monkeypatch.setattr("ticker_news.enrichment.insights.embed_missing", lambda **kw: 0)
+    result = runner.invoke(cli.app, ["insights", "--limit", "3", "--workers", "2"])
+    assert result.exit_code == 0, result.output
+    assert captured["limit"] == 3 and captured["workers"] == 2

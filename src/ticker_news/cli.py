@@ -96,3 +96,29 @@ def load_overviews(
 
     t = [x.strip() for x in tickers.split(",") if x.strip()] if tickers else None
     reference_data.load_overviews(tickers=t, refresh=refresh, delay=delay)
+
+
+@app.command()
+def insights(
+    limit: int | None = typer.Option(None, help="Only process the first N pending articles."),
+    reprocess: bool = typer.Option(False, "--reprocess", help="Re-extract articles that already have insights."),
+    ids: str | None = typer.Option(None, help="Comma-separated article ids (implies reprocess for those)."),
+    workers: int = typer.Option(8, min=1, help="Concurrent Gemini requests."),
+    no_embed: bool = typer.Option(False, "--no-embed", help="Extract boxes only; skip embedding."),
+    embed_only: bool = typer.Option(False, "--embed-only", help="Skip extraction; only fill missing embeddings."),
+    fix_quotes_flag: bool = typer.Option(False, "--fix-quotes", help="Re-verbatimize existing rows (no LLM)."),
+    quote_threshold: float = typer.Option(0.75, help="Min similarity for fuzzy quote match."),
+    no_index: bool = typer.Option(False, "--no-index", help="Skip building the HNSW index."),
+) -> None:
+    """Extract embedded insight boxes from articles (resumable)."""
+    from ticker_news.enrichment import insights as mod
+
+    if fix_quotes_flag:
+        mod.fix_quotes(quote_threshold=quote_threshold)
+        return
+    id_list = [int(x) for x in ids.split(",") if x.strip()] if ids else None
+    if not embed_only:
+        mod.extract_all(reprocess=reprocess, limit=limit,
+                        quote_threshold=quote_threshold, ids=id_list, workers=workers)
+    if not no_embed:
+        mod.embed_missing(build_index=not no_index)
