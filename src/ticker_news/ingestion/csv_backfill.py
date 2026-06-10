@@ -15,6 +15,8 @@ class CsvBackfillSource:
 
     async def stream(self) -> AsyncIterator[FeedItem]:
         produced = 0
+        # Blocking file I/O is intentional: backfill reads one bounded CSV at
+        # startup. A high-throughput source should use asyncio.to_thread.
         for job in read_jobs(self.csv_path):
             if self.limit is not None and produced >= self.limit:
                 return

@@ -19,7 +19,7 @@ class FeedItem(BaseModel):
     tickers: list[str] = Field(default_factory=list)
     published_utc: datetime | None = None
     publisher: str | None = None
-    source_meta: dict = Field(default_factory=dict)
+    source_meta: dict[str, object] = Field(default_factory=dict)
 
 
 @runtime_checkable
