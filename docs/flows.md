@@ -4,8 +4,9 @@ This document describes the three core flows of the Ticker News Analyzer:
 
 1. **[Article ingestion](#1-article-ingestion-flow)** — from scraping a URL to a fully
    tagged, classified, insight-chunked, embedded row in the DB.
-2. **[RAG retrieval](#2-rag-retrieval-flow)** — finding related coverage, both at
-   whole-article granularity and at insight granularity.
+2. **[RAG retrieval](#2-rag-retrieval-flow)** — finding related coverage at whole-article
+   granularity, at insight granularity, and via hybrid methods that combine the two
+   (incl. the two-stage `super` retriever).
 3. **[Sentiment querying](#3-sentiment-querying-flow)** — judging the immediate
    market reaction to an article, with no-lookahead context retrieval.
 
@@ -199,6 +200,38 @@ insight published at/after the seed leaks into the context — essential for hon
 backtesting. ANN robustness under selective filters is handled by per-query HNSW GUCs
 (`hnsw.ef_search`, `hnsw.iterative_scan`), so a date+ticker filter still returns matches.
 
+### 2c. Hybrid retrieval (`hybrid_retrieval.py`)
+
+Whole-article and insight-level search are **complementary**: the article net has higher
+**recall** (it nets the right documents), the insight net has higher **precision** (it
+matches the right *ideas*). The validation work (`docs/validations/validate_retrieval.md`)
+showed that whichever method is applied **last as a hard gate caps recall at that
+method's recall** — so the high-recall method must be the wide net and the high-precision
+method the filter. `hybrid_retrieval.retrieve(seed_id, method=…)` exposes four ways to
+combine them, all anchored on the seed and its no-lookahead `(since, until)` window:
+
+| `method` | Idea | Trade-off |
+|---|---|---|
+| `intersection` | Keep insights whose article is in **both** the insight top-`k` and the whole-article top-`k`. | Max precision; recall ≤ insight-alone (the naive overlap). |
+| `cascade` | **WIDE** whole-article net (large `net_k`, low `net_min_sim`) → score every insight inside the net against the seed's insights, keep those ≥ `tau_ins`. | Recall ceiling = whole-article (high); precision restored by the insight filter. |
+| `fusion` | Reciprocal-rank fusion (RRF) of two insight rankings: insight-ANN cosine **and** the rank of the insight's article in the whole-article net. Keep the top `budget`. | Highest recall ceiling (a union); precision controlled by the cutoff. |
+| **`super`** | **Two stages.** ① *cascade pool*: a wide article net gated to articles having ≥ 1 insight with max-cosine-to-seed ≥ `tau_ins` (cascade's high-recall article set). ② *fusion within the pool*: RRF of each pool insight's cosine-to-seed rank and its article's net rank, keeping the top `budget`. | Recall ceiling = the cascade pool (high); precision = fusion's rerank + `budget`. The best all-rounder. |
+
+```mermaid
+flowchart TD
+    S[seed article] --> NET[WIDE whole-article net<br/>net_k, net_min_sim]
+    NET --> COS[score every net insight:<br/>max cosine to a seed insight]
+    COS --> POOL[Stage 1 — cascade pool:<br/>articles with an insight ≥ tau_ins]
+    POOL --> FUSE[Stage 2 — RRF rerank pool insights:<br/>insight-cosine rank ⊕ article net rank]
+    FUSE --> KEEP[keep top budget → HybridResult<br/>insight_ids, article_ids, scored]
+```
+
+`retrieve(...)` returns a `HybridResult` (`insight_ids`, `article_ids`, and per-insight
+`scored` tuples); the `score` for `super`/`fusion` is the RRF score, for
+`cascade`/`intersection` it's the insight-to-seed cosine. Knobs: `net_k` (default 150),
+`net_min_sim` (0.45), `tau_ins` (0.70), `rrf_c` (60), `budget` (50). The tuning sweep
+lives in `scripts/validate_retreival/sweep_super.py`.
+
 ---
 
 ## 3. Sentiment querying flow
@@ -212,11 +245,14 @@ information available *then*.
 flowchart TD
     A[article_id] --> L[load_article<br/>title, content, tickers, published_utc]
     A --> SI[insights_of → seed insight boxes]
-    A --> GR[gather_related:<br/>search_by_insights over the<br/>months-before EXCLUSIVE window<br/>dedup best score, cap 80]
+    A --> GR{--retrieval}
+    GR -->|insight default| GRI[gather_related:<br/>search_by_insights over the<br/>months-before EXCLUSIVE window<br/>dedup best score, cap 80]
+    GR -->|super| GRS[gather_related_super:<br/>hybrid_retrieval.retrieve method=super<br/>→ hydrate kept insight ids to InsightHit]
     L --> BP[build_prompt]
     SI --> BP
-    GR --> BP
-    BP -->|strict timeline:<br/>article = NOW, prior insights = PAST| GM[ask_gemini<br/>gemini-2.5-flash]
+    GRI --> BP
+    GRS --> BP
+    BP -->|strict timeline:<br/>article = NOW, prior insights = PAST| GM[ask_gemini<br/>gemini-2.5-flash-lite]
     GM --> V[per-ticker verdict:<br/>buy / sell / hold<br/>+ confidence 0-1 + justification]
 ```
 
@@ -224,6 +260,13 @@ The prompt enforces a strict timeline: **the article is breaking now**, its own 
 are now, and all **related prior insights are PAST / already priced in** (used only to
 judge how *surprising* the news is — never as a fresh catalyst). Each ticker is judged on
 its own merits (one article can be bullish for one ticker and bearish for a rival).
+
+**Related-insight retrieval** is selectable via `--retrieval`:
+- `insight` (default) — `gather_related` → `search_by_insights` (insight-level ANN, §2b).
+- `super` — `gather_related_super` → `hybrid_retrieval.retrieve(method="super")` (§2c),
+  then the kept insight ids are hydrated back into `InsightHit` rows for the prompt. The
+  super knobs (`--net-k`, `--net-min-similarity`, `--tau-insight`, `--budget`) are exposed
+  on the CLI and apply only in this mode.
 
 **Ticker-set modes:**
 
@@ -234,7 +277,7 @@ its own merits (one article can be bullish for one ticker and bearish for a riva
 | `--ticker INTC` | Judge only that one ticker. |
 | `--top-2` (≥3 tickers) | Joint call, then **re-run the 2 highest-confidence non-hold tickers** each on its own; emits a consolidated JSON (`joint`, `top2_separate`, `top2_tickers`). Falls back to per-ticker calls (with a warning) when the article has <3 tickers. |
 
-Output model: `gemini-2.5-flash`, `temperature=0`, constrained to
+Output model: `gemini-2.5-flash-lite`, `temperature=0`, constrained to
 `[{ticker, action, confidence, justification}]` via `response_schema`. Each verdict is
 tagged `role: primary|mentioned`.
 
@@ -302,6 +345,6 @@ flowchart TD
 |---|---|
 | Classification (pass 1 / confirm) | `gemini-2.5-flash-lite` / `gemini-2.5-flash` |
 | Insight extraction | `gemini-2.5-flash-lite` (504-fallback `gemini-2.5-flash`) |
-| Sentiment & follow-up | `gemini-2.5-flash` |
+| Sentiment & follow-up | `gemini-2.5-flash-lite` |
 | Embeddings (articles + insights) | OpenAI `text-embedding-3-small` (1536-dim) |
 | Prices / news source | Massive REST API |

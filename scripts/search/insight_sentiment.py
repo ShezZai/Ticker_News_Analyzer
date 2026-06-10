@@ -22,7 +22,9 @@ Usage:
     python insight_sentiment.py 4235 --ticker INTC        # just one
     python insight_sentiment.py 4235 --months-before 3 --k 5
     python insight_sentiment.py 4235 --no-exclusive --show-context
-    python insight_sentiment.py 4235 --model gemini-2.5-flash --json
+    python insight_sentiment.py 4235 --retrieval super              # hybrid retriever
+    python insight_sentiment.py 4235 --retrieval super --budget 30
+    python insight_sentiment.py 4235 --model gemini-2.5-flash-lite --json
 
 Requires GOOGLE_API_KEY (Gemini) in env / .env. The article + insight data come
 from NEWS_DB_DSN / DATABASE_URL (default dbname=news) -- point this at the
@@ -47,11 +49,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from search_articles_by_insights import (  # noqa: E402
     InsightHit, SeedInsight, _seed_window, get_conn, insights_of, search_by_insights,
 )
+from hybrid_retrieval import (  # noqa: E402
+    DEF_BUDGET, DEF_NET_K, DEF_NET_MIN_SIM, DEF_TAU_INS, retrieve,
+)
 
 load_dotenv()
 
 MARKET_TZ = ZoneInfo("America/New_York")
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 GEMINI_TIMEOUT_MS = 120_000
 MAX_ARTICLE_CHARS = 16_000
 MAX_RELATED = 80  # safety cap on retrieved insights folded into the prompt
@@ -59,6 +64,8 @@ MAX_RELATED = 80  # safety cap on retrieved insights folded into the prompt
 DEFAULT_MONTHS_BEFORE = 3
 DEFAULT_K = 5
 DEFAULT_MIN_SIMILARITY = 0.7
+DEFAULT_RETRIEVAL = "insight"
+RETRIEVALS = ("insight", "super")
 ACTIONS = ["buy", "sell", "hold"]
 
 PROMPT_INSTRUCTIONS = """You are an equity analyst reacting to breaking news in real time.
@@ -139,6 +146,57 @@ def gather_related(
                 best[h.insight_id] = h
     hits = sorted(best.values(), key=lambda h: (h.published_utc is None, h.published_utc))
     return hits[:MAX_RELATED]
+
+
+def _load_insight_hits(conn, scored) -> List[InsightHit]:
+    """Hydrate (insight_id, article_id, score) tuples into full InsightHit rows.
+
+    The hybrid retriever returns only ids + a per-insight score; join back to
+    article_insights/articles for the topic, text, tickers and date the prompt
+    needs. ``similarity`` carries whatever score the method produced.
+    """
+    score_by_id = {iid: sc for iid, _aid, sc in scored}
+    if not score_by_id:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT ai.id, ai.article_id, ai.source_url, ai.article_headline, "
+            "       ai.topic, ai.insight, ai.box_text, a.tickers, a.published_utc "
+            "FROM public.article_insights ai "
+            "JOIN public.articles a ON a.id = ai.article_id "
+            "WHERE ai.id = ANY(%s)",
+            (list(score_by_id),),
+        )
+        rows = cur.fetchall()
+    hits = [
+        InsightHit(
+            insight_id=r[0], article_id=r[1], source_url=r[2], article_headline=r[3],
+            topic=r[4], insight=r[5], box_text=r[6], tickers=list(r[7] or []),
+            published_utc=r[8], similarity=float(score_by_id.get(r[0], 0.0)),
+        )
+        for r in rows
+    ]
+    hits.sort(key=lambda h: (h.published_utc is None, h.published_utc))
+    return hits[:MAX_RELATED]
+
+
+def gather_related_super(
+    conn, article_id: int, months_before: Optional[int], k: int,
+    exclusive: bool, min_similarity: float, net_k: int, net_min_sim: float,
+    tau_ins: float, budget: int,
+) -> List[InsightHit]:
+    """Retrieve related prior insights via the two-stage 'super' hybrid retriever.
+
+    Uses ``hybrid_retrieval.retrieve(method="super")`` -- a WIDE whole-article
+    net gated by an insight-cosine threshold, then RRF reranked -- and hydrates
+    the kept insight ids into InsightHit rows, sorted earliest->latest.
+    """
+    res = retrieve(
+        article_id, method="super", months_before=months_before,
+        exclusive=exclusive, k=k, min_sim=min_similarity, net_k=net_k,
+        net_min_sim=net_min_sim, tau_ins=tau_ins, budget=budget, conn=conn,
+    )
+    return _load_insight_hits(conn, res.scored)
 
 
 # --------------------------------------------------------------------------- #
@@ -262,6 +320,23 @@ def main() -> None:
     p.add_argument("--min-similarity", type=float, default=DEFAULT_MIN_SIMILARITY,
                    help=f"drop related insights below this cosine sim "
                         f"(default {DEFAULT_MIN_SIMILARITY})")
+    p.add_argument("--retrieval", choices=RETRIEVALS, default=DEFAULT_RETRIEVAL,
+                   help="related-insight retriever: 'insight' = per-seed-insight "
+                        "ANN over article_insights (the original); 'super' = the "
+                        "two-stage whole-article-net + insight-rerank hybrid "
+                        f"(default {DEFAULT_RETRIEVAL})")
+    p.add_argument("--net-k", type=int, default=DEF_NET_K,
+                   help=f"[--retrieval super] whole-article net size "
+                        f"(default {DEF_NET_K})")
+    p.add_argument("--net-min-similarity", type=float, default=DEF_NET_MIN_SIM,
+                   help=f"[--retrieval super] cosine floor for the wide article "
+                        f"net (default {DEF_NET_MIN_SIM})")
+    p.add_argument("--tau-insight", type=float, default=DEF_TAU_INS,
+                   help=f"[--retrieval super] keep net insights with max cosine-to-"
+                        f"seed >= this (default {DEF_TAU_INS})")
+    p.add_argument("--budget", type=int, default=DEF_BUDGET,
+                   help=f"[--retrieval super] how many reranked insights to keep "
+                        f"(default {DEF_BUDGET})")
     p.add_argument("--model", default=GEMINI_MODEL, help=f"Gemini model (default {GEMINI_MODEL})")
     p.add_argument("--show-context", action="store_true",
                    help="print the full prompt context sent to the model")
@@ -303,10 +378,17 @@ def main() -> None:
                 args.top_2 = False
 
         seeds = insights_of(conn, args.article_id)
-        related = gather_related(
-            conn, args.article_id, article["published_utc"],
-            args.months_before, args.k, args.exclusive, args.min_similarity,
-        )
+        if args.retrieval == "super":
+            related = gather_related_super(
+                conn, args.article_id, args.months_before, args.k,
+                args.exclusive, args.min_similarity, args.net_k,
+                args.net_min_similarity, args.tau_insight, args.budget,
+            )
+        else:
+            related = gather_related(
+                conn, args.article_id, article["published_utc"],
+                args.months_before, args.k, args.exclusive, args.min_similarity,
+            )
     finally:
         conn.close()
 
@@ -356,7 +438,8 @@ def main() -> None:
     by_ticker = {str(v.get("ticker", "")).upper(): v for v in verdicts}
     print(f"\nSeed: a#{article['id']} {_fmt_et(article['published_utc'])} ET")
     print(f"  {article['title'] or '(no title)'}")
-    print(f"  context: {len(seeds)} article insight(s) + {len(related)} related prior insight(s)")
+    print(f"  context: {len(seeds)} article insight(s) + {len(related)} related prior "
+          f"insight(s) [retrieval={args.retrieval}]")
     print(f"  judging {len(targets)} ticker(s): {', '.join(targets)}")
     for tk in targets:
         v = by_ticker.get(tk)
