@@ -908,3 +908,85 @@ from hybrid_retrieval import retrieve
 res = retrieve(seed_id, method="two-phase-similarity", months_before=3, exclusive=True)
 #   res.insight_ids / res.article_ids  -> feed into gather_related()
 ```
+
+---
+
+## 12. Does `--remove-unuseful` improve the precision/recall tradeoff?
+
+`--remove-unuseful` (in `insight_sentiment.py`) adds a *middle* model call between
+retrieval and the sentiment prompt: it shows each retrieved insight with its **source
+article headline** and asks the model to drop the incoherent or off-event ones (see the
+flag's design). The open question is whether that screen, applied *after* retrieval, buys
+precision cheaply — i.e. removes false positives without costing true positives.
+
+To measure it against ground truth, `scripts/validate_retreival/eval_screen.py` runs the
+**wide** two-phase-similarity point (`0.45/0.70/50`, the highest-recall config) on the
+original table (`last-noforward`), then applies the production screen and scores both at the
+insight level. Screening targets are the seed article's own tickers, exactly as in
+production. The *retrieved* row reproduces the §10.5 wide baseline (22.6 / 10.1 / 14.0).
+
+**Pooled (micro), 14 clusters, 1544 ground-truth insights:**
+
+| config | retrieved | TP | prec | recall | F1 |
+|---|--:|--:|--:|--:|--:|
+| `0.45/0.70/50` retrieved only | 691 | 156 | 22.6% | 10.1% | 14.0% |
+| `0.45/0.70/50` + `--remove-unuseful` | 678 | 155 | **22.9%** | 10.0% | 14.0% |
+| **Δ** | −13 | −1 | **+0.3pt** | −0.1pt | −0.0pt |
+
+**Where the screen actually acted** (9 of 14 clusters were left untouched):
+
+| Cluster | removed | TP (r→s) | prec (r→s) | F1 (r→s) |
+|---|--:|--:|--:|--:|
+| Stargate $500B AI infra | 1 | 4 → **3** | 8.0% → 6.1% | 4.3% → 3.3% |
+| Nvidia Q1 FY2026 | 1 | 26 → 26 | 52.0% → 53.1% | 31.0% → 31.1% |
+| Trump semiconductor tariffs | 3 | 2 → 2 | 4.0% → 4.3% | 4.3% → 4.4% |
+| Nvidia H20 export curbs | 1 | 6 → 6 | 12.0% → 12.2% | 19.0% → 19.4% |
+| CoreWeave IPO | 7 | 0 → 0 | 0.0% → 0.0% | n/a |
+
+#### What this shows
+
+1. **On this benchmark the screen is essentially F1-neutral** (−0.0 pt), nudging precision
+   up 0.3 pt and recall down 0.1 pt. It does **not** shift the precision/recall tradeoff in a
+   way ground truth can see.
+2. **When it does act, it is well-targeted.** Of the 13 insights it removed, **12 were
+   non-relevant** (false positives) and only **1 was relevant** (the Stargate true positive)
+   — a 12:1 good-to-bad ratio. So the screen rarely throws away signal; the precision lift is
+   real, just tiny in absolute terms.
+3. **Why so little happens here:** these clusters are *single, ticker-anchored events*
+   (an earnings print, a CEO change), and the retrieved insights are already the same ticker
+   and broadly on-event, so the headline screen has little to disambiguate. Its removals
+   cluster on the genuinely loose cases — CoreWeave (7, all non-relevant) and the tariff
+   narratives — exactly where retrieval reached past the event.
+4. **The screen's real value is event-disambiguation, which this benchmark doesn't stress.**
+   In production it shines on *narrow* seeds whose ticker has lots of unrelated coverage —
+   e.g. the live "Broadcom VeloSky launch" seed, where it cut 11 related insights to 3 by
+   dropping same-ticker / different-event boxes (custom-AI-chip, VMware, valuation takes).
+   The cluster ground truth, built around whole ticker-events, treats that same-ticker
+   coverage as on-topic, so the metric cannot reward the disambiguation.
+
+**Takeaway.** `--remove-unuseful` is a **precision safety-net, not a tradeoff lever.** Post
+two-phase-similarity retrieval it costs almost nothing (recall −0.1 pt, F1 flat) and removes
+mostly true noise, so it is safe to leave on; but on well-formed single-event retrieval it
+will not move precision/recall much. Its payoff is concentrated on narrow seeds where
+retrieval drags in same-ticker / different-event insights — a regime under-represented in
+this cluster benchmark but common in live single-article use.
+
+#### Conclusion — not adopted
+
+The tempting idea was to keep the wide `0.45/0.70/50` point (the best recall/F1) and let
+`--remove-unuseful` recover the precision of the tighter, adopted `0.55/0.75/40` default.
+It does not work:
+
+| config | prec | recall | F1 |
+|---|--:|--:|--:|
+| `0.55/0.75/40` (adopted default) | **25.2%** | 7.4% | 11.4% |
+| `0.45/0.70/50` + `--remove-unuseful` | 22.9% | 10.0% | 14.0% |
+| `0.45/0.70/50` retrieved only | 22.6% | 10.1% | 14.0% |
+
+Screening lifts wide precision only **22.6% → 22.9%**, closing ~0.3 of the ~2.6 pt gap to
+`0.55/0.75/40`'s 25.2% — roughly **12% of the way**. An LLM screen applied *after* retrieval
+cannot reproduce what the in-retrieval `tau` gate does, because the gate filters against the
+seed's own insight embeddings at scale while the screen only re-reads what already survived.
+**We therefore do not adopt `--remove-unuseful` as a precision mechanism, and keep it off by
+default**; precision is owned by the retrieval gates (`0.55/0.75/40`), and the flag remains
+available only as an optional safety-net for noisy single-article seeds (§above).
