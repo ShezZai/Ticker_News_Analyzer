@@ -124,11 +124,11 @@ def generate_boxes(article_text: str, *, chain=None, config=None) -> tuple[list[
     Langfuse client-side TTL cache absorbs the overhead. The chain itself is
     lru_cached, so model config changes need a process restart.
     """
-    from ticker_news.shared.prompts import get_prompt
+    from ticker_news.shared.prompts import get_prompt, safe_format
 
     chain = chain if chain is not None else _box_chain()
     template = get_prompt("extract-insights", PROMPT_TEMPLATE)
-    result = chain.invoke(template.format(article=article_text[:MAX_ARTICLE_CHARS]), config=config)
+    result = chain.invoke(safe_format(template, PROMPT_TEMPLATE, article=article_text[:MAX_ARTICLE_CHARS]), config=config)
     return result["boxes"], result["model"]
 
 

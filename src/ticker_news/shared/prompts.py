@@ -22,6 +22,17 @@ logger = logging.getLogger(__name__)
 PROMPT_LABEL = "production"
 
 
+def safe_format(template: str, fallback: str, **kwargs) -> str:
+    """Format a (possibly Langfuse-edited) template; fall back to the in-repo
+    template when the remote copy has unknown/typo'd placeholders, instead of
+    crashing every article until a restart."""
+    try:
+        return template.format(**kwargs)
+    except (KeyError, IndexError, ValueError) as exc:
+        logger.warning("prompt template format failed (%r); using in-repo fallback", exc)
+        return fallback.format(**kwargs)
+
+
 def get_prompt(name: str, fallback: str) -> str:
     """Return Langfuse prompt text (label=production) or the in-repo fallback.
 

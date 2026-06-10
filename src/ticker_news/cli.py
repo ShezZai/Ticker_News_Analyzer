@@ -210,7 +210,11 @@ def prompts_push() -> None:
     """Upsert the in-repo prompts to Langfuse with the production label."""
     from ticker_news.shared import prompts as prompts_mod
 
-    n = prompts_mod.push_all()
+    try:
+        n = prompts_mod.push_all()
+    except SystemExit as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1)
     typer.echo(f"pushed {n} prompt(s)")
 
 

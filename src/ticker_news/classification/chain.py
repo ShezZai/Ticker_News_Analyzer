@@ -87,7 +87,12 @@ def build_classifier(model_name: str):
         stop_after_attempt=RETRIES, wait_exponential_jitter=True
     )
     template = get_prompt("classify-article", PROMPT_TEMPLATE)
-    return ChatPromptTemplate.from_template(template) | structured
+    try:
+        prompt = ChatPromptTemplate.from_template(template)
+    except Exception:
+        logger.warning("classify prompt invalid; using in-repo fallback")
+        prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
+    return prompt | structured
 
 
 @lru_cache(maxsize=1)

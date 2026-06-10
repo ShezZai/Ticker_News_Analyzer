@@ -71,7 +71,7 @@ def render_analyst(role: str, article: dict) -> str:
     unavailable). Fetches per call; the Langfuse client-side TTL cache absorbs
     the overhead.
     """
-    from ticker_news.shared.prompts import get_prompt
+    from ticker_news.shared.prompts import get_prompt, safe_format
 
     kwargs = render_article(article)
     if role == "historical_precedent":
@@ -80,7 +80,7 @@ def render_analyst(role: str, article: dict) -> str:
             "\n".join(f"- {p}" for p in precedents) if precedents else "(none found)"
         )
     template = get_prompt(f"analyst-{role}", ANALYST_PROMPTS[role])
-    return template.format(**kwargs)
+    return safe_format(template, ANALYST_PROMPTS[role], **kwargs)
 
 
 def render_synthesis(article: dict, analyses: list[dict]) -> str:
@@ -88,10 +88,10 @@ def render_synthesis(article: dict, analyses: list[dict]) -> str:
     if available (falls back to in-repo template). Fetches per call; the
     Langfuse client-side TTL cache absorbs the overhead.
     """
-    from ticker_news.shared.prompts import get_prompt
+    from ticker_news.shared.prompts import get_prompt, safe_format
 
     blocks = "\n\n".join(
         f"[{a['role']}]\n{a['analysis']}" for a in analyses
     )
     template = get_prompt("synthesize-verdict", SYNTHESIS_PROMPT)
-    return template.format(analyses=blocks, **render_article(article))
+    return safe_format(template, SYNTHESIS_PROMPT, analyses=blocks, **render_article(article))
