@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,7 +15,9 @@ class AppSettings(BaseSettings):
 
     database_url: str = Field(
         default="postgresql://scraper:scraper@localhost:5432/news",
-        validation_alias="DATABASE_URL",
+        # SCRAPER_DB_DSN is honored as a fallback for the migration window
+        # (legacy scraper convention); remove the alias in the final cleanup phase.
+        validation_alias=AliasChoices("DATABASE_URL", "SCRAPER_DB_DSN"),
     )
 
     massive_api_key: str | None = Field(default=None, validation_alias="MASSIVE_API_KEY")

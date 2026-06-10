@@ -3,6 +3,7 @@ from ticker_news.shared.config import AppSettings
 
 def test_default_database_url_matches_docker_compose(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("SCRAPER_DB_DSN", raising=False)
     s = AppSettings(_env_file=None)
     assert s.database_url == "postgresql://scraper:scraper@localhost:5432/news"
 
@@ -32,3 +33,17 @@ def test_api_keys_default_to_none(monkeypatch):
     assert s.massive_api_key is None
     assert s.openai_api_key is None
     assert s.google_api_key is None
+
+
+def test_scraper_db_dsn_fallback_during_migration(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("SCRAPER_DB_DSN", "postgresql://legacy:x@oldhost:5432/news")
+    s = AppSettings(_env_file=None)
+    assert s.database_url == "postgresql://legacy:x@oldhost:5432/news"
+
+
+def test_database_url_wins_over_scraper_db_dsn(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://new:x@newhost:5432/news")
+    monkeypatch.setenv("SCRAPER_DB_DSN", "postgresql://legacy:x@oldhost:5432/news")
+    s = AppSettings(_env_file=None)
+    assert s.database_url == "postgresql://new:x@newhost:5432/news"
