@@ -42,8 +42,9 @@ SELLLIKE = {"sell", "strong_sell"}
 ACT_ORDER = ["strong_buy", "buy", "hold", "sell", "strong_sell"]
 
 
-def verdict_for(conn, article, seeds, related, ticker, model, actions) -> Optional[dict]:
-    prompt = isent.build_prompt([ticker], article, seeds, related, actions)
+def verdict_for(conn, article, seeds, related, ticker, model, actions,
+                bias: bool = False) -> Optional[dict]:
+    prompt = isent.build_prompt([ticker], article, seeds, related, actions, bias)
     try:
         out = isent.ask_gemini(prompt, model, actions=actions)
     except BaseException as exc:  # noqa: BLE001  (ask_gemini raises SystemExit on failure)
@@ -70,9 +71,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--db-range", nargs=2, metavar=("START", "END"), default=None,
                    help="instead of the pool CSV, sample real-news articles whose ET "
                         "date is in [START, END] (YYYY-MM-DD) straight from the DB")
-    p.add_argument("--compare", choices=["retrievers", "actions"], default="retrievers",
+    p.add_argument("--compare", choices=["retrievers", "actions", "bias"],
+                   default="retrievers",
                    help="retrievers: insight vs two-phase-similarity (both buy/sell/hold). "
-                        "actions: two-phase-similarity with buy/sell/hold vs +--include-strong.")
+                        "actions: two-phase-similarity with buy/sell/hold vs +--include-strong. "
+                        "bias: two-phase-similarity without vs with +--include-bias.")
     p.add_argument("--n", type=int, default=50)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--oversample", type=int, default=40,
@@ -93,8 +96,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             pool = [r for r in csv.DictReader(fh) if r["primary_ticker"]]
         src = os.path.basename(args.pool)
     args._src = src
-    args._labels = (("two-phase", "two-phase + strong") if args.compare == "actions"
-                    else ("insight", "two-phase-similarity"))
+    args._labels = {
+        "actions": ("two-phase", "two-phase + strong"),
+        "bias": ("two-phase", "two-phase + bias"),
+    }.get(args.compare, ("insight", "two-phase-similarity"))
     random.Random(args.seed).shuffle(pool)
     cand = pool[: args.n + args.oversample]
     print(f"pool={len(pool)}  drawing {len(cand)} candidates for {args.n} rows", file=sys.stderr)
@@ -142,6 +147,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                                   isent.ACTIONS)
                 v_b = verdict_for(conn, article, seeds, rel_two, tkr, args.model,
                                   isent.ACTIONS_STRONG)
+            elif args.compare == "bias":
+                # same (two-phase) context + actions; bias caveat off vs on
+                v_a = verdict_for(conn, article, seeds, rel_two, tkr, args.model,
+                                  isent.ACTIONS, bias=False)
+                v_b = verdict_for(conn, article, seeds, rel_two, tkr, args.model,
+                                  isent.ACTIONS, bias=True)
             else:
                 rel_ins = isent.gather_related(conn, aid, article["published_utc"],
                                                MONTHS_BEFORE, K, True, MIN_SIM)
@@ -227,14 +238,14 @@ def _bucket_table(rows, akey) -> List[str]:
     return out
 
 
-def _transition(rows) -> List[str]:
-    """default-action -> strong-action cross-tab (only the rows that changed)."""
+def _transition(rows, la: str, lb: str) -> List[str]:
+    """Verdict cross-tab (la -> lb), only the rows whose action changed."""
     from collections import Counter
     moved = Counter((r["act_a"], r["act_b"]) for r in rows if r["act_a"] != r["act_b"])
     if not moved:
-        return ["_No verdict changed when the strong menu was offered._"]
-    out = [f"_{sum(moved.values())} of {len(rows)} verdicts changed with the strong menu:_",
-           "", "| default | → strong | n |", "|---|---|--:|"]
+        return ["_No verdict changed between the two variants._"]
+    out = [f"_{sum(moved.values())} of {len(rows)} verdicts changed:_",
+           "", f"| {la} | → {lb} | n |", "|---|---|--:|"]
     for (a, b), n in sorted(moved.items(), key=lambda kv: -kv[1]):
         out.append(f"| {a} | {b} | {n} |")
     return out
@@ -260,9 +271,9 @@ def write_report(rows, args) -> None:
         lines.append(f"\n**Summary — `{label}`**")
         lines.append(_summary_line(rows, akey))
         lines += [""] + _bucket_table(rows, akey)
-    if args.compare == "actions":
-        lines.append("\n**Action shift (default → strong)**")
-        lines += _transition(rows)
+    if args.compare in ("actions", "bias"):
+        lines.append(f"\n**Verdict shift ({la} → {lb})**")
+        lines += _transition(rows, la, lb)
     with open(args.out, "w") as fh:
         fh.write("\n".join(lines) + "\n")
 

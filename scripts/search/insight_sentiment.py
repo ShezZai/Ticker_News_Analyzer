@@ -26,6 +26,7 @@ Usage:
     python insight_sentiment.py 4235 --retrieval two-phase-similarity --budget 30
     python insight_sentiment.py 4235 --remove-unuseful              # screen context first
     python insight_sentiment.py 4235 --include-strong               # +strong_buy/strong_sell
+    python insight_sentiment.py 4235 --include-bias                 # caveat: insights skew bullish
     python insight_sentiment.py 4235 --model gemini-2.5-flash-lite --json
 
 Requires GOOGLE_API_KEY (Gemini) in env / .env. The article + insight data come
@@ -80,6 +81,15 @@ ACTION_MENU_STRONG = (
     '"strong_sell" (a LARGE fall). Reserve "strong_*" for clearly material, '
     'surprising news; use the plain "buy"/"sell" for ordinary moves')
 
+# --include-bias injects a debiasing caveat: the extracted insights skew favorable.
+BIAS_NOTE = (
+    "- BIAS WARNING: the insights above (both this article's and the prior ones) are\n"
+    "  extracted from news/PR-style sources and skew FAVORABLE -- positives are\n"
+    "  emphasized and negatives downplayed. Take them with a grain of salt: do NOT\n"
+    "  read a wall of upbeat insights as a buy signal by itself, discount promotional\n"
+    "  or one-sided positivity, and weight genuinely surprising or negative details\n"
+    "  more heavily than the favorable framing.")
+
 PROMPT_INSTRUCTIONS = """You are an equity analyst reacting to breaking news in real time.
 
 TIMELINE -- this is strict:
@@ -107,7 +117,7 @@ Rules:
   relevant to a ticker, "hold" with low confidence is appropriate.
 - For each ticker return one action: {action_menu}; a confidence in [0, 1]; and a
   2-4 sentence justification grounded in the article.
-
+{bias_note}
 Return ONLY a JSON array with one object per ticker, in the same order:
 [{{"ticker": "...", "action": "...", "confidence": 0.0, "justification": "..."}}]
 """
@@ -218,11 +228,13 @@ def _fmt_et(dt) -> str:
 
 
 def build_prompt(targets: List[str], article: dict, seeds: List[SeedInsight],
-                 related: List[InsightHit], actions: List[str] = ACTIONS) -> str:
+                 related: List[InsightHit], actions: List[str] = ACTIONS,
+                 bias: bool = False) -> str:
     pub = _fmt_et(article["published_utc"])
     menu = ACTION_MENU_STRONG if actions == ACTIONS_STRONG else ACTION_MENU
     parts = [PROMPT_INSTRUCTIONS.format(tickers=", ".join(targets), pub=pub,
-                                        action_menu=menu)]
+                                        action_menu=menu,
+                                        bias_note=BIAS_NOTE if bias else "")]
 
     parts.append(f"\n===== THE ARTICLE -- breaking NOW at {pub} ET (react to this) =====")
     parts.append(f"TICKERS TO JUDGE: {', '.join(targets)}")
@@ -453,6 +465,10 @@ def main() -> None:
     p.add_argument("--include-strong", action="store_true",
                    help="widen the action menu with 'strong_buy' / 'strong_sell' "
                         "(large-move, high-conviction calls) alongside buy/sell/hold")
+    p.add_argument("--include-bias", action="store_true",
+                   help="add a caveat to the prompt that extracted insights skew "
+                        "favorable, so the model takes their positivity with a grain "
+                        "of salt")
     p.add_argument("--show-context", action="store_true",
                    help="print the full prompt context sent to the model")
     p.add_argument("--json", action="store_true", help="print only the JSON result")
@@ -517,13 +533,14 @@ def main() -> None:
 
     def judge(tks: List[str]) -> List[dict]:
         return _annotate(
-            ask_gemini(build_prompt(tks, article, seeds, related, actions),
+            ask_gemini(build_prompt(tks, article, seeds, related, actions,
+                                    args.include_bias),
                        args.model, actions=actions),
             article,
         )
 
     if args.show_context:
-        print(build_prompt(targets, article, seeds, related, actions))
+        print(build_prompt(targets, article, seeds, related, actions, args.include_bias))
         print("\n" + "=" * 70 + "\n")
 
     # --top-2: one joint call, then re-run the 2 best non-hold tickers separately.
