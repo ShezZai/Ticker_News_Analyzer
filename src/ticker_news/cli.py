@@ -3,9 +3,6 @@ from dataclasses import replace
 
 import typer
 
-from ticker_news.scraping.config import Settings
-from ticker_news.scraping.pipeline import run as pipeline_run
-
 app = typer.Typer(help="Ticker News Analyzer pipeline.", no_args_is_help=True)
 
 
@@ -25,9 +22,12 @@ def scrape(
     concurrency: int | None = typer.Option(None, min=1, help="Worker count override."),
 ) -> None:
     """Scrape article bodies for every URL in the CSV into the articles table."""
+    from ticker_news.scraping import pipeline
+    from ticker_news.scraping.config import Settings
+
     settings = Settings()
     if ignore_robots:
         settings = replace(settings, respect_robots=False)
     if concurrency is not None:
         settings = replace(settings, concurrency=concurrency)
-    asyncio.run(pipeline_run(csv, settings, limit=limit, retry_errors=retry_errors))
+    asyncio.run(pipeline.run(csv, settings, limit=limit, retry_errors=retry_errors))

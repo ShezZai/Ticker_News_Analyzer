@@ -17,7 +17,7 @@ def test_scrape_passes_args_and_settings(monkeypatch):
     async def fake_run(csv, settings, *, limit=None, retry_errors=False):
         captured.update(csv=csv, settings=settings, limit=limit, retry_errors=retry_errors)
 
-    monkeypatch.setattr(cli, "pipeline_run", fake_run)
+    monkeypatch.setattr("ticker_news.scraping.pipeline.run", fake_run)
     result = runner.invoke(
         cli.app,
         ["scrape", "--csv", "x.csv", "--ignore-robots", "--concurrency", "4",
@@ -40,7 +40,7 @@ def test_scrape_defaults_respect_robots(monkeypatch):
     async def fake_run(csv, settings, *, limit=None, retry_errors=False):
         captured["settings"] = settings
 
-    monkeypatch.setattr(cli, "pipeline_run", fake_run)
+    monkeypatch.setattr("ticker_news.scraping.pipeline.run", fake_run)
     result = runner.invoke(cli.app, ["scrape", "--csv", "x.csv"])
     assert result.exit_code == 0, result.output
     assert captured["settings"].respect_robots is True
@@ -52,7 +52,7 @@ def test_scrape_rejects_zero_concurrency(monkeypatch):
     async def fake_run(csv, settings, *, limit=None, retry_errors=False):
         called["yes"] = True
 
-    monkeypatch.setattr(cli, "pipeline_run", fake_run)
+    monkeypatch.setattr("ticker_news.scraping.pipeline.run", fake_run)
     result = runner.invoke(cli.app, ["scrape", "--csv", "x.csv", "--concurrency", "0"])
     assert result.exit_code != 0
     assert "yes" not in called
