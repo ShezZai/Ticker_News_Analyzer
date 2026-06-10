@@ -21,7 +21,7 @@ from ticker_news.service import jobs, stages
 from ticker_news.service.jobs import DONE, Job, NOTIFY_CHANNEL
 from ticker_news.service.stages import PermanentStageError, StageError, TagContext
 from ticker_news.shared.config import get_settings
-from ticker_news.shared import db
+from ticker_news.shared import db, observability as obs
 from ticker_news.sentiment import store as sentiment_store
 
 logger = logging.getLogger(__name__)
@@ -61,25 +61,28 @@ async def process_article(
     Returns True on success, False on failure.
     """
     stage = job.stage
-    try:
-        while stage != DONE:
-            runner = runners[stage]
-            result = await _run_stage(runner, job)
-            if stage == "scrape" and result == "empty":
-                # Nothing extracted — no content for downstream stages.
-                await asyncio.to_thread(queue.advance, conn, job.article_url, DONE)
-                return True
-            stage = jobs.next_stage(stage)
-            await asyncio.to_thread(queue.advance, conn, job.article_url, stage)
-        return True
-    except PermanentStageError as exc:
-        logger.warning("article %s permanently failed at stage %s: %r", job.article_url, stage, exc)
-        await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc), permanent=True)
-        return False
-    except Exception as exc:
-        logger.warning("article %s failed at stage %s: %r", job.article_url, stage, exc)
-        await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc))
-        return False
+    ticker = job.tickers[0] if job.tickers else None
+    with obs.article_trace(job.article_url, ticker=ticker):
+        try:
+            while stage != DONE:
+                runner = runners[stage]
+                with obs.stage_span(stage):
+                    result = await _run_stage(runner, job)
+                if stage == "scrape" and result == "empty":
+                    # Nothing extracted — no content for downstream stages.
+                    await asyncio.to_thread(queue.advance, conn, job.article_url, DONE)
+                    return True
+                stage = jobs.next_stage(stage)
+                await asyncio.to_thread(queue.advance, conn, job.article_url, stage)
+            return True
+        except PermanentStageError as exc:
+            logger.warning("article %s permanently failed at stage %s: %r", job.article_url, stage, exc)
+            await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc), permanent=True)
+            return False
+        except Exception as exc:
+            logger.warning("article %s failed at stage %s: %r", job.article_url, stage, exc)
+            await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc))
+            return False
 
 
 async def _listen_for_jobs(dsn: str, wake: asyncio.Event) -> None:
@@ -217,5 +220,6 @@ async def serve(
             except (asyncio.CancelledError, Exception):
                 pass
         await fetcher.aclose()
+        obs.flush()
 
     return processed

@@ -138,4 +138,5 @@ def classify_all(
             print(f"  {c:<20} {counts[c]}")
         return done
     finally:
+        obs.flush()
         conn.close()

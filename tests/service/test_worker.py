@@ -91,3 +91,17 @@ async def test_permanent_failure_parks_immediately():
     await worker.process_article(_job(), {"scrape": scrape}, q, conn=None)
     assert q.advanced == []
     assert len(q.failed) == 1
+
+
+async def test_process_article_unchanged_under_disabled_observability(monkeypatch):
+    # belt-and-braces: explicitly disabled, full chain still runs in order
+    from ticker_news.shared.config import get_settings
+    get_settings.cache_clear()
+    for var in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    ran = []
+    runners = {s: (lambda job, _s=s: ran.append(_s)) for s in
+               ["embed", "classify", "tag", "insights", "sentiment"]}
+    q = FakeQueue()
+    await worker.process_article(_job(stage="embed"), runners, q, conn=None)
+    assert ran == ["embed", "classify", "tag", "insights", "sentiment"]

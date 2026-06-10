@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ticker_news.sentiment import store
 from ticker_news.service.stages import sentiment_stage
+from ticker_news.shared import observability as obs
 from ticker_news.shared.db import connect
 
 try:
@@ -50,4 +51,5 @@ def run_batch(*, limit: int | None = None, reprocess: bool = False) -> int:
         print(f"Judged {done}/{len(urls)} article(s).")
         return done
     finally:
+        obs.flush()
         conn.close()

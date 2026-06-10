@@ -371,6 +371,7 @@ def extract_all(
         )
         return total_boxes
     finally:
+        obs.flush()
         conn.close()
 
 
