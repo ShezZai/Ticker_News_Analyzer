@@ -97,6 +97,8 @@ async def test_process_article_unchanged_under_disabled_observability(monkeypatc
     # belt-and-braces: explicitly disabled, full chain still runs in order
     from ticker_news.shared.config import get_settings
     get_settings.cache_clear()
+    from ticker_news.shared import observability as obs
+    obs.client.cache_clear()
     for var in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
         monkeypatch.delenv(var, raising=False)
     ran = []

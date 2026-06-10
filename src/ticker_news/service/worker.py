@@ -62,7 +62,7 @@ async def process_article(
     """
     stage = job.stage
     ticker = job.tickers[0] if job.tickers else None
-    with obs.article_trace(job.article_url, ticker=ticker):
+    with obs.article_trace(job.article_url, ticker=ticker) as root:
         try:
             while stage != DONE:
                 runner = runners[stage]
@@ -71,16 +71,26 @@ async def process_article(
                 if stage == "scrape" and result == "empty":
                     # Nothing extracted — no content for downstream stages.
                     await asyncio.to_thread(queue.advance, conn, job.article_url, DONE)
+                    if root is not None:
+                        root.update(output={"final_stage": jobs.DONE, "ok": True})
                     return True
                 stage = jobs.next_stage(stage)
                 await asyncio.to_thread(queue.advance, conn, job.article_url, stage)
+            if root is not None:
+                root.update(output={"final_stage": jobs.DONE, "ok": True})
             return True
         except PermanentStageError as exc:
             logger.warning("article %s permanently failed at stage %s: %r", job.article_url, stage, exc)
+            if root is not None:
+                root.update(level="ERROR", status_message=repr(exc),
+                            output={"final_stage": stage, "ok": False})
             await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc), permanent=True)
             return False
         except Exception as exc:
             logger.warning("article %s failed at stage %s: %r", job.article_url, stage, exc)
+            if root is not None:
+                root.update(level="ERROR", status_message=repr(exc),
+                            output={"final_stage": stage, "ok": False})
             await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc))
             return False
 
@@ -220,6 +230,8 @@ async def serve(
             except (asyncio.CancelledError, Exception):
                 pass
         await fetcher.aclose()
+        # Bounded by the SDK's HTTP timeout — shutdown can take seconds when
+        # Langfuse Cloud is unreachable; no-op when disabled.
         obs.flush()
 
     return processed
