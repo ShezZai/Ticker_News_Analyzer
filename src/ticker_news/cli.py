@@ -137,6 +137,47 @@ def sentiment(
 
 
 @app.command()
+def search(
+    query: str | None = typer.Argument(None, help="Free-text search query."),
+    like: int | None = typer.Option(None, "--like", metavar="ID", help="Find articles similar to this article id instead of a text query."),
+    like_url: str | None = typer.Option(None, "--like-url", metavar="URL", help="Find articles similar to the article at this URL."),
+    statement: str | None = typer.Option(None, "--statement", metavar="TEXT|FILE", help="Search by similarity to a statement, dated relative to the --like/--like-url article. A literal string, or a path to a JSON array of {statement, scope, value} objects."),
+    k: int = typer.Option(10, "-k", "--k", help="Number of results."),
+    ticker: list[str] | None = typer.Option(None, "--ticker", metavar="SYM", help="Filter by ticker (repeatable)."),
+    segment: str | None = typer.Option(None, "--segment", metavar="NAME", help="Filter by AI segment (matches primary_segment or more_segments)."),
+    domain: str | None = typer.Option(None, "--domain", help="Filter by source_domain."),
+    since: str | None = typer.Option(None, "--since", "--after", help="Earliest published_utc, inclusive (YYYY-MM-DD)."),
+    until: str | None = typer.Option(None, "--until", "--before", help="Latest published_utc, inclusive (YYYY-MM-DD)."),
+    months_before: int | None = typer.Option(None, "--months-before", metavar="N", help="With --like/--like-url, only search the N months before the seed article's own publish date."),
+    min_similarity: float = typer.Option(0.7, "--min-similarity", help="Drop results below this cosine similarity (pass 0 to show all)."),
+    exclusive: bool = typer.Option(False, "--exclusive", help="Make the upper date bound strict on the exact timestamp; with --months-before this anchors the window on the seed's exact publish time."),
+    ef_search: int | None = typer.Option(None, "--ef-search", metavar="N", help="HNSW ANN candidate breadth (default 40, or HNSW_EF_SEARCH); raise it if a selective filter returns too few/no results."),
+) -> None:
+    """Semantic search over the embedded articles (pgvector ANN)."""
+    from ticker_news.research import search as search_mod
+
+    try:
+        search_mod.run_cli(
+            query,
+            like=like,
+            like_url=like_url,
+            statement=statement,
+            k=k,
+            tickers=list(ticker) if ticker else None,
+            segment=segment,
+            domain=domain,
+            since=since,
+            until=until,
+            months_before=months_before,
+            min_similarity=min_similarity,
+            exclusive=exclusive,
+            ef_search=ef_search,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+@app.command()
 def serve(
     workers: int = typer.Option(4, min=1, help="Concurrent pipeline workers."),
     poll_interval: float = typer.Option(60.0, help="Feed poll interval, seconds."),
