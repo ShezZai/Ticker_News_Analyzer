@@ -106,12 +106,17 @@ class MassiveRestSource:
         lookback: timedelta = timedelta(hours=24),
         fetch_articles: Callable[[str, str], list[dict]] = fetch_articles_rest,
         max_polls: int | None = None,
+        fetch_concurrency: int = 8,
     ):
         self.tickers = [t.strip().upper() for t in tickers if t and t.strip()]
         self.poll_interval_s = poll_interval_s
         self.lookback = lookback
         self.fetch_articles = fetch_articles
         self.max_polls = max_polls
+        self.fetch_concurrency = fetch_concurrency
+        # Cursors are in-memory only: a restart re-fetches from now-lookback.
+        # The DB enqueue (ON CONFLICT DO NOTHING) absorbs re-emits; articles
+        # are only LOST if the process is down longer than `lookback`.
         self._cursors: dict[str, datetime] = {}
         self._seen_urls: set[str] = set()
 
@@ -128,14 +133,24 @@ class MassiveRestSource:
             now = datetime.now(timezone.utc)
             # url -> (tickers, article) accumulated across this poll
             batch: dict[str, tuple[list[str], dict]] = {}
-            for ticker in self.tickers:
-                since = self._since(ticker, now)
-                try:
-                    articles = await asyncio.to_thread(
-                        self.fetch_articles, ticker, since.isoformat()
-                    )
-                except Exception as exc:
-                    logger.warning("massive poll failed for %s: %r", ticker, exc)
+            sem = asyncio.Semaphore(self.fetch_concurrency)
+
+            async def _fetch_one(ticker: str, since: datetime):
+                async with sem:
+                    try:
+                        articles = await asyncio.to_thread(
+                            self.fetch_articles, ticker, since.isoformat()
+                        )
+                        return ticker, articles, None
+                    except Exception as exc:
+                        return ticker, [], exc
+
+            results = await asyncio.gather(
+                *(_fetch_one(t, self._since(t, now)) for t in self.tickers)
+            )
+            for ticker, articles, error in results:
+                if error is not None:
+                    logger.warning("massive poll failed for %s: %r", ticker, error)
                     continue
                 newest = self._cursors.get(ticker)
                 for article in articles:
