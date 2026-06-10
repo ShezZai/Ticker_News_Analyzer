@@ -9,7 +9,8 @@ def test_ignore_robots_flag_overrides_settings():
     assert args.csv == "x.csv"
 
 
-def test_defaults_respect_robots():
+def test_defaults_respect_robots(monkeypatch):
+    monkeypatch.delenv("SCRAPER_RESPECT_ROBOTS", raising=False)
     args = parse_args(["--csv", "x.csv"])
     settings = build_settings(args)
     assert settings.respect_robots is True

@@ -1,4 +1,5 @@
 import os
+import urllib.parse
 
 import psycopg
 import pytest
@@ -6,12 +7,21 @@ import pytest
 TEST_DSN = os.environ.get(
     "TICKER_NEWS_TEST_DSN", "postgresql://scraper:scraper@localhost:5432/news_test"
 )
-ADMIN_DSN = "postgresql://scraper:scraper@localhost:5432/news"
+
+
+def _db_name(dsn: str) -> str:
+    return urllib.parse.urlparse(dsn).path.lstrip("/")
+
+
+def _admin_dsn(dsn: str) -> str:
+    """Same server as TEST_DSN, but the default maintenance database."""
+    parts = urllib.parse.urlparse(dsn)
+    return urllib.parse.urlunparse(parts._replace(path="/postgres"))
 
 
 def _connect_test_db():
     """Connect to news_test, creating the database on first run."""
-    if "news_test" not in TEST_DSN:
+    if "news_test" not in _db_name(TEST_DSN):
         raise RuntimeError(
             f"Refusing to run db tests against {TEST_DSN!r}: the test database "
             "name must contain 'news_test' (this fixture TRUNCATEs tables)."
@@ -21,7 +31,7 @@ def _connect_test_db():
     except psycopg.OperationalError as exc:
         if "news_test" not in str(exc):
             pytest.skip("Postgres not reachable; run `docker compose up -d`")
-        admin = psycopg.connect(ADMIN_DSN, autocommit=True)
+        admin = psycopg.connect(_admin_dsn(TEST_DSN), autocommit=True)
         admin.execute("CREATE DATABASE news_test")
         admin.close()
         return psycopg.connect(TEST_DSN)
