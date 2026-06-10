@@ -282,6 +282,5 @@ def sentiment_stage(conn: psycopg.Connection, url: str) -> None:
         "precedents": precedents,
     }
     conn.rollback()  # release the read transaction; LLM calls can take minutes
-    _cfg = obs.chain_config() or None
-    verdict, analyses = judge_article(article) if _cfg is None else judge_article(article, config=_cfg)
+    verdict, analyses = judge_article(article, config=obs.chain_config() or None)
     sentiment_store.save_verdict(conn, aid, ticker, verdict, analyses, GEMINI_FLASH)

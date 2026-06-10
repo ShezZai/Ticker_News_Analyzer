@@ -13,6 +13,7 @@ import psycopg
 from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel
 
+from ticker_news.shared import observability as obs
 from ticker_news.shared.llm import EMBED_DIM, GEMINI_FLASH, GEMINI_FLASH_LITE, gemini_chat
 
 try:  # optional progress bar
@@ -319,11 +320,12 @@ def extract_all(
         n_empty = 0       # articles the model judged to have no insight (boilerplate)
         n_failed = 0      # articles the model never answered for, even after retries
 
+        def _generate_with_cfg(content):
+            return generate_boxes(content, config=obs.chain_config() or None)
+
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            from ticker_news.shared import observability as obs
-            _cfg = obs.chain_config() or None
             futures = {
-                pool.submit(generate_boxes, content or "", config=_cfg):
+                pool.submit(_generate_with_cfg, content or ""):
                     (aid, url, title, content)
                 for aid, url, title, content in rows
             }

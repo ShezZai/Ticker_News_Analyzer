@@ -105,10 +105,12 @@ def classify_all(
             conn.commit()
             pending.clear()
 
+        def _classify_with_cfg(title, content):
+            return classify_article(title, content, config=obs.chain_config() or None)
+
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            _cfg = obs.chain_config() or None
             futures = {
-                pool.submit(classify_article, title, content or "", config=_cfg):
+                pool.submit(_classify_with_cfg, title, content or ""):
                     (aid, title)
                 for aid, title, content in rows
             }

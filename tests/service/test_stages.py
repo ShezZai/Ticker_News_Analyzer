@@ -169,7 +169,7 @@ class _StubConn:
 async def test_sentiment_skips_non_real_news(monkeypatch):
     conn = _StubConn([(1, "T", "body", "marketing fluff", "NVDA", None, None)])
     called = {}
-    monkeypatch.setattr(stages, "judge_article", lambda a: called.setdefault("x", True))
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None: called.setdefault("x", True))
     stages.sentiment_stage(conn, "https://example.com/a")
     assert "x" not in called
     assert conn.rolled_back == 1
@@ -177,14 +177,14 @@ async def test_sentiment_skips_non_real_news(monkeypatch):
 
 async def test_sentiment_skips_untagged(monkeypatch):
     conn = _StubConn([(1, "T", "body", "real news", None, None, None)])
-    monkeypatch.setattr(stages, "judge_article", lambda a: (_ for _ in ()).throw(AssertionError))
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
     stages.sentiment_stage(conn, "https://example.com/a")
     assert conn.rolled_back == 1
 
 
 async def test_sentiment_skips_empty_content(monkeypatch):
     conn = _StubConn([(1, "T", "   ", "real news", "NVDA", None, None)])
-    monkeypatch.setattr(stages, "judge_article", lambda a: (_ for _ in ()).throw(AssertionError))
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
     stages.sentiment_stage(conn, "https://example.com/a")
     assert conn.rolled_back == 1
 
@@ -200,8 +200,8 @@ async def test_sentiment_judges_real_news(monkeypatch):
     monkeypatch.setattr(stages, "similar_past_articles", lambda c, a, k=5: ["p1"])
     monkeypatch.setattr(
         stages, "judge_article",
-        lambda article: (seen.update(article) or
-                         (Verdict(action="hold", confidence=0.5, reasoning=""), [])),
+        lambda article, config=None: (seen.update(article) or
+                                      (Verdict(action="hold", confidence=0.5, reasoning=""), [])),
     )
     saved = {}
     monkeypatch.setattr(
