@@ -222,23 +222,28 @@ def insights_stage(conn: psycopg.Connection, url: str, tag_ctx: TagContext) -> N
 def similar_past_articles(conn: psycopg.Connection, article_id: int, k: int = 5) -> list[str]:
     """Cosine-nearest earlier real-news articles, using the stored embedding.
 
-    No new embedding call — the article was embedded in the embed stage.
-    Returns display lines for the historical-precedent analyst.
+    Two-step on purpose: fetching the target embedding first lets the planner
+    drive the second query through the HNSW index (a join-embedded ORDER BY
+    <=> falls back to a sequential scan). Returns display lines for the
+    historical-precedent analyst; empty when the target has no embedding or
+    no published_utc.
     """
+    target = conn.execute(
+        "SELECT embedding, published_utc FROM public.articles "
+        "WHERE id = %s AND embedding IS NOT NULL",
+        (article_id,),
+    ).fetchone()
+    if target is None or target[1] is None:
+        logger.debug("no embedding/published_utc for article %s; skipping precedents", article_id)
+        return []
+    embedding, published = target
     rows = conn.execute(
-        """
-        SELECT to_char(b.published_utc, 'YYYY-MM-DD'), b.primary_ticker, b.title
-        FROM public.articles a
-        JOIN public.articles b
-          ON b.id != a.id
-         AND b.embedding IS NOT NULL
-         AND b.category = 'real news'
-         AND b.published_utc < a.published_utc
-        WHERE a.id = %s AND a.embedding IS NOT NULL
-        ORDER BY b.embedding <=> a.embedding
-        LIMIT %s
-        """,
-        (article_id, k),
+        "SELECT to_char(published_utc, 'YYYY-MM-DD'), primary_ticker, title "
+        "FROM public.articles "
+        "WHERE id != %s AND embedding IS NOT NULL "
+        "  AND category = 'real news' AND published_utc < %s "
+        "ORDER BY embedding <=> %s LIMIT %s",
+        (article_id, published, embedding, k),
     ).fetchall()
     return [f"{d} [{t or '?'}] {title}" for d, t, title in rows]
 

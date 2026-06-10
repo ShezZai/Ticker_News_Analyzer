@@ -182,6 +182,13 @@ async def test_sentiment_skips_untagged(monkeypatch):
     assert conn.rolled_back == 1
 
 
+async def test_sentiment_skips_empty_content(monkeypatch):
+    conn = _StubConn([(1, "T", "   ", "real news", "NVDA", None, None)])
+    monkeypatch.setattr(stages, "judge_article", lambda a: (_ for _ in ()).throw(AssertionError))
+    stages.sentiment_stage(conn, "https://example.com/a")
+    assert conn.rolled_back == 1
+
+
 async def test_sentiment_judges_real_news(monkeypatch):
     from ticker_news.sentiment.schemas import Verdict
 
