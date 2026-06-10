@@ -305,9 +305,18 @@ Which script produced which set/result in this document, and what was run.
 
 **Validation runs**
 
-| Script | What it does | Produced |
-|---|---|---|
-| [`validate_sentiment.py`](../../scripts/validate_retreival/validate_sentiment.py) | Samples articles (from the pool CSV, or from the DB via `--db-range`), runs `insight_sentiment` on the primary ticker under both retrievers, pairs each verdict with the buy→close return, and scores correctness. | §6 (50 peaceful-day articles), §7 (15 bearish-window articles via `--db-range 2025-01-02 2025-03-30`) |
+All produced by [`validate_sentiment.py`](../../scripts/validate_retreival/validate_sentiment.py)
+— samples articles (from the pool CSV, or the DB via `--db-range`), runs `insight_sentiment` on
+the primary ticker for the two variants of `--compare`, pairs each verdict with the buy→close
+return, and scores correctness. One row per section:
+
+| Section | Invocation | Compares | Sample |
+|---|---|---|---|
+| §6 | `--n 50 --seed 42` | `insight` vs `two-phase-similarity` retrieval | 50 peaceful-day |
+| §7 | `--db-range 2025-01-02 2025-03-30 --n 15 --seed 7` | same (retrievers) | 15 bearish-window |
+| §9 | `--compare actions --n 150 --seed 42` | two-phase: `buy/sell/hold` vs `+--include-strong` | 150 peaceful-day |
+| §10 | `--compare bias --n 100 --seed 42` | two-phase: without vs `+--include-bias` | 100 peaceful-day |
+| §11 | `--compare bias --db-range 2025-01-02 2025-03-30 --n 30 --seed 7` | same (bias) | 30 bearish-window |
 
 **Subjects under test / dependencies** (the pipeline being measured, not validators)
 
@@ -710,3 +719,82 @@ accuracy); reach for it only when you specifically want fewer, more-hedged bulli
 
 </details>
 
+
+---
+
+## 11. `--include-bias` in a bearish window (Jan 2 – Mar 30 2025)
+
+§10 found the debiasing caveat roughly neutral on *calm* tape. This repeats it on the
+**down-trending** window from §7 (SPY −4.3%, NASDAQ Composite −10.3%), where over-bullishness
+should be most costly — so the caveat has the best chance to help. **30** real-news articles
+sampled (seed 7) from the DB; two-phase-similarity retrieval, plain `buy/sell/hold`; the only
+difference between columns is the bias caveat.
+
+```bash
+python scripts/validate_retreival/validate_sentiment.py \
+    --compare bias --db-range 2025-01-02 2025-03-30 --n 30 --seed 7
+```
+
+| # | a# | ticker | sell date | gain% | two-phase (act·conf) | ✓ | two-phase + bias (act·conf) | ✓ |
+|--:|--:|:--|:--|--:|:--|:-:|:--|:-:|
+| 1 | 2584 | MKSI | 2025-01-24 | -1.76 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 2 | 3999 | MRVL | 2025-03-07 | -2.69 | hold · 0.10 | — | hold · 0.30 | — |
+| 3 | 3733 | TSM | 2025-02-28 | -0.80 | hold · 0.30 | — | hold · 0.30 | — |
+| 4 | 2453 | CRWD | 2025-01-21 | +1.79 | buy · 0.75 | ✓ | buy · 0.75 | ✓ |
+| 5 | 3569 | FORM | 2025-02-24 | -3.67 | hold · 0.30 | — | hold · 0.30 | — |
+| 6 | 2692 | GEV | 2025-01-28 | +4.10 | buy · 0.75 | ✓ | buy · 0.70 | ✓ |
+| 7 | 3889 | CDNS | 2025-03-05 | +1.41 | hold · 0.30 | — | hold · 0.30 | — |
+| 8 | 1947 | MSFT | 2025-01-07 | -1.43 | hold · 0.30 | — | hold · 0.30 | — |
+| 9 | 4140 | CRWD | 2025-03-12 | +0.57 | hold · 0.40 | — | hold · 0.40 | — |
+| 10 | 2987 | SIMO | 2025-02-06 | +7.49 | hold · 0.40 | — | hold · 0.40 | — |
+| 11 | 4459 | CRWD | 2025-03-24 | +2.33 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 12 | 2954 | POWL | 2025-02-05 | +3.55 | hold · 0.20 | — | hold · 0.20 | — |
+| 13 | 3542 | AMZN | 2025-02-24 | -2.13 | sell · 0.70 | ✓ | sell · 0.70 | ✓ |
+| 14 | 3018 | AMZN | 2025-02-06 | +0.01 | sell · 0.70 | ✗ | sell · 0.70 | ✗ |
+| 15 | 4056 | NOK | 2025-03-10 | -1.72 | buy · 0.70 | ✗ | hold · 0.30 | — |
+| 16 | 2843 | CSCO | 2025-01-31 | -0.51 | hold · 0.10 | — | hold · 0.10 | — |
+| 17 | 3967 | PLTR | 2025-03-06 | -6.35 | buy · 0.70 | ✗ | buy · 0.60 | ✗ |
+| 18 | 4139 | IBM | 2025-03-12 | +0.25 | hold · 0.30 | — | hold · 0.30 | — |
+| 19 | 4331 | NVDA | 2025-03-19 | +2.28 | buy · 0.70 | ✓ | buy · 0.75 | ✓ |
+| 20 | 4055 | PLTR | 2025-03-10 | -6.40 | hold · 0.40 | — | hold · 0.40 | — |
+| 21 | 2801 | CLS | 2025-01-30 | -0.77 | hold · 0.30 | — | hold · 0.60 | — |
+| 22 | 3865 | AVGO | 2025-03-04 | +0.36 | hold · 0.30 | — | hold · 0.30 | — |
+| 23 | 3381 | AMZN | 2025-02-18 | -1.33 | hold · 0.10 | — | hold · 0.20 | — |
+| 24 | 4107 | GOOG | 2025-03-12 | +1.42 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 25 | 3223 | TEL | 2025-02-12 | +0.56 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 26 | 3191 | AMD | 2025-02-11 | -0.65 | hold · 0.40 | — | hold · 0.30 | — |
+| 27 | 4460 | INTC | 2025-03-24 | -0.92 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 28 | 3012 | ORCL | 2025-02-06 | -1.15 | hold · 0.30 | — | hold · 0.30 | — |
+| 29 | 3666 | MDB | 2025-02-26 | -0.39 | hold · 0.30 | — | hold · 0.30 | — |
+| 30 | 3129 | HPE | 2025-02-10 | +0.19 | hold · 0.20 | — | hold · 0.10 | — |
+
+**Summary**
+
+| variant | BUY-like | SELL-like | HOLD | dir. hit-rate | BUY mean | BUY−SELL spread |
+|---|--:|--:|--:|--:|--:|--:|
+| no bias | 10 | 2 | 18 | 58% (7/12) | +0.17% | +1.23pt |
+| `+bias` | 9 | 2 | 19 | 64% (7/11) | +0.38% | +1.44pt |
+
+**Verdict shift:** 1 of 30 changed — a single `buy → hold` (NOK, a −1.72% loser).
+
+#### Findings
+
+1. **The caveat barely engaged here — 1 of 30 verdicts changed** (vs 11/100 on calm days in
+   §10). In the down-tape the model was already cautious (**18/30 HOLD** even without the
+   caveat), so the bias note had little room to push further.
+2. **That one change was beneficial but is noise-level.** Dropping the losing NOK buy lifts
+   buy hit-rate **60% → 67%**, buy mean gain **+0.17% → +0.38%**, and the BUY−SELL spread
+   **+1.23 → +1.44pt** — all from a *single* verdict on a tiny directional sample (11–12
+   calls). Not a robust effect.
+3. **It did not catch the real damage.** The biggest losing buys in the window — PLTR −6.35%
+   (a#3967) and INTC −0.92% (a#4460) — stayed BUY under the caveat; the bias note removed the
+   marginal NOK call, not the conviction misses.
+4. **Consistent with §10.** Even where over-bullishness hurts most, `--include-bias` is a mild
+   conservatism nudge, not an accuracy lever — the model's own HOLD-heavy caution does most of
+   the de-risking on falling tape.
+
+**Conclusion.** `--include-bias` does **not** robustly fix the bear-market buy problem: it
+flipped one marginal buy to hold and otherwise left the conviction misses (PLTR, INTC) intact.
+The directional improvement is real but within noise and driven by N=1. Keep it **off by
+default** (§10's verdict holds in the bearish regime too); the durable bear-market control is
+the regime filter itself (§7) plus the model's baseline abstention, not a prompt caveat.
