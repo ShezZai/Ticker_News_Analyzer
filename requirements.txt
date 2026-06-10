@@ -1,3 +1,5 @@
+# Legacy scripts/ only. Canonical version constraints live in pyproject.toml.
+
 # LLM providers
 langchain-openai
 langchain-anthropic

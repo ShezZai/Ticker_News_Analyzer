@@ -4,11 +4,18 @@ All chat models and embedding models are built here so retries, rate limits,
 and (in a later phase) Langfuse instrumentation live in exactly one place.
 """
 
+from __future__ import annotations
+
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from langchain_core.rate_limiters import InMemoryRateLimiter
 
 from ticker_news.shared.config import get_settings
+
+if TYPE_CHECKING:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_openai import OpenAIEmbeddings
 
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_DIM = 1536
@@ -27,7 +34,7 @@ def gemini_rate_limiter() -> InMemoryRateLimiter:
     )
 
 
-def gemini_chat(model: str, *, timeout_s: float = 60.0):
+def gemini_chat(model: str, *, timeout_s: float = 60.0) -> ChatGoogleGenerativeAI:
     """A deterministic (temperature 0) Gemini chat model with shared rate limit.
 
     google-genai has no default request timeout — without one a single stuck
@@ -47,7 +54,7 @@ def gemini_chat(model: str, *, timeout_s: float = 60.0):
     )
 
 
-def openai_embeddings(*, batch_size: int = 256):
+def openai_embeddings(*, batch_size: int = 256) -> OpenAIEmbeddings:
     """text-embedding-3-small client. Inputs must be pre-truncated to the model
     window by the caller (ticker_news.embedding); LangChain's own
     chunk-and-average path for long inputs is disabled because it changes
