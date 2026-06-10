@@ -46,3 +46,17 @@ def embed(
     pipeline.embed_all(
         batch_size=batch_size, limit=limit, reembed=reembed, build_index=not no_index
     )
+
+
+@app.command()
+def classify(
+    limit: int | None = typer.Option(None, help="Only process the first N pending articles."),
+    reprocess: bool = typer.Option(False, "--reprocess", help="Re-classify articles that already have a category."),
+    ids: str | None = typer.Option(None, help="Comma-separated article ids to (re)classify."),
+    workers: int = typer.Option(8, min=1, help="Concurrent Gemini requests."),
+) -> None:
+    """Classify articles into content categories (two-pass Gemini, resumable)."""
+    from ticker_news.classification import pipeline
+
+    id_list = [int(x) for x in ids.split(",") if x.strip()] if ids else None
+    pipeline.classify_all(reprocess=reprocess, limit=limit, ids=id_list, workers=workers)

@@ -72,3 +72,20 @@ def test_embed_command_passes_args(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert captured == {"batch_size": 64, "limit": 5, "reembed": True, "build_index": False}
+
+
+def test_classify_command_passes_args(monkeypatch):
+    captured = {}
+
+    def fake_classify_all(*, reprocess, limit, ids, workers):
+        captured.update(reprocess=reprocess, limit=limit, ids=ids, workers=workers)
+        return 0
+
+    monkeypatch.setattr(
+        "ticker_news.classification.pipeline.classify_all", fake_classify_all
+    )
+    result = runner.invoke(
+        cli.app, ["classify", "--limit", "20", "--ids", "78,79,80", "--workers", "4"]
+    )
+    assert result.exit_code == 0, result.output
+    assert captured == {"reprocess": False, "limit": 20, "ids": [78, 79, 80], "workers": 4}
