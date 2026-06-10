@@ -17,10 +17,12 @@ def test_scraper_knobs_read_legacy_env_names(monkeypatch):
     monkeypatch.setenv("SCRAPER_CONCURRENCY", "3")
     monkeypatch.setenv("SCRAPER_RESPECT_ROBOTS", "0")
     monkeypatch.setenv("SCRAPER_DOMAIN_DELAY", "2.5")
+    monkeypatch.setenv("SCRAPER_UA", "TestBot/1.0")
     s = AppSettings(_env_file=None)
     assert s.scraper_concurrency == 3
     assert s.scraper_respect_robots is False
     assert s.scraper_domain_delay_s == 2.5
+    assert s.scraper_user_agent == "TestBot/1.0"
 
 
 def test_api_keys_default_to_none(monkeypatch):
