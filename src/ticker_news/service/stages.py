@@ -52,24 +52,20 @@ async def scrape_stage(job: Job, resources) -> str:
     return status
 
 
-def _fetch_article(conn: psycopg.Connection, url: str) -> tuple:
+def embed_stage(conn: psycopg.Connection, url: str) -> None:
     row = conn.execute(
-        "SELECT id, title, content FROM public.articles WHERE url = %s", (url,)
+        "SELECT id, title, content, embedding IS NOT NULL FROM public.articles WHERE url = %s",
+        (url,),
     ).fetchone()
     if row is None:
         raise StageError(f"article row missing for {url}")
-    return row
-
-
-def embed_stage(conn: psycopg.Connection, url: str) -> None:
-    aid, title, content = _fetch_article(conn, url)
-    done = conn.execute(
-        "SELECT embedding IS NOT NULL FROM public.articles WHERE id = %s", (aid,)
-    ).fetchone()[0]
+    aid, title, content, done = row
     if done:
+        conn.rollback()
         return
     text = build_text(title, content)
     if not text:
+        conn.rollback()
         return
     vec = embed_texts([text])[0]
     conn.execute(
@@ -79,11 +75,18 @@ def embed_stage(conn: psycopg.Connection, url: str) -> None:
 
 
 def classify_stage(conn: psycopg.Connection, url: str) -> None:
-    aid, title, content = _fetch_article(conn, url)
-    current = conn.execute(
-        "SELECT category FROM public.articles WHERE id = %s", (aid,)
-    ).fetchone()[0]
+    row = conn.execute(
+        "SELECT id, title, content, category FROM public.articles WHERE url = %s",
+        (url,),
+    ).fetchone()
+    if row is None:
+        raise StageError(f"article row missing for {url}")
+    aid, title, content, current = row
     if current is not None:
+        conn.rollback()
+        return
+    if not (content or "").strip():
+        conn.rollback()
         return
     verdict, _confirmed = classify_article(title, content or "")
     conn.execute(
@@ -116,6 +119,7 @@ def tag_stage(conn: psycopg.Connection, url: str, tag_ctx: TagContext) -> None:
         raise StageError(f"article row missing for {url}")
     aid, tickers, title, content, primary = row
     if primary is not None:
+        conn.rollback()
         return
     # Mirror tag_all's exact text-building convention so service-tagged rows
     # match batch-tagged rows: "{title or ''}\n{content or ''}".
@@ -140,6 +144,7 @@ def insights_stage(conn: psycopg.Connection, url: str, tag_ctx: TagContext) -> N
         raise StageError(f"article row missing for {url}")
     aid, title, content, stamped = row
     if stamped is not None:
+        conn.rollback()
         return
     if not (content or "").strip():
         conn.execute(
