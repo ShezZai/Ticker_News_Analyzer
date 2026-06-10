@@ -319,3 +319,227 @@ Which script produced which set/result in this document, and what was run.
 
 Runs require `NEWS_DB_DSN` (articles/insights), `MASSIVE_API_KEY` (returns), and
 `GOOGLE_API_KEY` (Gemini verdicts); `peaceful_days.py` additionally hits FRED (no key).
+
+---
+
+## 9. `--include-strong`: does a wider action menu help? (150 peaceful-day articles)
+
+Tests whether offering `strong_buy` / `strong_sell` (the `--include-strong` flag) sharpens the
+verdict. **150** articles sampled (seed 42) from `peaceful_days_articles.csv`, all judged on the
+primary ticker with **two-phase-similarity** retrieval; the *only* difference between the two
+columns is the action menu — plain `buy/sell/hold` vs `+strong`.
+
+```bash
+python scripts/validate_retreival/validate_sentiment.py \
+    --compare actions --n 150 --seed 42
+```
+
+**Headline comparison**
+
+| menu | BUY-like | SELL-like | HOLD | dir. hit-rate | BUY−SELL spread |
+|---|--:|--:|--:|--:|--:|
+| default (`buy`/`sell`/`hold`) | 47 | 5 | 98 | **54%** (28/52) | **+0.96pt** |
+| `+strong` | 65 | 7 | 78 | **47%** (34/72) | **−0.77pt** |
+
+**Per-bucket realized return** (`+strong` menu) — is "strong" magnitude-predictive?
+
+| bucket | n | mean gain% | dir hit-rate |
+|---|--:|--:|--:|
+| strong_buy | 12 | **−0.71%** | 50% (6/12) |
+| buy | 53 | +0.23% | 47% (25/53) |
+| hold | 78 | +0.18% | — |
+| sell | 6 | +1.26% | 33% (2/6) |
+| strong_sell | 1 | −1.75% | 100% (1/1) |
+
+**Action shift (default → strong)** — 34 of 150 verdicts changed:
+
+| default | → strong | n |
+|---|---|--:|
+| hold | buy | 17 |
+| buy | strong_buy | 11 |
+| hold | sell | 3 |
+| hold | strong_buy | 1 |
+| sell | strong_sell | 1 |
+| sell | hold | 1 |
+
+#### Findings
+
+1. **The strong menu makes the model more decisive — it abstains less.** HOLD falls **98 → 78**
+   while BUY-like rises **47 → 65**. Offered bigger labels it reaches for them: 17 HOLD→buy,
+   11 buy→strong_buy, 3 HOLD→sell.
+2. **But the added decisiveness *hurts* accuracy.** Directional hit-rate drops **54% → 47%**, and
+   the BUY−SELL spread flips from **+0.96pt to −0.77pt**. The newly-promoted calls are mostly the
+   marginal ones the plain menu correctly left as HOLD; converting them to directional bets just
+   adds coin-flip noise.
+3. **`strong_buy` is anti-calibrated for magnitude.** The 12 strong_buy calls — the model's
+   "LARGE rise, high-conviction" bets — returned **−0.71% mean** at 50% hit, *worse* than plain
+   buy (**+0.23%**, 47%). 11 of 12 were `buy → strong_buy` upgrades; raising the conviction label
+   did not select bigger or more reliable winners. The literal "strong" carries **no** realized
+   magnitude signal here.
+4. **The extra SELLs are noise too.** Under strong, `sell` n=6 averaged **+1.26%** (33% hit — the
+   names it sold *rose*); the lone `strong_sell` was right (−1.75%) but cannot offset.
+
+**Conclusion — keep `--include-strong` off by default.** On calm tape it trades the plain menu's
+well-judged abstention for over-confident directional calls that sit closer to coin-flip, and the
+`strong_*` tier is not magnitude-predictive (strong_buy actually lost money). The 3-action menu is
+better calibrated; reserve `--include-strong` for exploratory / risk-on use, not validation or
+production scoring.
+
+<details>
+<summary>Full 150-row table (verdict · correctness · confidence · buy→close gain)</summary>
+
+| # | a# | ticker | sell date | gain% | two-phase (act·conf) | ✓ | two-phase + strong (act·conf) | ✓ |
+|--:|--:|:--|:--|--:|:--|:-:|:--|:-:|
+| 1 | 19833 | NVDA | 2026-05-14 | +2.50 | hold · 0.10 | — | hold · 0.10 | — |
+| 2 | 19819 | AMZN | 2026-05-14 | -0.97 | buy · 0.75 | ✗ | buy · 0.70 | ✗ |
+| 3 | 10534 | WDC | 2025-10-13 | +1.11 | buy · 0.70 | ✓ | buy · 0.60 | ✓ |
+| 4 | 11257 | AMZN | 2025-10-30 | -2.20 | hold · 0.30 | — | hold · 0.20 | — |
+| 5 | 8631 | NOK | 2025-08-21 | +0.47 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 6 | 1298 | AMZN | 2024-12-12 | -0.69 | hold · 0.30 | — | buy · 0.60 | ✗ |
+| 7 | 16011 | AVGO | 2026-02-19 | -0.31 | buy · 0.75 | ✗ | strong_buy · 0.90 | ✗ |
+| 8 | 1445 | COHR | 2024-12-17 | -2.57 | hold · 0.10 | — | hold · 0.10 | — |
+| 9 | 13612 | CSCO | 2025-12-26 | +0.70 | hold · 0.10 | — | hold · 0.10 | — |
+| 10 | 7866 | IBM | 2025-07-30 | -0.80 | hold · 0.30 | — | hold · 0.30 | — |
+| 11 | 1190 | PLTR | 2024-12-09 | -11.61 | buy · 0.85 | ✗ | strong_buy · 0.90 | ✗ |
+| 12 | 12126 | ADBE | 2025-11-19 | -0.29 | hold · 0.30 | — | hold · 0.30 | — |
+| 13 | 7915 | NVDA | 2025-07-31 | -2.73 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 14 | 7770 | LNVGY | 2025-07-28 | +2.43 | buy · 0.85 | ✓ | buy · 0.70 | ✓ |
+| 15 | 19306 | AMAT | 2026-05-04 | +0.07 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 16 | 13844 | AMBA | 2026-01-05 | -0.45 | buy · 0.80 | ✗ | strong_buy · 0.90 | ✗ |
+| 17 | 14210 | GOOG | 2026-01-12 | +1.94 | buy · 0.75 | ✓ | buy · 0.70 | ✓ |
+| 18 | 14208 | NVDA | 2026-01-12 | +0.02 | buy · 0.85 | ✓ | buy · 0.75 | ✓ |
+| 19 | 19675 | NVDA | 2026-05-11 | -1.15 | hold · 0.30 | — | hold · 0.30 | — |
+| 20 | 19102 | DELL | 2026-04-29 | +0.69 | hold · 0.30 | — | hold · 0.30 | — |
+| 21 | 13326 | NVDA | 2025-12-17 | -3.92 | hold · 0.10 | — | hold · 0.10 | — |
+| 22 | 11563 | LNVGY | 2025-11-06 | -3.20 | hold · 0.30 | — | buy · 0.60 | ✗ |
+| 23 | 13972 | MSFT | 2026-01-07 | +1.00 | hold · 0.10 | — | hold · 0.10 | — |
+| 24 | 14391 | AMZN | 2026-01-16 | +0.08 | hold · 0.30 | — | hold · 0.30 | — |
+| 25 | 7222 | GOOG | 2025-07-10 | +0.70 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 26 | 19431 | AMZN | 2026-05-06 | +0.84 | hold · 0.30 | — | sell · 0.60 | ✗ |
+| 27 | 7393 | POWL | 2025-07-16 | +3.62 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 28 | 9620 | HPE | 2025-09-17 | +2.61 | hold · 0.20 | — | hold · 0.10 | — |
+| 29 | 13787 | NVDA | 2026-01-02 | -0.54 | hold · 0.30 | — | hold · 0.30 | — |
+| 30 | 7047 | ADI | 2025-07-03 | -0.03 | hold · 0.30 | — | hold · 0.20 | — |
+| 31 | 8845 | AMBA | 2025-08-27 | +2.12 | hold · 0.30 | — | hold · 0.10 | — |
+| 32 | 16576 | AVGO | 2026-03-05 | +4.44 | buy · 0.85 | ✓ | buy · 0.70 | ✓ |
+| 33 | 10567 | AMZN | 2025-10-14 | -1.60 | hold · 0.10 | — | hold · 0.10 | — |
+| 34 | 14701 | NVDA | 2026-01-23 | +0.24 | buy · 0.75 | ✓ | buy · 0.70 | ✓ |
+| 35 | 14712 | DELL | 2026-01-23 | +0.68 | hold · 0.10 | — | hold · 0.10 | — |
+| 36 | 623 | GOOG | 2024-11-20 | -1.13 | hold · 0.30 | — | hold · 0.20 | — |
+| 37 | 19378 | IREN | 2026-05-05 | +9.96 | buy · 0.75 | ✓ | buy · 0.70 | ✓ |
+| 38 | 14045 | IBM | 2026-01-08 | -0.14 | hold · 0.30 | — | hold · 0.20 | — |
+| 39 | 15347 | AMZN | 2026-02-05 | +0.37 | hold · 0.10 | — | hold · 0.10 | — |
+| 40 | 14314 | META | 2026-01-14 | -0.38 | hold · 0.10 | — | hold · 0.10 | — |
+| 41 | 9825 | MSFT | 2025-09-26 | +0.31 | hold · 0.30 | — | hold · 0.30 | — |
+| 42 | 14889 | NVDA | 2026-01-28 | -0.01 | buy · 0.75 | ✗ | buy · 0.70 | ✗ |
+| 43 | 8463 | ASX | 2025-08-15 | -0.05 | hold · 0.30 | — | buy · 0.60 | ✗ |
+| 44 | 16038 | AMD | 2026-02-20 | -1.55 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 45 | 9661 | AVGO | 2025-09-17 | +0.54 | buy · 0.85 | ✓ | buy · 0.70 | ✓ |
+| 46 | 19852 | AMZN | 2026-05-14 | -0.64 | hold · 0.10 | — | hold · 0.10 | — |
+| 47 | 9942 | QCOM | 2025-09-30 | +0.38 | hold · 0.30 | — | hold · 0.20 | — |
+| 48 | 7134 | CSCO | 2025-07-07 | -0.04 | hold · 0.30 | — | hold · 0.30 | — |
+| 49 | 10281 | AMD | 2025-10-08 | +9.66 | hold · 0.30 | — | sell · 0.60 | ✗ |
+| 50 | 608 | HUBB | 2024-11-20 | -1.52 | hold · 0.30 | — | hold · 0.10 | — |
+| 51 | 6646 | NOK | 2025-06-16 | +0.95 | hold · 0.40 | — | hold · 0.30 | — |
+| 52 | 14486 | MCHP | 2026-01-20 | +0.48 | buy · 0.75 | ✓ | buy · 0.70 | ✓ |
+| 53 | 14207 | NVDA | 2026-01-12 | +0.02 | buy · 0.85 | ✓ | strong_buy · 0.95 | ✓ |
+| 54 | 19835 | NVDA | 2026-05-14 | +1.16 | hold · 0.30 | — | hold · 0.30 | — |
+| 55 | 16186 | KEYS | 2026-02-24 | +6.91 | hold · 0.30 | — | hold · 0.20 | — |
+| 56 | 11556 | GOOG | 2025-11-06 | -0.05 | hold · 0.10 | — | hold · 0.10 | — |
+| 57 | 7392 | AVGO | 2025-07-15 | -0.47 | hold · 0.40 | — | buy · 0.70 | ✗ |
+| 58 | 9740 | IBM | 2025-09-22 | +1.60 | hold · 0.10 | — | hold · 0.10 | — |
+| 59 | 8993 | FLEX | 2025-09-02 | -0.09 | buy · 0.70 | ✗ | buy · 0.60 | ✗ |
+| 60 | 13375 | NVDA | 2025-12-18 | +1.02 | sell · 0.65 | ✗ | sell · 0.60 | ✗ |
+| 61 | 19908 | NVDA | 2026-05-18 | -1.23 | hold · 0.30 | — | buy · 0.60 | ✗ |
+| 62 | 3409 | ARM | 2025-02-19 | -3.46 | hold · 0.30 | — | hold · 0.30 | — |
+| 63 | 13272 | AMZN | 2025-12-16 | -0.20 | hold · 0.10 | — | hold · 0.10 | — |
+| 64 | 9244 | GOOG | 2025-09-08 | -0.13 | hold · 0.30 | — | hold · 0.30 | — |
+| 65 | 9777 | NOK | 2025-09-24 | -1.25 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 66 | 13742 | AVGO | 2025-12-31 | -0.71 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 67 | 7068 | ADBE | 2025-07-07 | -0.54 | hold · 0.30 | — | hold · 0.20 | — |
+| 68 | 815 | NOK | 2024-11-27 | +0.24 | buy · 0.85 | ✓ | strong_buy · 0.90 | ✓ |
+| 69 | 9080 | NVDA | 2025-09-04 | -0.01 | hold · 0.10 | — | hold · 0.20 | — |
+| 70 | 10245 | APLD | 2025-10-07 | -2.85 | hold · 0.30 | — | buy · 0.70 | ✗ |
+| 71 | 16241 | MSFT | 2026-02-25 | +2.80 | hold · 0.30 | — | hold · 0.30 | — |
+| 72 | 19946 | AMAT | 2026-05-18 | -3.48 | hold · 0.30 | — | sell · 0.60 | ✓ |
+| 73 | 9719 | ARM | 2025-09-19 | -0.83 | sell · 0.60 | ✓ | sell · 0.60 | ✓ |
+| 74 | 14095 | META | 2026-01-09 | +1.07 | hold · 0.30 | — | hold · 0.30 | — |
+| 75 | 12121 | ADBE | 2025-11-19 | -0.15 | hold · 0.30 | — | hold · 0.30 | — |
+| 76 | 7811 | TSM | 2025-07-28 | +0.34 | sell · 0.70 | ✗ | sell · 0.60 | ✗ |
+| 77 | 10252 | IBM | 2025-10-07 | -1.90 | buy · 0.85 | ✗ | buy · 0.70 | ✗ |
+| 78 | 11434 | MSFT | 2025-11-03 | -0.83 | hold · 0.30 | — | hold · 0.30 | — |
+| 79 | 13505 | NVDA | 2025-12-22 | +0.04 | hold · 0.30 | — | hold · 0.20 | — |
+| 80 | 20103 | CRWD | 2026-05-20 | +6.40 | buy · 0.75 | ✓ | buy · 0.70 | ✓ |
+| 81 | 694 | NOK | 2024-11-22 | +2.20 | hold · 0.30 | — | hold · 0.30 | — |
+| 82 | 13333 | AMZN | 2025-12-17 | -1.68 | hold · 0.10 | — | hold · 0.10 | — |
+| 83 | 149 | GOOG | 2024-11-04 | -1.34 | buy · 0.75 | ✗ | buy · 0.70 | ✗ |
+| 84 | 11135 | MSFT | 2025-10-27 | -0.26 | hold · 0.10 | — | hold · 0.10 | — |
+| 85 | 7377 | MSFT | 2025-07-15 | +0.10 | hold · 0.30 | — | buy · 0.60 | ✓ |
+| 86 | 13695 | APLD | 2025-12-30 | -2.82 | buy · 0.70 | ✗ | strong_buy · 0.90 | ✗ |
+| 87 | 14254 | META | 2026-01-13 | +0.32 | hold · 0.10 | — | hold · 0.10 | — |
+| 88 | 14141 | GOOG | 2026-01-12 | +1.97 | hold · 0.10 | — | hold · 0.10 | — |
+| 89 | 1056 | META | 2024-12-05 | -0.95 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 90 | 10201 | AMD | 2025-10-06 | -2.92 | hold · 0.60 | — | strong_buy · 0.95 | ✗ |
+| 91 | 10277 | MSFT | 2025-10-08 | +0.09 | hold · 0.10 | — | hold · 0.10 | — |
+| 92 | 6649 | NOK | 2025-06-16 | +0.95 | hold · 0.40 | — | hold · 0.30 | — |
+| 93 | 9125 | AI | 2025-09-04 | -1.75 | sell · 0.85 | ✓ | strong_sell · 0.90 | ✓ |
+| 94 | 8436 | NVDA | 2025-08-15 | -0.70 | hold · 0.30 | — | hold · 0.10 | — |
+| 95 | 10323 | SNPS | 2025-10-09 | -0.63 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 96 | 10324 | AMZN | 2025-10-09 | +1.01 | hold · 0.30 | — | buy · 0.60 | ✓ |
+| 97 | 10350 | MSFT | 2025-10-09 | -0.24 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 98 | 17107 | S | 2026-03-16 | -2.39 | hold · 0.40 | — | buy · 0.60 | ✗ |
+| 99 | 3404 | NVDA | 2025-02-19 | -0.12 | hold · 0.30 | — | hold · 0.20 | — |
+| 100 | 6928 | NVDA | 2025-06-27 | +1.38 | buy · 0.75 | ✓ | buy · 0.70 | ✓ |
+| 101 | 14823 | MU | 2026-01-27 | +2.35 | hold · 0.30 | — | buy · 0.70 | ✓ |
+| 102 | 9218 | AMZN | 2025-09-08 | +1.07 | hold · 0.10 | — | hold · 0.10 | — |
+| 103 | 13879 | MSFT | 2026-01-06 | +1.21 | hold · 0.30 | — | buy · 0.70 | ✓ |
+| 104 | 16458 | CRWD | 2026-03-02 | +3.25 | buy · 0.85 | ✓ | buy · 0.70 | ✓ |
+| 105 | 17129 | NVDA | 2026-03-17 | -0.84 | buy · 0.75 | ✗ | buy · 0.70 | ✗ |
+| 106 | 9819 | META | 2025-09-26 | -0.58 | hold · 0.30 | — | buy · 0.70 | ✗ |
+| 107 | 12997 | LNVGY | 2025-12-10 | +1.44 | hold · 0.30 | — | hold · 0.30 | — |
+| 108 | 8152 | STM | 2025-08-06 | -0.80 | hold · 0.30 | — | hold · 0.20 | — |
+| 109 | 19785 | LNVGY | 2026-05-13 | +0.51 | hold · 0.20 | — | hold · 0.20 | — |
+| 110 | 19524 | AMZN | 2026-05-07 | -0.78 | hold · 0.30 | — | buy · 0.70 | ✗ |
+| 111 | 9662 | AVGO | 2025-09-17 | +0.54 | buy · 0.75 | ✓ | buy · 0.70 | ✓ |
+| 112 | 15349 | HPQ | 2026-02-05 | +1.40 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 113 | 10292 | FLEX | 2025-10-08 | +4.14 | buy · 0.85 | ✓ | strong_buy · 0.90 | ✓ |
+| 114 | 11111 | AMZN | 2025-10-27 | -0.58 | hold · 0.10 | — | hold · 0.10 | — |
+| 115 | 16832 | AMAT | 2026-03-11 | +1.50 | buy · 0.80 | ✓ | strong_buy · 0.90 | ✓ |
+| 116 | 6989 | MSFT | 2025-06-30 | -0.16 | hold · 0.10 | — | hold · 0.10 | — |
+| 117 | 8549 | META | 2025-08-19 | -1.64 | hold · 0.10 | — | hold · 0.10 | — |
+| 118 | 8772 | AMZN | 2025-08-25 | -0.56 | hold · 0.30 | — | buy · 0.60 | ✗ |
+| 119 | 10076 | IBM | 2025-10-03 | +0.54 | hold · 0.30 | — | hold · 0.30 | — |
+| 120 | 8407 | ASX | 2025-08-14 | -0.50 | hold · 0.40 | — | hold · 0.30 | — |
+| 121 | 12907 | LNVGY | 2025-12-08 | +1.91 | hold · 0.30 | — | hold · 0.30 | — |
+| 122 | 8661 | GOOG | 2025-08-22 | +2.13 | hold · 0.30 | — | hold · 0.30 | — |
+| 123 | 19385 | SOUN | 2026-05-05 | -5.97 | buy · 0.75 | ✗ | buy · 0.70 | ✗ |
+| 124 | 15151 | AMD | 2026-02-02 | -0.86 | hold · 0.30 | — | hold · 0.30 | — |
+| 125 | 10249 | NOK | 2025-10-07 | +1.50 | buy · 0.80 | ✓ | strong_buy · 0.90 | ✓ |
+| 126 | 17109 | META | 2026-03-16 | +0.35 | hold · 0.30 | — | hold · 0.30 | — |
+| 127 | 12745 | UMC | 2025-12-04 | +0.51 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 128 | 14006 | MSFT | 2026-01-08 | -1.11 | hold · 0.30 | — | hold · 0.30 | — |
+| 129 | 19369 | AMD | 2026-05-05 | +3.21 | hold · 0.30 | — | hold · 0.30 | — |
+| 130 | 16795 | STM | 2026-03-10 | -0.42 | buy · 0.85 | ✗ | strong_buy · 0.90 | ✗ |
+| 131 | 3632 | AMZN | 2025-02-25 | +0.49 | hold · 0.10 | — | hold · 0.10 | — |
+| 132 | 6014 | NOK | 2025-05-22 | -0.19 | buy · 0.75 | ✗ | buy · 0.70 | ✗ |
+| 133 | 9221 | AMZN | 2025-09-08 | +1.07 | hold · 0.10 | — | hold · 0.10 | — |
+| 134 | 12783 | NVDA | 2025-12-05 | -1.18 | hold · 0.10 | — | hold · 0.10 | — |
+| 135 | 7335 | NOK | 2025-07-14 | -1.81 | buy · 0.75 | ✗ | buy · 0.70 | ✗ |
+| 136 | 14292 | DELL | 2026-01-14 | -0.26 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 137 | 16154 | AMZN | 2026-02-23 | +0.87 | hold · 0.10 | — | hold · 0.10 | — |
+| 138 | 6385 | MCHP | 2025-06-05 | -0.46 | hold · 0.30 | — | buy · 0.60 | ✗ |
+| 139 | 11510 | MSFT | 2025-11-05 | -1.31 | hold · 0.10 | — | hold · 0.10 | — |
+| 140 | 12673 | AMD | 2025-12-03 | +0.33 | hold · 0.30 | — | buy · 0.60 | ✓ |
+| 141 | 9947 | DELL | 2025-09-30 | +2.90 | hold · 0.10 | — | hold · 0.10 | — |
+| 142 | 8004 | META | 2025-08-01 | +0.06 | hold · 0.10 | — | hold · 0.20 | — |
+| 143 | 3455 | PWR | 2025-02-20 | +0.82 | hold · 0.40 | — | hold · 0.30 | — |
+| 144 | 11375 | AMD | 2025-11-03 | +0.66 | hold · 0.30 | — | hold · 0.30 | — |
+| 145 | 16188 | AMD | 2026-02-24 | -2.27 | sell · 0.70 | ✓ | hold · 0.30 | — |
+| 146 | 20459 | NVDA | 2026-05-27 | +0.60 | hold · 0.30 | — | hold · 0.30 | — |
+| 147 | 16626 | NBIS | 2026-03-05 | +2.64 | buy · 0.85 | ✓ | strong_buy · 0.90 | ✓ |
+| 148 | 697 | GOOG | 2024-11-22 | -0.82 | hold · 0.30 | — | hold · 0.30 | — |
+| 149 | 8791 | AMD | 2025-08-26 | +2.48 | hold · 0.40 | — | buy · 0.70 | ✓ |
+| 150 | 10234 | AMZN | 2025-10-07 | +0.54 | hold · 0.10 | — | hold · 0.20 | — |
+
+</details>
+

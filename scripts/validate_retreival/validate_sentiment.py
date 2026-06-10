@@ -37,10 +37,15 @@ POOL = "docs/validations/peaceful_days_articles.csv"
 MONTHS_BEFORE, K, MIN_SIM = 3, 5, 0.7
 
 
-def verdict_for(conn, article, seeds, related, ticker, model) -> Optional[dict]:
-    prompt = isent.build_prompt([ticker], article, seeds, related)
+BUYLIKE = {"buy", "strong_buy"}
+SELLLIKE = {"sell", "strong_sell"}
+ACT_ORDER = ["strong_buy", "buy", "hold", "sell", "strong_sell"]
+
+
+def verdict_for(conn, article, seeds, related, ticker, model, actions) -> Optional[dict]:
+    prompt = isent.build_prompt([ticker], article, seeds, related, actions)
     try:
-        out = isent.ask_gemini(prompt, model)
+        out = isent.ask_gemini(prompt, model, actions=actions)
     except BaseException as exc:  # noqa: BLE001  (ask_gemini raises SystemExit on failure)
         print(f"  a#{article['id']} {ticker}: verdict failed ({exc!r})", file=sys.stderr)
         return None
@@ -51,9 +56,9 @@ def verdict_for(conn, article, seeds, related, ticker, model) -> Optional[dict]:
 
 
 def correctness(action: str, gain: float) -> str:
-    if action == "buy":
+    if action in BUYLIKE:
         return "✓" if gain > 0 else "✗"
-    if action == "sell":
+    if action in SELLLIKE:
         return "✓" if gain < 0 else "✗"
     return "—"  # hold: not scored directionally
 
@@ -65,6 +70,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--db-range", nargs=2, metavar=("START", "END"), default=None,
                    help="instead of the pool CSV, sample real-news articles whose ET "
                         "date is in [START, END] (YYYY-MM-DD) straight from the DB")
+    p.add_argument("--compare", choices=["retrievers", "actions"], default="retrievers",
+                   help="retrievers: insight vs two-phase-similarity (both buy/sell/hold). "
+                        "actions: two-phase-similarity with buy/sell/hold vs +--include-strong.")
     p.add_argument("--n", type=int, default=50)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--oversample", type=int, default=40,
@@ -85,6 +93,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             pool = [r for r in csv.DictReader(fh) if r["primary_ticker"]]
         src = os.path.basename(args.pool)
     args._src = src
+    args._labels = (("two-phase", "two-phase + strong") if args.compare == "actions"
+                    else ("insight", "two-phase-similarity"))
     random.Random(args.seed).shuffle(pool)
     cand = pool[: args.n + args.oversample]
     print(f"pool={len(pool)}  drawing {len(cand)} candidates for {args.n} rows", file=sys.stderr)
@@ -122,25 +132,33 @@ def main(argv: Optional[List[str]] = None) -> int:
             gain = sim["gain_pct"]
 
             seeds = isent.insights_of(conn, aid)
-            rel_ins = isent.gather_related(conn, aid, article["published_utc"],
-                                           MONTHS_BEFORE, K, True, MIN_SIM)
             rel_two = isent.gather_related_two_phase(
                 conn, aid, MONTHS_BEFORE, K, True, MIN_SIM, isent.DEF_NET_K,
                 isent.DEF_TWO_PHASE_NET_MIN_SIM, isent.DEF_TWO_PHASE_TAU_INS,
                 isent.DEF_TWO_PHASE_BUDGET)
-            v_ins = verdict_for(conn, article, seeds, rel_ins, tkr, args.model)
-            v_two = verdict_for(conn, article, seeds, rel_two, tkr, args.model)
-            if not v_ins or not v_two:
+            if args.compare == "actions":
+                # same (two-phase) context; default action menu vs +strong
+                v_a = verdict_for(conn, article, seeds, rel_two, tkr, args.model,
+                                  isent.ACTIONS)
+                v_b = verdict_for(conn, article, seeds, rel_two, tkr, args.model,
+                                  isent.ACTIONS_STRONG)
+            else:
+                rel_ins = isent.gather_related(conn, aid, article["published_utc"],
+                                               MONTHS_BEFORE, K, True, MIN_SIM)
+                v_a = verdict_for(conn, article, seeds, rel_ins, tkr, args.model,
+                                  isent.ACTIONS)
+                v_b = verdict_for(conn, article, seeds, rel_two, tkr, args.model,
+                                  isent.ACTIONS)
+            if not v_a or not v_b:
                 continue
             rows.append({
                 "aid": aid, "ticker": tkr, "date": sim["sell_date"], "gain": gain,
-                "ins_a": v_ins["action"], "ins_c": float(v_ins["confidence"]),
-                "two_a": v_two["action"], "two_c": float(v_two["confidence"]),
-                "n_ins": len(rel_ins), "n_two": len(rel_two),
+                "act_a": v_a["action"], "conf_a": float(v_a["confidence"]),
+                "act_b": v_b["action"], "conf_b": float(v_b["confidence"]),
             })
             print(f"  [{len(rows)}/{args.n}] a#{aid} {tkr} gain={gain:+.2f}  "
-                  f"ins={v_ins['action']}({v_ins['confidence']:.2f}) "
-                  f"two={v_two['action']}({v_two['confidence']:.2f})", file=sys.stderr)
+                  f"a={v_a['action']}({v_a['confidence']:.2f}) "
+                  f"b={v_b['action']}({v_b['confidence']:.2f})", file=sys.stderr)
     finally:
         conn.close()
 
@@ -172,54 +190,79 @@ def csv_date_plus(d: str, days: int) -> str:
     return (date.fromisoformat(d) + timedelta(days=days)).isoformat()
 
 
-def _summary(rows, mode_a, mode_c) -> str:
-    """Hit-rate + mean-gain summary for one retriever's action/conf keys."""
-    buys = [r for r in rows if r[mode_a] == "buy"]
-    sells = [r for r in rows if r[mode_a] == "sell"]
-    holds = [r for r in rows if r[mode_a] == "hold"]
+def _mean(xs):
+    return sum(xs) / len(xs) if xs else None
+
+
+def _fmt(m):
+    return "n/a" if m is None else f"{m:+.2f}%"
+
+
+def _summary_line(rows, akey) -> str:
+    buys = [r for r in rows if r[akey] in BUYLIKE]
+    sells = [r for r in rows if r[akey] in SELLLIKE]
+    holds = [r for r in rows if r[akey] == "hold"]
     dirl = buys + sells
     hits = sum(1 for r in buys if r["gain"] > 0) + sum(1 for r in sells if r["gain"] < 0)
-    def mean(xs): return sum(xs) / len(xs) if xs else None
-    def fmt(xs, pct=True):
-        m = mean(xs)
-        return "n/a" if m is None else (f"{m:+.2f}%" if pct else f"{m:+.2f}pt")
-    hit_rate = f"{hits / len(dirl) * 100:.0f}%" if dirl else "n/a"
-    mb, ms = mean([r["gain"] for r in buys]), mean([r["gain"] for r in sells])
+    hr = f"{hits / len(dirl) * 100:.0f}%" if dirl else "n/a"
+    mb, ms = _mean([r["gain"] for r in buys]), _mean([r["gain"] for r in sells])
     spread = f"**{mb - ms:+.2f}pt**" if (mb is not None and ms is not None) else "n/a"
-    return (f"- **{len(buys)} BUY / {len(sells)} SELL / {len(holds)} HOLD**; "
-            f"directional hit-rate **{hit_rate}** ({hits}/{len(dirl)}). "
-            f"Mean gain: BUY **{fmt([r['gain'] for r in buys])}**, "
-            f"SELL **{fmt([r['gain'] for r in sells])}**, "
-            f"HOLD {fmt([r['gain'] for r in holds])}. "
-            f"BUY−SELL spread {spread}.")
+    return (f"- **{len(buys)} BUY-like / {len(sells)} SELL-like / {len(holds)} HOLD**; "
+            f"directional hit-rate **{hr}** ({hits}/{len(dirl)}). "
+            f"Mean gain: BUY-like **{_fmt(mb)}**, SELL-like **{_fmt(ms)}**, "
+            f"HOLD {_fmt(_mean([r['gain'] for r in holds]))}. BUY−SELL spread {spread}.")
+
+
+def _bucket_table(rows, akey) -> List[str]:
+    out = ["| action | n | mean gain% | dir hit-rate |", "|---|--:|--:|--:|"]
+    for a in [x for x in ACT_ORDER if any(r[akey] == x for r in rows)]:
+        rs = [r for r in rows if r[akey] == a]
+        if a in BUYLIKE:
+            h = sum(1 for r in rs if r["gain"] > 0); hr = f"{h/len(rs)*100:.0f}% ({h}/{len(rs)})"
+        elif a in SELLLIKE:
+            h = sum(1 for r in rs if r["gain"] < 0); hr = f"{h/len(rs)*100:.0f}% ({h}/{len(rs)})"
+        else:
+            hr = "—"
+        out.append(f"| {a} | {len(rs)} | {_fmt(_mean([r['gain'] for r in rs]))} | {hr} |")
+    return out
+
+
+def _transition(rows) -> List[str]:
+    """default-action -> strong-action cross-tab (only the rows that changed)."""
+    from collections import Counter
+    moved = Counter((r["act_a"], r["act_b"]) for r in rows if r["act_a"] != r["act_b"])
+    if not moved:
+        return ["_No verdict changed when the strong menu was offered._"]
+    out = [f"_{sum(moved.values())} of {len(rows)} verdicts changed with the strong menu:_",
+           "", "| default | → strong | n |", "|---|---|--:|"]
+    for (a, b), n in sorted(moved.items(), key=lambda kv: -kv[1]):
+        out.append(f"| {a} | {b} | {n} |")
+    return out
 
 
 def write_report(rows, args) -> None:
+    la, lb = getattr(args, "_labels", ("insight", "two-phase-similarity"))
     lines = [f"Sample: {len(rows)} articles from `{getattr(args, '_src', args.pool)}` "
-             f"(seed={args.seed}, model={args.model}). "
+             f"(seed={args.seed}, model={args.model}, compare={args.compare}). "
              f"Verdict on the **primary ticker**; gain = buy-at-publish → close. "
              f"✓/✗ = action sign matches the realized move; — = HOLD.\n",
-             "| # | a# | ticker | sell date | gain% | insight (act·conf) | ✓ | "
-             "two-phase (act·conf) | ✓ |",
+             f"| # | a# | ticker | sell date | gain% | {la} (act·conf) | ✓ | "
+             f"{lb} (act·conf) | ✓ |",
              "|--:|--:|:--|:--|--:|:--|:-:|:--|:-:|"]
     for i, r in enumerate(rows, 1):
-        ci = correctness(r["ins_a"], r["gain"])
-        ct = correctness(r["two_a"], r["gain"])
+        ca = correctness(r["act_a"], r["gain"])
+        cb = correctness(r["act_b"], r["gain"])
         lines.append(
             f"| {i} | {r['aid']} | {r['ticker']} | {r['date']} | {r['gain']:+.2f} | "
-            f"{r['ins_a']} · {r['ins_c']:.2f} | {ci} | "
-            f"{r['two_a']} · {r['two_c']:.2f} | {ct} |")
-    lines.append("\n**Summary — `insight` retriever**")
-    lines.append(_summary(rows, "ins_a", "ins_c"))
-    lines.append("\n**Summary — `two-phase-similarity` retriever**")
-    lines.append(_summary(rows, "two_a", "two_c"))
-    # high-confidence slice
-    for tag, a, c in [("insight", "ins_a", "ins_c"), ("two-phase-similarity", "two_a", "two_c")]:
-        hi = [r for r in rows if r[c] >= 0.7 and r[a] in ("buy", "sell")]
-        hits = sum(1 for r in hi if correctness(r[a], r["gain"]) == "✓")
-        if hi:
-            lines.append(f"\n_High-confidence (≥0.70) directional, {tag}: "
-                         f"{hits}/{len(hi)} = {hits/len(hi)*100:.0f}% hit-rate._")
+            f"{r['act_a']} · {r['conf_a']:.2f} | {ca} | "
+            f"{r['act_b']} · {r['conf_b']:.2f} | {cb} |")
+    for label, akey in [(la, "act_a"), (lb, "act_b")]:
+        lines.append(f"\n**Summary — `{label}`**")
+        lines.append(_summary_line(rows, akey))
+        lines += [""] + _bucket_table(rows, akey)
+    if args.compare == "actions":
+        lines.append("\n**Action shift (default → strong)**")
+        lines += _transition(rows)
     with open(args.out, "w") as fh:
         fh.write("\n".join(lines) + "\n")
 

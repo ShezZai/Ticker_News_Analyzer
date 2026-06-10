@@ -25,6 +25,7 @@ Usage:
     python insight_sentiment.py 4235 --retrieval two-phase-similarity              # hybrid retriever
     python insight_sentiment.py 4235 --retrieval two-phase-similarity --budget 30
     python insight_sentiment.py 4235 --remove-unuseful              # screen context first
+    python insight_sentiment.py 4235 --include-strong               # +strong_buy/strong_sell
     python insight_sentiment.py 4235 --model gemini-2.5-flash-lite --json
 
 Requires GOOGLE_API_KEY (Gemini) in env / .env. The article + insight data come
@@ -68,6 +69,16 @@ DEFAULT_MIN_SIMILARITY = 0.7
 DEFAULT_RETRIEVAL = "insight"
 RETRIEVALS = ("insight", "two-phase-similarity")
 ACTIONS = ["buy", "sell", "hold"]
+# --include-strong widens the menu with high-conviction, large-move calls.
+ACTIONS_STRONG = ["strong_buy", "buy", "hold", "sell", "strong_sell"]
+
+ACTION_MENU = ('"buy" (expect an immediate rise), "sell" (expect an immediate fall, '
+               'i.e. short / avoid), or "hold" (no clear edge)')
+ACTION_MENU_STRONG = (
+    '"strong_buy" (expect a LARGE immediate rise), "buy" (a modest rise), '
+    '"hold" (no clear edge), "sell" (a modest fall, i.e. short / avoid), or '
+    '"strong_sell" (a LARGE fall). Reserve "strong_*" for clearly material, '
+    'surprising news; use the plain "buy"/"sell" for ordinary moves')
 
 PROMPT_INSTRUCTIONS = """You are an equity analyst reacting to breaking news in real time.
 
@@ -94,9 +105,8 @@ Rules:
 - Judge each ticker on its OWN merits: one article can be bullish for one ticker
   and bearish for another (e.g. a rival's good news). If the article is barely
   relevant to a ticker, "hold" with low confidence is appropriate.
-- For each ticker return one action: "buy" (expect an immediate rise), "sell"
-  (expect an immediate fall, i.e. short / avoid), or "hold" (no clear edge); a
-  confidence in [0, 1]; and a 2-4 sentence justification grounded in the article.
+- For each ticker return one action: {action_menu}; a confidence in [0, 1]; and a
+  2-4 sentence justification grounded in the article.
 
 Return ONLY a JSON array with one object per ticker, in the same order:
 [{{"ticker": "...", "action": "...", "confidence": 0.0, "justification": "..."}}]
@@ -208,9 +218,11 @@ def _fmt_et(dt) -> str:
 
 
 def build_prompt(targets: List[str], article: dict, seeds: List[SeedInsight],
-                 related: List[InsightHit]) -> str:
+                 related: List[InsightHit], actions: List[str] = ACTIONS) -> str:
     pub = _fmt_et(article["published_utc"])
-    parts = [PROMPT_INSTRUCTIONS.format(tickers=", ".join(targets), pub=pub)]
+    menu = ACTION_MENU_STRONG if actions == ACTIONS_STRONG else ACTION_MENU
+    parts = [PROMPT_INSTRUCTIONS.format(tickers=", ".join(targets), pub=pub,
+                                        action_menu=menu)]
 
     parts.append(f"\n===== THE ARTICLE -- breaking NOW at {pub} ET (react to this) =====")
     parts.append(f"TICKERS TO JUDGE: {', '.join(targets)}")
@@ -247,7 +259,8 @@ def build_prompt(targets: List[str], article: dict, seeds: List[SeedInsight],
 # --------------------------------------------------------------------------- #
 # Gemini
 # --------------------------------------------------------------------------- #
-def ask_gemini(prompt: str, model: str, retries: int = 3) -> List[dict]:
+def ask_gemini(prompt: str, model: str, retries: int = 3,
+               actions: List[str] = ACTIONS) -> List[dict]:
     """Send the prompt and parse the per-ticker [{ticker, action, confidence, ...}]."""
     from google import genai
     from google.genai import types
@@ -264,7 +277,7 @@ def ask_gemini(prompt: str, model: str, retries: int = 3) -> List[dict]:
                 "type": "OBJECT",
                 "properties": {
                     "ticker": {"type": "STRING"},
-                    "action": {"type": "STRING", "enum": ACTIONS},
+                    "action": {"type": "STRING", "enum": actions},
                     "confidence": {"type": "NUMBER"},
                     "justification": {"type": "STRING"},
                 },
@@ -279,7 +292,7 @@ def ask_gemini(prompt: str, model: str, retries: int = 3) -> List[dict]:
             data = json.loads(resp.text) if (resp := client.models.generate_content(
                 model=model, contents=prompt, config=config)).text else None
             if isinstance(data, list) and data and all(
-                isinstance(d, dict) and d.get("action") in ACTIONS for d in data
+                isinstance(d, dict) and d.get("action") in actions for d in data
             ):
                 return data
             last = f"unexpected payload: {str(data)[:120]}"
@@ -437,6 +450,9 @@ def main() -> None:
                    help="before the sentiment call, run a screening model call that "
                         "drops incoherent or unuseful related insights, then judge "
                         "with the reduced context")
+    p.add_argument("--include-strong", action="store_true",
+                   help="widen the action menu with 'strong_buy' / 'strong_sell' "
+                        "(large-move, high-conviction calls) alongside buy/sell/hold")
     p.add_argument("--show-context", action="store_true",
                    help="print the full prompt context sent to the model")
     p.add_argument("--json", action="store_true", help="print only the JSON result")
@@ -497,13 +513,17 @@ def main() -> None:
     if args.remove_unuseful:
         related, removed = screen_related(related, article, targets, args.model)
 
+    actions = ACTIONS_STRONG if args.include_strong else ACTIONS
+
     def judge(tks: List[str]) -> List[dict]:
         return _annotate(
-            ask_gemini(build_prompt(tks, article, seeds, related), args.model), article
+            ask_gemini(build_prompt(tks, article, seeds, related, actions),
+                       args.model, actions=actions),
+            article,
         )
 
     if args.show_context:
-        print(build_prompt(targets, article, seeds, related))
+        print(build_prompt(targets, article, seeds, related, actions))
         print("\n" + "=" * 70 + "\n")
 
     # --top-2: one joint call, then re-run the 2 best non-hold tickers separately.
