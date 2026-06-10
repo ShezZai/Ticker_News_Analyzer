@@ -7,6 +7,9 @@ venv/
 *.csv
 *.jpg
 *.dump
+*.txt
+*.log
+*.json
 
 # Scraper tooling
 .pytest_cache/
