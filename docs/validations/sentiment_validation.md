@@ -798,3 +798,232 @@ flipped one marginal buy to hold and otherwise left the conviction misses (PLTR,
 The directional improvement is real but within noise and driven by N=1. Keep it **off by
 default** (§10's verdict holds in the bearish regime too); the durable bear-market control is
 the regime filter itself (§7) plus the model's baseline abstention, not a prompt caveat.
+
+---
+
+## 12. A constructive bias prompt — does it measure better? (re-run of §10 / §11)
+
+§10–§11 found the original `--include-bias` caveat just blanket-pruned buys (it left the
+conviction misses — PLTR, INTC — as BUY). The caveat was rewritten to **triage by materiality
+instead of tone**: react to hard events (earnings, M&A, quantified deals, regulatory), lean
+`hold` on soft promotional items, and amplify any downplayed negative. The prompt diff:
+
+```diff
+- - BIAS WARNING: the insights above (both this article's and the prior ones) are
+-   extracted from news/PR-style sources and skew FAVORABLE -- positives are
+-   emphasized and negatives downplayed. Take them with a grain of salt: do NOT
+-   read a wall of upbeat insights as a buy signal by itself, discount promotional
+-   or one-sided positivity, and weight genuinely surprising or negative details
+-   more heavily than the favorable framing.
++ - SOURCE-BIAS CALIBRATION: the insights above come from news/PR-style sources that
++   skew FAVORABLE -- positives are inflated, negatives softened. Don't distrust
++   everything; TRIAGE by how material/surprising the underlying FACT is, not by tone:
++     * MATERIAL events -- react on their merits (buy OR sell): earnings results and
++       guidance changes, M&A, large or quantified contracts/deals, regulatory or legal
++       outcomes, major customer wins, capacity/pricing/supply changes. Do NOT dismiss
++       these just because they are wrapped in upbeat PR language.
++     * SOFT / promotional items -- usually already priced, lean 'hold': product
++       features, partnerships with no disclosed terms, awards, 'leading'/'innovative'
++       marketing, reiterated or already-known guidance.
++     * Negatives are downplayed, so any cautious, hedged, or negative detail that still
++       surfaces is unusually informative -- weight it MORE than its mild wording (it
++       can justify 'sell' even amid favorable framing).
++   In short: let hard, specific facts drive the call; don't let upbeat adjectives ALONE
++   make a 'buy', but don't hold through genuinely material news either.
+```
+
+Spot-checks confirm the *per-article* behavior improved: the PLTR partnership PR that the old
+caveat bought (−6.35%) now correctly `hold`s, while genuine M&A (IREN +9.96%, POWL +3.62%)
+still `buy`s. To measure it, §10 (100 calm, seed 42) and §11 (30 bearish, seed 7) were re-run
+with the new prompt.
+
+**Calm (100 articles)** — same seed/sample, three prompts:
+
+| variant | BUY | dir. hit-rate | BUY hit-rate | BUY mean | spread |
+|---|--:|--:|--:|--:|--:|
+| no bias | 33 | 51% (19/37) | 52% (17/33) | +0.20% | +0.50pt |
+| old caveat (§10) | 23 | 54% (15/28) | 52% (12/23) | +0.15% | +0.42pt |
+| **new caveat** | 27 | 52% (16/31) | 52% (14/27) | −0.02% | +0.28pt |
+| new caveat **+ `--include-strong`** | 44 | **46%** (23/50) | 45% (20/44) | +0.01% | +0.65pt |
+
+(BUY columns count BUY-like = `buy`+`strong_buy`; on calm the `strong_buy` bucket was −1.15%
+mean / 40% hit — the §9 anti-calibration, back again.)
+
+**Bearish (30 articles)** — same seed/sample, three prompts:
+
+| variant | BUY | dir. hit-rate | BUY hit-rate | BUY mean | spread |
+|---|--:|--:|--:|--:|--:|
+| no bias | 10 | 58% (7/12) | 60% (6/10) | +0.17% | +1.23pt |
+| old caveat (§11) | 9 | 64% (7/11) | 67% (6/9) | +0.38% | +1.44pt |
+| **new caveat** | 9 | 64% (7/11) | 67% (6/9) | +0.42% | +1.48pt |
+| new caveat **+ `--include-strong`** | 16 | **47%** (9/19) | 50% (8/16) | −0.06% | **−1.85pt** |
+
+#### Findings
+
+1. **The per-article behavior is genuinely better — the aggregate accuracy is not.** Across
+   *all three* prompts the **BUY hit-rate is identical** (calm **52%**, bearish **67%**). The
+   bias caveat — old or new — moves only the *number* of buys, not their precision. The buys it
+   prunes are coin-flip either way, so pruning them can't raise the hit-rate.
+2. **The new caveat over-prunes less.** On calm tape it keeps **27** buys vs the old caveat's 23
+   (7 `buy→hold` + 1 `hold→buy`, vs the old's 10 `buy→hold`) — exactly the intended effect of
+   reacting to material news instead of distrusting all positives. But at equal precision, the
+   4 extra buys slightly *dilute* the calm BUY mean (−0.02% vs +0.15%) and spread.
+3. **Bearish is a statistical tie** with the old caveat (9 buys, 64% hit, +0.42% vs +0.38%): a
+   net of 3 verdicts moved (2 `buy→hold`, 1 `hold→buy`) but they cancel out.
+4. **Stacking `--include-strong` on top undoes the caution — and is the worst of all.** The
+   strong action menu's decisiveness *overpowers* the bias caveat: BUY-like jumps to **44 (calm)
+   / 16 (bearish)** — *more* directional calls than even the no-bias baseline — while hit-rate
+   drops to **46% / 47%** and the bearish spread flips to **−1.85pt**. `strong_buy` is
+   anti-calibrated all over again (−1.15% mean, §9). So the two flags don't compose: the
+   strong menu re-inflates exactly the marginal buys the bias caveat was meant to suppress.
+5. **Conclusion stands from §10.** A post-hoc prompt caveat is a *volume / conservatism* lever,
+   not an accuracy lever; on this intraday metric and small directional N it cannot beat the
+   model's underlying ~coin-flip buy precision. The new prompt is the **better-behaved form of
+   `--include-bias`** (use it if the flag is used at all), but it does not justify turning the
+   flag on by default — precision must come from the retrieval gates and the signal itself, not
+   the prompt. **`--include-strong` should not be combined with it.**
+
+<details>
+<summary>Full new-prompt tables — calm (100) and bearish (30)</summary>
+
+**Calm (100, new caveat)**
+
+| # | a# | ticker | sell date | gain% | two-phase (act·conf) | ✓ | two-phase + bias (act·conf) | ✓ |
+|--:|--:|:--|:--|--:|:--|:-:|:--|:-:|
+| 1 | 19833 | NVDA | 2026-05-14 | +2.50 | hold · 0.10 | — | hold · 0.10 | — |
+| 2 | 19819 | AMZN | 2026-05-14 | -0.97 | buy · 0.75 | ✗ | buy · 0.75 | ✗ |
+| 3 | 10534 | WDC | 2025-10-13 | +1.11 | buy · 0.70 | ✓ | hold · 0.30 | — |
+| 4 | 11257 | AMZN | 2025-10-30 | -2.20 | hold · 0.30 | — | hold · 0.30 | — |
+| 5 | 8631 | NOK | 2025-08-21 | +0.47 | buy · 0.70 | ✓ | buy · 0.75 | ✓ |
+| 6 | 1298 | AMZN | 2024-12-12 | -0.69 | hold · 0.30 | — | hold · 0.30 | — |
+| 7 | 16011 | AVGO | 2026-02-19 | -0.31 | buy · 0.75 | ✗ | buy · 0.75 | ✗ |
+| 8 | 1445 | COHR | 2024-12-17 | -2.57 | hold · 0.10 | — | hold · 0.30 | — |
+| 9 | 13612 | CSCO | 2025-12-26 | +0.70 | hold · 0.10 | — | hold · 0.10 | — |
+| 10 | 7866 | IBM | 2025-07-30 | -0.80 | hold · 0.30 | — | hold · 0.30 | — |
+| 11 | 1190 | PLTR | 2024-12-09 | -11.61 | buy · 0.85 | ✗ | buy · 0.85 | ✗ |
+| 12 | 12126 | ADBE | 2025-11-19 | -0.29 | hold · 0.30 | — | hold · 0.30 | — |
+| 13 | 7915 | NVDA | 2025-07-31 | -2.73 | buy · 0.70 | ✗ | buy · 0.75 | ✗ |
+| 14 | 7770 | LNVGY | 2025-07-28 | +2.43 | buy · 0.85 | ✓ | buy · 0.85 | ✓ |
+| 15 | 19306 | AMAT | 2026-05-04 | +0.07 | buy · 0.70 | ✓ | buy · 0.75 | ✓ |
+| 16 | 13844 | AMBA | 2026-01-05 | -0.45 | buy · 0.80 | ✗ | buy · 0.85 | ✗ |
+| 17 | 14210 | GOOG | 2026-01-12 | +1.94 | buy · 0.75 | ✓ | buy · 0.75 | ✓ |
+| 18 | 14208 | NVDA | 2026-01-12 | +0.02 | buy · 0.85 | ✓ | buy · 0.85 | ✓ |
+| 19 | 19675 | NVDA | 2026-05-11 | -1.15 | hold · 0.30 | — | hold · 0.30 | — |
+| 20 | 19102 | DELL | 2026-04-29 | +0.69 | hold · 0.30 | — | hold · 0.30 | — |
+| 21 | 13326 | NVDA | 2025-12-17 | -3.92 | hold · 0.10 | — | hold · 0.10 | — |
+| 22 | 11563 | LNVGY | 2025-11-06 | -3.20 | hold · 0.30 | — | hold · 0.30 | — |
+| 23 | 13972 | MSFT | 2026-01-07 | +1.00 | hold · 0.10 | — | hold · 0.10 | — |
+| 24 | 14391 | AMZN | 2026-01-16 | +0.08 | hold · 0.30 | — | hold · 0.30 | — |
+| 25 | 7222 | GOOG | 2025-07-10 | +0.70 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 26 | 19431 | AMZN | 2026-05-06 | +0.84 | hold · 0.30 | — | hold · 0.30 | — |
+| 27 | 7393 | POWL | 2025-07-16 | +3.62 | buy · 0.70 | ✓ | buy · 0.75 | ✓ |
+| 28 | 9620 | HPE | 2025-09-17 | +2.61 | hold · 0.20 | — | hold · 0.30 | — |
+| 29 | 13787 | NVDA | 2026-01-02 | -0.54 | hold · 0.30 | — | hold · 0.30 | — |
+| 30 | 7047 | ADI | 2025-07-03 | -0.03 | hold · 0.30 | — | hold · 0.30 | — |
+| 31 | 8845 | AMBA | 2025-08-27 | +2.12 | hold · 0.30 | — | hold · 0.30 | — |
+| 32 | 16576 | AVGO | 2026-03-05 | +4.44 | buy · 0.85 | ✓ | buy · 0.85 | ✓ |
+| 33 | 10567 | AMZN | 2025-10-14 | -1.60 | hold · 0.10 | — | hold · 0.10 | — |
+| 34 | 14701 | NVDA | 2026-01-23 | +0.24 | buy · 0.75 | ✓ | buy · 0.75 | ✓ |
+| 35 | 14712 | DELL | 2026-01-23 | +0.68 | hold · 0.10 | — | hold · 0.30 | — |
+| 36 | 623 | GOOG | 2024-11-20 | -1.13 | hold · 0.30 | — | hold · 0.30 | — |
+| 37 | 19378 | IREN | 2026-05-05 | +9.96 | buy · 0.75 | ✓ | buy · 0.75 | ✓ |
+| 38 | 14045 | IBM | 2026-01-08 | -0.14 | hold · 0.30 | — | hold · 0.30 | — |
+| 39 | 15347 | AMZN | 2026-02-05 | +0.37 | hold · 0.10 | — | hold · 0.30 | — |
+| 40 | 14314 | META | 2026-01-14 | -0.38 | hold · 0.10 | — | hold · 0.10 | — |
+| 41 | 9825 | MSFT | 2025-09-26 | +0.31 | hold · 0.30 | — | hold · 0.30 | — |
+| 42 | 14889 | NVDA | 2026-01-28 | -0.01 | buy · 0.75 | ✗ | buy · 0.75 | ✗ |
+| 43 | 8463 | ASX | 2025-08-15 | -0.05 | hold · 0.30 | — | hold · 0.30 | — |
+| 44 | 16038 | AMD | 2026-02-20 | -1.55 | buy · 0.70 | ✗ | buy · 0.75 | ✗ |
+| 45 | 9661 | AVGO | 2025-09-17 | +0.54 | buy · 0.85 | ✓ | buy · 0.85 | ✓ |
+| 46 | 19852 | AMZN | 2026-05-14 | -0.64 | hold · 0.10 | — | hold · 0.10 | — |
+| 47 | 9942 | QCOM | 2025-09-30 | +0.38 | hold · 0.30 | — | hold · 0.30 | — |
+| 48 | 7134 | CSCO | 2025-07-07 | -0.04 | hold · 0.30 | — | hold · 0.30 | — |
+| 49 | 10281 | AMD | 2025-10-08 | +9.66 | hold · 0.30 | — | hold · 0.30 | — |
+| 50 | 608 | HUBB | 2024-11-20 | -1.52 | hold · 0.30 | — | hold · 0.20 | — |
+| 51 | 6646 | NOK | 2025-06-16 | +0.95 | hold · 0.40 | — | hold · 0.30 | — |
+| 52 | 14486 | MCHP | 2026-01-20 | +0.48 | buy · 0.75 | ✓ | buy · 0.70 | ✓ |
+| 53 | 14207 | NVDA | 2026-01-12 | +0.02 | buy · 0.85 | ✓ | buy · 0.85 | ✓ |
+| 54 | 19835 | NVDA | 2026-05-14 | +1.16 | hold · 0.30 | — | hold · 0.30 | — |
+| 55 | 16186 | KEYS | 2026-02-24 | +6.91 | hold · 0.30 | — | hold · 0.40 | — |
+| 56 | 11556 | GOOG | 2025-11-06 | -0.05 | hold · 0.10 | — | hold · 0.10 | — |
+| 57 | 7392 | AVGO | 2025-07-15 | -0.47 | hold · 0.40 | — | hold · 0.40 | — |
+| 58 | 9740 | IBM | 2025-09-22 | +1.60 | hold · 0.10 | — | hold · 0.30 | — |
+| 59 | 8993 | FLEX | 2025-09-02 | -0.09 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 60 | 13375 | NVDA | 2025-12-18 | +1.02 | sell · 0.65 | ✗ | sell · 0.60 | ✗ |
+| 61 | 19908 | NVDA | 2026-05-18 | -1.23 | hold · 0.30 | — | hold · 0.30 | — |
+| 62 | 3409 | ARM | 2025-02-19 | -3.46 | hold · 0.30 | — | hold · 0.30 | — |
+| 63 | 13272 | AMZN | 2025-12-16 | -0.20 | hold · 0.10 | — | hold · 0.20 | — |
+| 64 | 9244 | GOOG | 2025-09-08 | -0.13 | hold · 0.30 | — | hold · 0.40 | — |
+| 65 | 9777 | NOK | 2025-09-24 | -1.25 | buy · 0.70 | ✗ | hold · 0.30 | — |
+| 66 | 13742 | AVGO | 2025-12-31 | -0.71 | buy · 0.70 | ✗ | buy · 0.75 | ✗ |
+| 67 | 7068 | ADBE | 2025-07-07 | -0.54 | hold · 0.30 | — | hold · 0.30 | — |
+| 68 | 815 | NOK | 2024-11-27 | +0.24 | buy · 0.85 | ✓ | buy · 0.85 | ✓ |
+| 69 | 9080 | NVDA | 2025-09-04 | -0.01 | hold · 0.10 | — | hold · 0.30 | — |
+| 70 | 10245 | APLD | 2025-10-07 | -2.85 | hold · 0.30 | — | hold · 0.30 | — |
+| 71 | 16241 | MSFT | 2026-02-25 | +2.80 | hold · 0.30 | — | hold · 0.30 | — |
+| 72 | 19946 | AMAT | 2026-05-18 | -3.48 | hold · 0.30 | — | hold · 0.30 | — |
+| 73 | 9719 | ARM | 2025-09-19 | -0.83 | sell · 0.60 | ✓ | sell · 0.60 | ✓ |
+| 74 | 14095 | META | 2026-01-09 | +1.07 | hold · 0.30 | — | hold · 0.30 | — |
+| 75 | 12121 | ADBE | 2025-11-19 | -0.15 | hold · 0.30 | — | hold · 0.40 | — |
+| 76 | 7811 | TSM | 2025-07-28 | +0.34 | sell · 0.70 | ✗ | sell · 0.70 | ✗ |
+| 77 | 10252 | IBM | 2025-10-07 | -1.90 | buy · 0.85 | ✗ | hold · 0.30 | — |
+| 78 | 11434 | MSFT | 2025-11-03 | -0.83 | hold · 0.30 | — | hold · 0.30 | — |
+| 79 | 13505 | NVDA | 2025-12-22 | +0.04 | hold · 0.30 | — | hold · 0.30 | — |
+| 80 | 20103 | CRWD | 2026-05-20 | +6.40 | buy · 0.75 | ✓ | hold · 0.40 | — |
+| 81 | 694 | NOK | 2024-11-22 | +2.20 | hold · 0.30 | — | hold · 0.30 | — |
+| 82 | 13333 | AMZN | 2025-12-17 | -1.68 | hold · 0.10 | — | hold · 0.20 | — |
+| 83 | 149 | GOOG | 2024-11-04 | -1.34 | buy · 0.75 | ✗ | hold · 0.40 | — |
+| 84 | 11135 | MSFT | 2025-10-27 | -0.26 | hold · 0.10 | — | hold · 0.10 | — |
+| 85 | 7377 | MSFT | 2025-07-15 | +0.10 | hold · 0.30 | — | hold · 0.30 | — |
+| 86 | 13695 | APLD | 2025-12-30 | -2.82 | buy · 0.70 | ✗ | buy · 0.75 | ✗ |
+| 87 | 14254 | META | 2026-01-13 | +0.32 | hold · 0.10 | — | hold · 0.10 | — |
+| 88 | 14141 | GOOG | 2026-01-12 | +1.97 | hold · 0.10 | — | hold · 0.10 | — |
+| 89 | 1056 | META | 2024-12-05 | -0.95 | buy · 0.70 | ✗ | buy · 0.75 | ✗ |
+| 90 | 10201 | AMD | 2025-10-06 | -2.92 | hold · 0.60 | — | buy · 0.90 | ✗ |
+| 91 | 10277 | MSFT | 2025-10-08 | +0.09 | hold · 0.10 | — | hold · 0.10 | — |
+| 92 | 6649 | NOK | 2025-06-16 | +0.95 | hold · 0.40 | — | hold · 0.40 | — |
+| 93 | 9125 | AI | 2025-09-04 | -1.75 | sell · 0.85 | ✓ | sell · 0.85 | ✓ |
+| 94 | 8436 | NVDA | 2025-08-15 | -0.70 | hold · 0.30 | — | hold · 0.30 | — |
+| 95 | 10323 | SNPS | 2025-10-09 | -0.63 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 96 | 10324 | AMZN | 2025-10-09 | +1.01 | hold · 0.30 | — | hold · 0.30 | — |
+| 97 | 10350 | MSFT | 2025-10-09 | -0.24 | buy · 0.70 | ✗ | hold · 0.30 | — |
+| 98 | 17107 | S | 2026-03-16 | -2.39 | hold · 0.40 | — | hold · 0.40 | — |
+| 99 | 3404 | NVDA | 2025-02-19 | -0.12 | hold · 0.30 | — | hold · 0.30 | — |
+| 100 | 6928 | NVDA | 2025-06-27 | +1.38 | buy · 0.75 | ✓ | hold · 0.40 | — |
+
+**Bearish (30, new caveat)**
+
+| # | a# | ticker | sell date | gain% | two-phase (act·conf) | ✓ | two-phase + bias (act·conf) | ✓ |
+|--:|--:|:--|:--|--:|:--|:-:|:--|:-:|
+| 1 | 2584 | MKSI | 2025-01-24 | -1.76 | buy · 0.70 | ✗ | hold · 0.30 | — |
+| 2 | 3999 | MRVL | 2025-03-07 | -2.69 | hold · 0.10 | — | hold · 0.30 | — |
+| 3 | 3733 | TSM | 2025-02-28 | -0.80 | hold · 0.30 | — | hold · 0.30 | — |
+| 4 | 2453 | CRWD | 2025-01-21 | +1.79 | buy · 0.75 | ✓ | buy · 0.75 | ✓ |
+| 5 | 3569 | FORM | 2025-02-24 | -3.67 | hold · 0.30 | — | hold · 0.30 | — |
+| 6 | 2692 | GEV | 2025-01-28 | +4.10 | buy · 0.75 | ✓ | buy · 0.75 | ✓ |
+| 7 | 3889 | CDNS | 2025-03-05 | +1.41 | hold · 0.30 | — | hold · 0.30 | — |
+| 8 | 1947 | MSFT | 2025-01-07 | -1.43 | hold · 0.30 | — | buy · 0.70 | ✗ |
+| 9 | 4140 | CRWD | 2025-03-12 | +0.57 | hold · 0.40 | — | hold · 0.30 | — |
+| 10 | 2987 | SIMO | 2025-02-06 | +7.49 | hold · 0.40 | — | hold · 0.40 | — |
+| 11 | 4459 | CRWD | 2025-03-24 | +2.33 | buy · 0.70 | ✓ | buy · 0.75 | ✓ |
+| 12 | 2954 | POWL | 2025-02-05 | +3.55 | hold · 0.20 | — | hold · 0.30 | — |
+| 13 | 3542 | AMZN | 2025-02-24 | -2.13 | sell · 0.70 | ✓ | sell · 0.70 | ✓ |
+| 14 | 3018 | AMZN | 2025-02-06 | +0.01 | sell · 0.70 | ✗ | sell · 0.70 | ✗ |
+| 15 | 4056 | NOK | 2025-03-10 | -1.72 | buy · 0.70 | ✗ | hold · 0.30 | — |
+| 16 | 2843 | CSCO | 2025-01-31 | -0.51 | hold · 0.10 | — | hold · 0.10 | — |
+| 17 | 3967 | PLTR | 2025-03-06 | -6.35 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 18 | 4139 | IBM | 2025-03-12 | +0.25 | hold · 0.30 | — | hold · 0.30 | — |
+| 19 | 4331 | NVDA | 2025-03-19 | +2.28 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 20 | 4055 | PLTR | 2025-03-10 | -6.40 | hold · 0.40 | — | hold · 0.40 | — |
+| 21 | 2801 | CLS | 2025-01-30 | -0.77 | hold · 0.30 | — | hold · 0.40 | — |
+| 22 | 3865 | AVGO | 2025-03-04 | +0.36 | hold · 0.30 | — | hold · 0.30 | — |
+| 23 | 3381 | AMZN | 2025-02-18 | -1.33 | hold · 0.10 | — | hold · 0.20 | — |
+| 24 | 4107 | GOOG | 2025-03-12 | +1.42 | buy · 0.70 | ✓ | buy · 0.70 | ✓ |
+| 25 | 3223 | TEL | 2025-02-12 | +0.56 | buy · 0.70 | ✓ | buy · 0.75 | ✓ |
+| 26 | 3191 | AMD | 2025-02-11 | -0.65 | hold · 0.40 | — | hold · 0.30 | — |
+| 27 | 4460 | INTC | 2025-03-24 | -0.92 | buy · 0.70 | ✗ | buy · 0.70 | ✗ |
+| 28 | 3012 | ORCL | 2025-02-06 | -1.15 | hold · 0.30 | — | hold · 0.30 | — |
+| 29 | 3666 | MDB | 2025-02-26 | -0.39 | hold · 0.30 | — | hold · 0.30 | — |
+| 30 | 3129 | HPE | 2025-02-10 | +0.19 | hold · 0.20 | — | hold · 0.20 | — |
+
+</details>

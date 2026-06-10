@@ -71,11 +71,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--db-range", nargs=2, metavar=("START", "END"), default=None,
                    help="instead of the pool CSV, sample real-news articles whose ET "
                         "date is in [START, END] (YYYY-MM-DD) straight from the DB")
-    p.add_argument("--compare", choices=["retrievers", "actions", "bias"],
+    p.add_argument("--compare", choices=["retrievers", "actions", "bias", "bias-strong"],
                    default="retrievers",
                    help="retrievers: insight vs two-phase-similarity (both buy/sell/hold). "
                         "actions: two-phase-similarity with buy/sell/hold vs +--include-strong. "
-                        "bias: two-phase-similarity without vs with +--include-bias.")
+                        "bias: two-phase-similarity without vs with +--include-bias. "
+                        "bias-strong: plain two-phase vs two-phase +--include-bias +--include-strong.")
     p.add_argument("--n", type=int, default=50)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--oversample", type=int, default=40,
@@ -99,6 +100,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     args._labels = {
         "actions": ("two-phase", "two-phase + strong"),
         "bias": ("two-phase", "two-phase + bias"),
+        "bias-strong": ("two-phase", "two-phase + bias + strong"),
     }.get(args.compare, ("insight", "two-phase-similarity"))
     random.Random(args.seed).shuffle(pool)
     cand = pool[: args.n + args.oversample]
@@ -153,6 +155,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                                   isent.ACTIONS, bias=False)
                 v_b = verdict_for(conn, article, seeds, rel_two, tkr, args.model,
                                   isent.ACTIONS, bias=True)
+            elif args.compare == "bias-strong":
+                # plain two-phase vs two-phase + bias caveat + strong action menu
+                v_a = verdict_for(conn, article, seeds, rel_two, tkr, args.model,
+                                  isent.ACTIONS, bias=False)
+                v_b = verdict_for(conn, article, seeds, rel_two, tkr, args.model,
+                                  isent.ACTIONS_STRONG, bias=True)
             else:
                 rel_ins = isent.gather_related(conn, aid, article["published_utc"],
                                                MONTHS_BEFORE, K, True, MIN_SIM)
@@ -271,7 +279,7 @@ def write_report(rows, args) -> None:
         lines.append(f"\n**Summary — `{label}`**")
         lines.append(_summary_line(rows, akey))
         lines += [""] + _bucket_table(rows, akey)
-    if args.compare in ("actions", "bias"):
+    if args.compare in ("actions", "bias", "bias-strong"):
         lines.append(f"\n**Verdict shift ({la} → {lb})**")
         lines += _transition(rows, la, lb)
     with open(args.out, "w") as fh:

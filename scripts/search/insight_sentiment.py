@@ -81,14 +81,26 @@ ACTION_MENU_STRONG = (
     '"strong_sell" (a LARGE fall). Reserve "strong_*" for clearly material, '
     'surprising news; use the plain "buy"/"sell" for ordinary moves')
 
-# --include-bias injects a debiasing caveat: the extracted insights skew favorable.
+# --include-bias injects a debiasing caveat. It does NOT ask the model to blanket-
+# distrust positives (that just trades buys for holds); it asks it to TRIAGE the
+# favorable insights into priced-in fluff vs genuinely move-worthy hard facts, and to
+# amplify the rare downplayed negative.
 BIAS_NOTE = (
-    "- BIAS WARNING: the insights above (both this article's and the prior ones) are\n"
-    "  extracted from news/PR-style sources and skew FAVORABLE -- positives are\n"
-    "  emphasized and negatives downplayed. Take them with a grain of salt: do NOT\n"
-    "  read a wall of upbeat insights as a buy signal by itself, discount promotional\n"
-    "  or one-sided positivity, and weight genuinely surprising or negative details\n"
-    "  more heavily than the favorable framing.")
+    "- SOURCE-BIAS CALIBRATION: the insights above come from news/PR-style sources that\n"
+    "  skew FAVORABLE -- positives are inflated, negatives softened. Don't distrust\n"
+    "  everything; TRIAGE by how material/surprising the underlying FACT is, not by tone:\n"
+    "    * MATERIAL events -- react on their merits (buy OR sell): earnings results and\n"
+    "      guidance changes, M&A, large or quantified contracts/deals, regulatory or legal\n"
+    "      outcomes, major customer wins, capacity/pricing/supply changes. Do NOT dismiss\n"
+    "      these just because they are wrapped in upbeat PR language.\n"
+    "    * SOFT / promotional items -- usually already priced, lean 'hold': product\n"
+    "      features, partnerships with no disclosed terms, awards, 'leading'/'innovative'\n"
+    "      marketing, reiterated or already-known guidance.\n"
+    "    * Negatives are downplayed, so any cautious, hedged, or negative detail that still\n"
+    "      surfaces is unusually informative -- weight it MORE than its mild wording (it\n"
+    "      can justify 'sell' even amid favorable framing).\n"
+    "  In short: let hard, specific facts drive the call; don't let upbeat adjectives ALONE\n"
+    "  make a 'buy', but don't hold through genuinely material news either.")
 
 PROMPT_INSTRUCTIONS = """You are an equity analyst reacting to breaking news in real time.
 
