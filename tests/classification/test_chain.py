@@ -68,3 +68,14 @@ def test_config_passes_through_to_chains():
 
     classify_article("T", "body", lite=CfgChain(), config={"callbacks": []})
     assert captured["config"] == {"callbacks": []}
+
+
+def test_build_classifier_falls_back_on_bad_remote_template(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "ticker_news.classification.chain.get_prompt",
+        lambda name, fallback: "broken {titel} and {body}",
+    )
+    from ticker_news.classification.chain import build_classifier
+    chain = build_classifier("gemini-2.5-flash-lite")
+    assert chain is not None  # built from the in-repo fallback, not the broken remote

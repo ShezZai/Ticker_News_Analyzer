@@ -11,6 +11,8 @@ venv/
 *.log
 *.json
 
+graphify-out/
+
 # Scraper tooling
 .pytest_cache/
 *.egg-info/

@@ -16,6 +16,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from ticker_news.classification.schemas import Classification
 from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE, gemini_chat
+from ticker_news.shared.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +81,6 @@ def build_classifier(model_name: str):
     NOTE: this function is lru_cached by _default_lite/_default_confirm, so
     prompt updates from Langfuse take effect only after a process restart.
     """
-    from ticker_news.shared.prompts import get_prompt
-
     llm = gemini_chat(model_name, timeout_s=GEMINI_TIMEOUT_S)
     structured = llm.with_structured_output(Classification).with_retry(
         stop_after_attempt=RETRIES, wait_exponential_jitter=True
@@ -89,8 +88,10 @@ def build_classifier(model_name: str):
     template = get_prompt("classify-article", PROMPT_TEMPLATE)
     try:
         prompt = ChatPromptTemplate.from_template(template)
-    except Exception:
-        logger.warning("classify prompt invalid; using in-repo fallback")
+        if set(prompt.input_variables) != {"title", "body"}:
+            raise ValueError(f"unexpected variables: {prompt.input_variables}")
+    except Exception as exc:
+        logger.warning("classify prompt invalid (%r); using in-repo fallback", exc)
         prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
     return prompt | structured
 
