@@ -201,6 +201,25 @@ def backfill(
     typer.echo(f"backfill complete: {counts}")
 
 
+@app.command(name="fetch-news")
+def fetch_news(
+    tickers: str | None = typer.Option(None, help="Comma-separated tickers (default: ticker_data table)."),
+    start: str = typer.Option(..., help="Start date YYYY-MM-DD."),
+    end: str | None = typer.Option(None, help="End date YYYY-MM-DD (default: today)."),
+    output: Path = typer.Option(None, "--output", "-o", help="Output CSV (default: news_<start>_<end>.csv)."),
+) -> None:
+    """Fetch news metadata + provider sentiment from Massive into a CSV."""
+    from datetime import date
+
+    from ticker_news.ingestion import news_history
+
+    t = [x.strip().upper() for x in tickers.split(",") if x.strip()] if tickers else _universe_tickers()
+    end_date = end or date.today().isoformat()
+    out = str(output) if output else f"news_{start}_{end_date}.csv"
+    path = news_history.fetch_news_csv(t, start, end_date, output_path=out)
+    typer.echo(f"wrote {path}")
+
+
 prompts_app = typer.Typer(help="Manage Langfuse prompt versions.")
 app.add_typer(prompts_app, name="prompts")
 
