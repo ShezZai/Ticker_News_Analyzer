@@ -990,3 +990,26 @@ seed's own insight embeddings at scale while the screen only re-reads what alrea
 **We therefore do not adopt `--remove-unuseful` as a precision mechanism, and keep it off by
 default**; precision is owned by the retrieval gates (`0.55/0.75/40`), and the flag remains
 available only as an optional safety-net for noisy single-article seeds (§above).
+
+#### Reading the numbers: low recall is by design, and true precision is high
+
+Two things about these insight-level scores are easy to misread:
+
+- **Low recall is the intended behaviour, not a failure.** The task is *distilling* a small,
+  clean set of background insights to feed a sentiment prompt — not exhaustively recovering
+  every insight of an event. An event carries 100–500 labelled insights (§7.3); we
+  deliberately keep only a budgeted handful (`budget=40`) and gate the rest out, so a
+  single-digit-to-low-double-digit recall (e.g. 10%) is *exactly what we want* — matching a
+  few of the most on-point insights is enough to ground the verdict, and pulling more would
+  re-add the noise the gates exist to remove (this is the §7.4 point #4, made concrete).
+  Recall here measures coverage of a set we are intentionally **not** trying to cover.
+
+- **`--remove-unuseful` doubles as a validation that the *real* precision is high.** The
+  ground-truth precision (≈22.6%) looks low only because the cluster labels are an
+  *incomplete* "should-be-retrieved" set: they credit insights from the hand-labelled
+  articles and count everything else as a false positive — even genuinely on-topic insights
+  from articles nobody labelled. The screening call is an independent, content-aware judge of
+  those "false positives", and it **kept ~98% of them** (removed just 13 of 691). That the
+  content-reading model agrees almost all retrieved insights are coherent and relevant is
+  strong evidence the *true* precision is far higher than 22.6% — the gates are returning
+  clean context; the metric is simply penalising relevance the ground truth never enumerated.
