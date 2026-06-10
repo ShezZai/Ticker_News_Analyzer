@@ -9,10 +9,11 @@ service instantly on enqueue; polling is the fallback.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 STAGES = ["scrape", "embed", "classify", "tag", "insights"]
 DONE = "done"
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS pipeline_jobs (
 );
 CREATE INDEX IF NOT EXISTS pipeline_jobs_claim_idx
     ON pipeline_jobs (status, next_attempt_at);
+ALTER TABLE pipeline_jobs ADD COLUMN IF NOT EXISTS source_meta jsonb NOT NULL DEFAULT '{}'::jsonb;
 """
 
 
@@ -50,6 +52,7 @@ class Job:
     tickers: list[str]
     published_utc: datetime | None
     publisher: str | None
+    source_meta: dict = field(default_factory=dict)
 
 
 def ensure_schema(conn: psycopg.Connection) -> None:
@@ -71,9 +74,10 @@ def backoff_delay(attempts: int) -> float:
 def enqueue(conn: psycopg.Connection, item) -> bool:
     """Insert a job for a FeedItem; returns True if it was new."""
     cur = conn.execute(
-        "INSERT INTO pipeline_jobs (article_url, tickers, published_utc, publisher) "
-        "VALUES (%s, %s, %s, %s) ON CONFLICT (article_url) DO NOTHING",
-        (item.url, item.tickers, item.published_utc, item.publisher),
+        "INSERT INTO pipeline_jobs (article_url, tickers, published_utc, publisher, source_meta) "
+        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (article_url) DO NOTHING",
+        (item.url, item.tickers, item.published_utc, item.publisher,
+         Jsonb(item.source_meta or {})),
     )
     new = cur.rowcount == 1
     if new:
@@ -93,7 +97,7 @@ def claim(conn: psycopg.Connection) -> Job | None:
             FOR UPDATE SKIP LOCKED
             LIMIT 1
         )
-        RETURNING article_url, stage, attempts, tickers, published_utc, publisher
+        RETURNING article_url, stage, attempts, tickers, published_utc, publisher, source_meta
         """
     ).fetchone()
     conn.commit()

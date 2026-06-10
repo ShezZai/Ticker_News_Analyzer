@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from ticker_news.classification.chain import classify_article
 from ticker_news.embedding.embedder import build_text, embed_texts
@@ -47,6 +48,17 @@ def _stored_error(store, url: str) -> str | None:
     return row[0] if row else None
 
 
+def _save_provider_sentiments(store, url: str, source_meta: dict) -> None:
+    sentiments = (source_meta or {}).get("sentiments")
+    if not sentiments:
+        return
+    store.conn.execute(
+        "UPDATE articles SET provider_sentiments = %s "
+        "WHERE url = %s AND provider_sentiments IS NULL",
+        (Jsonb(sentiments), url),
+    )
+
+
 async def scrape_stage(job: Job, resources) -> str:
     """Returns the scraper status: 'ok' | 'empty'. Raises StageError on 'error'.
 
@@ -54,6 +66,9 @@ async def scrape_stage(job: Job, resources) -> str:
     failing re-fetch would overwrite the good row via the store upsert).
     """
     if await asyncio.to_thread(resources.store.exists_ok, job.article_url):
+        await asyncio.to_thread(
+            _save_provider_sentiments, resources.store, job.article_url, job.source_meta
+        )
         return "ok"
     article_job = ArticleJob(
         url=job.article_url,
@@ -70,6 +85,9 @@ async def scrape_stage(job: Job, resources) -> str:
         if reason == "blocked_by_robots":
             raise PermanentStageError(f"robots blocked {job.article_url}")
         raise StageError(f"scrape returned error for {job.article_url}")
+    await asyncio.to_thread(
+        _save_provider_sentiments, resources.store, job.article_url, job.source_meta
+    )
     return status
 
 

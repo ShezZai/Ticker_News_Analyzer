@@ -29,6 +29,15 @@ def _item(url="https://example.com/a"):
     return FeedItem(url=url, tickers=["NVDA"], publisher="Benzinga")
 
 
+def _item_with_meta(url="https://example.com/a"):
+    return FeedItem(
+        url=url,
+        tickers=["NVDA"],
+        publisher="Benzinga",
+        source_meta={"sentiments": {"NVDA": {"sentiment": "positive"}}},
+    )
+
+
 def test_enqueue_is_idempotent(conn):
     assert jobs.enqueue(conn, _item()) is True
     assert jobs.enqueue(conn, _item()) is False
@@ -36,11 +45,12 @@ def test_enqueue_is_idempotent(conn):
 
 
 def test_claim_marks_running_and_returns_payload(conn):
-    jobs.enqueue(conn, _item())
+    jobs.enqueue(conn, _item_with_meta())
     job = jobs.claim(conn)
     assert job.article_url == "https://example.com/a"
     assert job.stage == "scrape"
     assert job.tickers == ["NVDA"]
+    assert job.source_meta["sentiments"]["NVDA"]["sentiment"] == "positive"
     assert jobs.claim(conn) is None  # nothing else pending
 
 

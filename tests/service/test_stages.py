@@ -105,3 +105,29 @@ async def test_scrape_robots_block_is_permanent(monkeypatch):
     res.store = FakeStore()
     with pytest.raises(stages.PermanentStageError):
         await stages.scrape_stage(_job(), res)
+
+
+async def test_scrape_persists_provider_sentiments(monkeypatch):
+    writes = {}
+
+    class FakeConn:
+        def execute(self, sql, params):
+            writes["params"] = params
+
+            class R:
+                def fetchone(self):
+                    return None
+            return R()
+
+    class FakeStore:
+        conn = FakeConn()
+
+        def exists_ok(self, url):
+            return True  # skip path must STILL persist sentiments
+
+    res = _Resources()
+    res.store = FakeStore()
+    job = _job()
+    job.source_meta = {"sentiments": {"NVDA": {"sentiment": "positive"}}}
+    assert await stages.scrape_stage(job, res) == "ok"
+    assert writes["params"][1] == "https://example.com/a"

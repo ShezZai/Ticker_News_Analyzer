@@ -27,3 +27,4 @@ CREATE TABLE IF NOT EXISTS articles (
 CREATE INDEX IF NOT EXISTS articles_tickers_idx ON articles USING GIN (tickers);
 CREATE INDEX IF NOT EXISTS articles_domain_idx ON articles (source_domain);
 CREATE INDEX IF NOT EXISTS articles_published_idx ON articles (published_utc);
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS provider_sentiments JSONB;
