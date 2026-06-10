@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import replace
+from pathlib import Path
 
 import typer
 
@@ -60,3 +61,38 @@ def classify(
 
     id_list = [int(x) for x in ids.split(",") if x.strip()] if ids else None
     pipeline.classify_all(reprocess=reprocess, limit=limit, ids=id_list, workers=workers)
+
+
+@app.command()
+def tag(
+    not_only_missing: bool = typer.Option(False, "--not-only-missing", help="Recompute every row, not just untagged ones."),
+    no_index: bool = typer.Option(False, "--no-index", help="Skip building indexes."),
+) -> None:
+    """Tag articles with primary/secondary tickers and segments."""
+    from ticker_news.enrichment import tagging
+
+    tagging.tag_all(only_missing=not not_only_missing, build_index=not no_index)
+
+
+@app.command(name="load-universe")
+def load_universe(
+    csv: Path = typer.Option(None, help="Universe CSV (default: repo-root consolidated CSV)."),
+) -> None:
+    """Load the ticker → company/segment universe into ticker_data."""
+    from ticker_news.enrichment import reference_data
+
+    n = reference_data.load_universe(csv_path=csv or reference_data.DEFAULT_CSV)
+    typer.echo(f"Upserted {n} tickers.")
+
+
+@app.command(name="load-overviews")
+def load_overviews(
+    tickers: str | None = typer.Option(None, help="Comma-separated tickers (default: all in ticker_data)."),
+    refresh: bool = typer.Option(False, "--refresh", help="Re-fetch tickers that already have a row."),
+    delay: float = typer.Option(0.5, help="Seconds between Yahoo requests."),
+) -> None:
+    """Fetch Yahoo Finance company descriptions into ticker_overview."""
+    from ticker_news.enrichment import reference_data
+
+    t = [x.strip() for x in tickers.split(",") if x.strip()] if tickers else None
+    reference_data.load_overviews(tickers=t, refresh=refresh, delay=delay)

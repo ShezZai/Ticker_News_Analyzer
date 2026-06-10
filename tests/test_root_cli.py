@@ -89,3 +89,39 @@ def test_classify_command_passes_args(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert captured == {"reprocess": False, "limit": 20, "ids": [78, 79, 80], "workers": 4}
+
+
+def test_tag_command(monkeypatch):
+    captured = {}
+
+    def fake_tag_all(*, only_missing, build_index):
+        captured.update(only_missing=only_missing, build_index=build_index)
+        return 0
+
+    monkeypatch.setattr("ticker_news.enrichment.tagging.tag_all", fake_tag_all)
+    result = runner.invoke(cli.app, ["tag", "--not-only-missing", "--no-index"])
+    assert result.exit_code == 0, result.output
+    assert captured == {"only_missing": False, "build_index": False}
+
+
+def test_load_universe_command(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "ticker_news.enrichment.reference_data.load_universe",
+        lambda csv_path: captured.update(csv=str(csv_path)) or 7,
+    )
+    result = runner.invoke(cli.app, ["load-universe", "--csv", "u.csv"])
+    assert result.exit_code == 0, result.output
+    assert captured["csv"].endswith("u.csv")
+
+
+def test_load_overviews_command(monkeypatch):
+    captured = {}
+
+    def fake_load(*, tickers, refresh, delay):
+        captured.update(tickers=tickers, refresh=refresh, delay=delay)
+
+    monkeypatch.setattr("ticker_news.enrichment.reference_data.load_overviews", fake_load)
+    result = runner.invoke(cli.app, ["load-overviews", "--tickers", "NVDA,AMD", "--refresh"])
+    assert result.exit_code == 0, result.output
+    assert captured == {"tickers": ["NVDA", "AMD"], "refresh": True, "delay": 0.5}
