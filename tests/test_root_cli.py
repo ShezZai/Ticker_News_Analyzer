@@ -32,6 +32,8 @@ def test_scrape_passes_args_and_settings(monkeypatch):
 
 
 def test_scrape_defaults_respect_robots(monkeypatch):
+    from ticker_news.shared.config import get_settings
+    get_settings.cache_clear()
     monkeypatch.delenv("SCRAPER_RESPECT_ROBOTS", raising=False)
     captured = {}
 
@@ -42,3 +44,15 @@ def test_scrape_defaults_respect_robots(monkeypatch):
     result = runner.invoke(cli.app, ["scrape", "--csv", "x.csv"])
     assert result.exit_code == 0, result.output
     assert captured["settings"].respect_robots is True
+
+
+def test_scrape_rejects_zero_concurrency(monkeypatch):
+    called = {}
+
+    async def fake_run(csv, settings, *, limit=None, retry_errors=False):
+        called["yes"] = True
+
+    monkeypatch.setattr(cli, "pipeline_run", fake_run)
+    result = runner.invoke(cli.app, ["scrape", "--csv", "x.csv", "--concurrency", "0"])
+    assert result.exit_code != 0
+    assert "yes" not in called
