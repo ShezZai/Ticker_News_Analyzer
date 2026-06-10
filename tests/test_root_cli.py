@@ -257,6 +257,19 @@ def test_jobs_status_command(monkeypatch):
     assert "pending" in result.output and "2" in result.output
 
 
+def test_sentiment_command(monkeypatch):
+    captured = {}
+
+    def fake_run(*, limit, reprocess):
+        captured.update(limit=limit, reprocess=reprocess)
+        return 3
+
+    monkeypatch.setattr("ticker_news.sentiment.batch.run_batch", fake_run)
+    result = runner.invoke(cli.app, ["sentiment", "--limit", "10"])
+    assert result.exit_code == 0, result.output
+    assert captured == {"limit": 10, "reprocess": False}
+
+
 class _FakeConn:
     def close(self):
         pass

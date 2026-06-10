@@ -125,6 +125,18 @@ def insights(
 
 
 @app.command()
+def sentiment(
+    limit: int | None = typer.Option(None, help="Judge at most N pending articles."),
+    reprocess: bool = typer.Option(False, "--reprocess", help="Re-judge articles that already have a verdict."),
+) -> None:
+    """Run the analyst-panel sentiment over real-news articles missing a verdict."""
+    from ticker_news.sentiment import batch
+
+    n = batch.run_batch(limit=limit, reprocess=reprocess)
+    typer.echo(f"judged {n} article(s)")
+
+
+@app.command()
 def serve(
     workers: int = typer.Option(4, min=1, help="Concurrent pipeline workers."),
     poll_interval: float = typer.Option(60.0, help="Feed poll interval, seconds."),

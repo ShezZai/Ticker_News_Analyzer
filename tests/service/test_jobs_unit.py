@@ -9,12 +9,13 @@ from ticker_news.service.jobs import (
 
 
 def test_stage_chain_order():
-    assert STAGES == ["scrape", "embed", "classify", "tag", "insights"]
+    assert STAGES == ["scrape", "embed", "classify", "tag", "insights", "sentiment"]
 
 
 def test_next_stage_walks_the_chain_then_done():
     assert next_stage("scrape") == "embed"
-    assert next_stage("insights") == DONE
+    assert next_stage("insights") == "sentiment"
+    assert next_stage("sentiment") == DONE
 
 
 def test_backoff_is_exponential_and_capped():

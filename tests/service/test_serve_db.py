@@ -78,6 +78,9 @@ async def test_drain_serve_processes_fake_feed(conn, monkeypatch):
     monkeypatch.setattr(worker.stages, "classify_stage", fake_sync("classify"))
     monkeypatch.setattr(worker.stages, "tag_stage", fake_sync("tag"))
     monkeypatch.setattr(worker.stages, "insights_stage", fake_sync("insights"))
+    monkeypatch.setattr(worker.stages, "sentiment_stage", fake_sync("sentiment"))
+    # sentiment_store.ensure_schema runs against news_test at serve() startup — that's
+    # fine (it creates the real table); no monkeypatching needed.
     # TagContext.load queries ticker_data which may not exist in news_test;
     # the patched stages don't use it, so return None.
     monkeypatch.setattr(
@@ -88,10 +91,10 @@ async def test_drain_serve_processes_fake_feed(conn, monkeypatch):
     feed = OneShotFeed([FeedItem(url="https://example.com/e2e", tickers=["NVDA"])])
     result = await worker.serve(feed, workers=2, poll_interval_s=0.2, drain=True)
 
-    # All five stages ran for the one article (in order).
+    # All six stages ran for the one article (in order).
     stages_run = [s for s, _ in ran]
-    assert stages_run == ["scrape", "embed", "classify", "tag", "insights"], (
-        f"Expected all 5 stages in order, got: {stages_run}"
+    assert stages_run == ["scrape", "embed", "classify", "tag", "insights", "sentiment"], (
+        f"Expected all 6 stages in order, got: {stages_run}"
     )
 
     # The job must be marked done in the queue.

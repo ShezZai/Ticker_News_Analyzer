@@ -15,7 +15,7 @@ from datetime import datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
-STAGES = ["scrape", "embed", "classify", "tag", "insights"]
+STAGES = ["scrape", "embed", "classify", "tag", "insights", "sentiment"]
 DONE = "done"
 
 MAX_ATTEMPTS = 5

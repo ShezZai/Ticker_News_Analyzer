@@ -22,6 +22,7 @@ from ticker_news.service.jobs import DONE, Job, NOTIFY_CHANNEL
 from ticker_news.service.stages import PermanentStageError, StageError, TagContext
 from ticker_news.shared.config import get_settings
 from ticker_news.shared import db
+from ticker_news.sentiment import store as sentiment_store
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,7 @@ async def serve(
 
     setup_conn = db.connect()
     jobs.ensure_schema(setup_conn)
+    sentiment_store.ensure_schema(setup_conn)
     recovered = jobs.recover_orphans(setup_conn)
     if recovered:
         logger.info("recovered %d orphaned running job(s)", recovered)
@@ -177,6 +179,7 @@ async def serve(
                 "classify": lambda job: stages.classify_stage(conn, job.article_url),
                 "tag": lambda job: stages.tag_stage(conn, job.article_url, tag_ctx),
                 "insights": lambda job: stages.insights_stage(conn, job.article_url, tag_ctx),
+                "sentiment": lambda job: stages.sentiment_stage(conn, job.article_url),
             }
 
         runner_map = _runners()

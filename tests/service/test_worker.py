@@ -43,11 +43,12 @@ async def test_process_article_runs_stages_in_order_and_advances():
         "classify": sync_stage("classify"),
         "tag": sync_stage("tag"),
         "insights": sync_stage("insights"),
+        "sentiment": sync_stage("sentiment"),
     }
     q = FakeQueue()
     await worker.process_article(_job(), runners, q, conn=None)
-    assert ran == ["scrape", "embed", "classify", "tag", "insights"]
-    assert q.advanced == ["embed", "classify", "tag", "insights", DONE]
+    assert ran == ["scrape", "embed", "classify", "tag", "insights", "sentiment"]
+    assert q.advanced == ["embed", "classify", "tag", "insights", "sentiment", DONE]
 
 
 async def test_process_article_resumes_mid_chain():
@@ -55,11 +56,12 @@ async def test_process_article_resumes_mid_chain():
     runners = {
         "tag": lambda job: ran.append("tag"),
         "insights": lambda job: ran.append("insights"),
+        "sentiment": lambda job: ran.append("sentiment"),
     }
     q = FakeQueue()
     await worker.process_article(_job(stage="tag"), runners, q, conn=None)
-    assert ran == ["tag", "insights"]
-    assert q.advanced == ["insights", DONE]
+    assert ran == ["tag", "insights", "sentiment"]
+    assert q.advanced == ["insights", "sentiment", DONE]
 
 
 async def test_empty_scrape_short_circuits_to_done():
