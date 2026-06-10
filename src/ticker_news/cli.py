@@ -201,6 +201,7 @@ def jobs_status() -> None:
 
     conn = db.connect()
     try:
+        jobs_mod.ensure_schema(conn)
         for status, n in sorted(jobs_mod.counts(conn).items()):
             typer.echo(f"{status:>8}  {n}")
     finally:
@@ -217,6 +218,7 @@ def jobs_retry(
 
     conn = db.connect()
     try:
+        jobs_mod.ensure_schema(conn)
         n = jobs_mod.requeue_failed(conn, url)
         typer.echo(f"requeued {n} job(s).")
     finally:

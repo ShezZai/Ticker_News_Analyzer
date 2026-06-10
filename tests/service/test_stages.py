@@ -9,9 +9,28 @@ def _job(url="https://example.com/a"):
                tickers=["NVDA"], published_utc=None, publisher="Benzinga")
 
 
+class _FakeConn:
+    """Stub DB connection: execute().fetchone() returns None."""
+
+    def execute(self, sql, params):
+        class _R:
+            def fetchone(self):
+                return None
+        return _R()
+
+
+class _FakeStore:
+    """Default stub: exists_ok always returns False, conn returns no rows."""
+    conn = _FakeConn()
+
+    def exists_ok(self, url):
+        return False
+
+
 class _Resources:
     """Only what scrape_stage touches."""
-    fetcher = store = settings = limiter = robots = None
+    fetcher = settings = limiter = robots = None
+    store = _FakeStore()
 
 
 async def test_scrape_error_raises_stage_error(monkeypatch):
@@ -44,3 +63,45 @@ async def test_scrape_builds_article_job_from_queue_payload(monkeypatch):
     assert seen["job"].url == "https://example.com/a"
     assert seen["job"].tickers == ["NVDA"]
     assert seen["job"].publisher == "Benzinga"
+
+
+async def test_scrape_skips_already_ok(monkeypatch):
+    class FakeStore:
+        def exists_ok(self, url):
+            return True
+
+    called = {}
+
+    async def fake_process_job(*a, **kw):
+        called["yes"] = True
+        return "ok"
+
+    monkeypatch.setattr(stages, "process_job", fake_process_job)
+    res = _Resources()
+    res.store = FakeStore()
+    assert await stages.scrape_stage(_job(), res) == "ok"
+    assert "yes" not in called
+
+
+async def test_scrape_robots_block_is_permanent(monkeypatch):
+    class FakeConn:
+        def execute(self, sql, params):
+            class R:
+                def fetchone(self):
+                    return ("blocked_by_robots",)
+            return R()
+
+    class FakeStore:
+        conn = FakeConn()
+
+        def exists_ok(self, url):
+            return False
+
+    async def fake_process_job(*a, **kw):
+        return "error"
+
+    monkeypatch.setattr(stages, "process_job", fake_process_job)
+    res = _Resources()
+    res.store = FakeStore()
+    with pytest.raises(stages.PermanentStageError):
+        await stages.scrape_stage(_job(), res)

@@ -78,3 +78,10 @@ def test_recover_orphans(conn):
     jobs.claim(conn)
     assert jobs.recover_orphans(conn) == 1
     assert jobs.claim(conn) is not None
+
+
+def test_fail_permanent_parks_immediately(conn):
+    jobs.enqueue(conn, _item())
+    job = jobs.claim(conn)
+    jobs.fail(conn, job.article_url, "robots", permanent=True)
+    assert jobs.counts(conn) == {"failed": 1}

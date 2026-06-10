@@ -19,7 +19,7 @@ import psycopg
 from ticker_news.ingestion.feed import NewsFeedSource
 from ticker_news.service import jobs, stages
 from ticker_news.service.jobs import DONE, Job, NOTIFY_CHANNEL
-from ticker_news.service.stages import StageError, TagContext
+from ticker_news.service.stages import PermanentStageError, StageError, TagContext
 from ticker_news.shared.config import get_settings
 from ticker_news.shared import db
 
@@ -71,6 +71,10 @@ async def process_article(
             stage = jobs.next_stage(stage)
             await asyncio.to_thread(queue.advance, conn, job.article_url, stage)
         return True
+    except PermanentStageError as exc:
+        logger.warning("article %s permanently failed at stage %s: %r", job.article_url, stage, exc)
+        await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc), permanent=True)
+        return False
     except Exception as exc:
         logger.warning("article %s failed at stage %s: %r", job.article_url, stage, exc)
         await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc))
@@ -79,15 +83,16 @@ async def process_article(
 
 async def _listen_for_jobs(dsn: str, wake: asyncio.Event) -> None:
     """Hold an AsyncConnection and SET wake on every NOTIFY."""
-    aconn = await psycopg.AsyncConnection.connect(dsn, autocommit=True)
     try:
-        await aconn.execute(f"LISTEN {NOTIFY_CHANNEL}")
-        async for _notice in aconn.notifies():
-            wake.set()
+        aconn = await psycopg.AsyncConnection.connect(dsn, autocommit=True)
+        try:
+            await aconn.execute(f"LISTEN {NOTIFY_CHANNEL}")
+            async for _notice in aconn.notifies():
+                wake.set()
+        finally:
+            await aconn.close()
     except Exception:
         logger.warning("LISTEN connection lost; relying on poll fallback", exc_info=True)
-    finally:
-        await aconn.close()
 
 
 async def serve(

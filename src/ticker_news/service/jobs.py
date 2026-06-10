@@ -112,14 +112,14 @@ def advance(conn: psycopg.Connection, article_url: str, to_stage: str) -> None:
 
 
 def fail(conn: psycopg.Connection, article_url: str, error: str,
-         *, max_attempts: int = MAX_ATTEMPTS) -> None:
+         *, max_attempts: int = MAX_ATTEMPTS, permanent: bool = False) -> None:
     row = conn.execute(
         "UPDATE pipeline_jobs SET attempts = attempts + 1, last_error = %s, "
         "updated_at = now() WHERE article_url = %s RETURNING attempts",
         (error[:2000], article_url),
     ).fetchone()
     attempts = row[0] if row else max_attempts
-    if attempts >= max_attempts:
+    if permanent or attempts >= max_attempts:
         conn.execute(
             "UPDATE pipeline_jobs SET status = 'failed' WHERE article_url = %s",
             (article_url,),

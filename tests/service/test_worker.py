@@ -21,7 +21,7 @@ class FakeQueue:
     def advance(self, conn, url, to_stage):
         self.advanced.append(to_stage)
 
-    def fail(self, conn, url, error):
+    def fail(self, conn, url, error, **kw):
         self.failed.append(error)
 
 
@@ -79,3 +79,13 @@ async def test_stage_failure_calls_fail_not_advance():
     await worker.process_article(_job(), {"scrape": scrape}, q, conn=None)
     assert q.advanced == []
     assert len(q.failed) == 1 and "boom" in q.failed[0]
+
+
+async def test_permanent_failure_parks_immediately():
+    async def scrape(job):
+        raise worker.PermanentStageError("robots")
+
+    q = FakeQueue()
+    await worker.process_article(_job(), {"scrape": scrape}, q, conn=None)
+    assert q.advanced == []
+    assert len(q.failed) == 1

@@ -249,6 +249,7 @@ def test_serve_command_uses_massive_source(monkeypatch):
 
 
 def test_jobs_status_command(monkeypatch):
+    monkeypatch.setattr("ticker_news.service.jobs.ensure_schema", lambda conn: None)
     monkeypatch.setattr("ticker_news.service.jobs.counts", lambda conn: {"pending": 2, "done": 5})
     monkeypatch.setattr("ticker_news.shared.db.connect", lambda **kw: _FakeConn())
     result = runner.invoke(cli.app, ["jobs", "status"])

@@ -8,6 +8,7 @@ natively async.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Callable, Optional
@@ -35,8 +36,25 @@ class StageError(RuntimeError):
     """A stage failed in a way that should consume a retry attempt."""
 
 
+class PermanentStageError(StageError):
+    """A failure that will never succeed on retry — park the job immediately."""
+
+
+def _stored_error(store, url: str) -> str | None:
+    row = store.conn.execute(
+        "SELECT error FROM articles WHERE url = %s", (url,)
+    ).fetchone()
+    return row[0] if row else None
+
+
 async def scrape_stage(job: Job, resources) -> str:
-    """Returns the scraper status: 'ok' | 'empty'. Raises StageError on 'error'."""
+    """Returns the scraper status: 'ok' | 'empty'. Raises StageError on 'error'.
+
+    Already-ok articles are skipped — a re-enqueued URL must not re-fetch (a
+    failing re-fetch would overwrite the good row via the store upsert).
+    """
+    if await asyncio.to_thread(resources.store.exists_ok, job.article_url):
+        return "ok"
     article_job = ArticleJob(
         url=job.article_url,
         tickers=job.tickers,
@@ -48,6 +66,9 @@ async def scrape_stage(job: Job, resources) -> str:
         resources.limiter, resources.robots,
     )
     if status == "error":
+        reason = await asyncio.to_thread(_stored_error, resources.store, job.article_url)
+        if reason == "blocked_by_robots":
+            raise PermanentStageError(f"robots blocked {job.article_url}")
         raise StageError(f"scrape returned error for {job.article_url}")
     return status
 
