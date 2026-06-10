@@ -49,6 +49,46 @@ def test_request_retries_transient_then_succeeds(monkeypatch):
     assert len(calls) == 2
     assert len(sleeps) == 1
 
+
+def test_fetch_articles_rest_paginates_reattaching_api_key(monkeypatch):
+    calls = []
+
+    def fake_request(session, url, params):
+        calls.append((url, params))
+        if url == mr.BASE_URL:
+            return {"results": [{"article_url": "https://x.com/1"}],
+                    "next_url": "https://api.massive.com/page2"}
+        return {"results": [{"article_url": "https://x.com/2"}]}
+
+    monkeypatch.setattr(mr, "_request", fake_request)
+    articles = mr.fetch_articles_rest(
+        "NVDA", "2025-01-01", until_iso="2025-01-31", key="k"
+    )
+    assert [a["article_url"] for a in articles] == ["https://x.com/1", "https://x.com/2"]
+    first_url, first_params = calls[0]
+    assert first_url == mr.BASE_URL
+    assert first_params["ticker"] == "NVDA"
+    assert first_params["published_utc.gte"] == "2025-01-01"
+    assert first_params["published_utc.lte"] == "2025-01-31"
+    assert first_params["order"] == "asc"
+    assert first_params["sort"] == "published_utc"
+    assert first_params["apiKey"] == "k"
+    # next_url carries the cursor + filters but not the apiKey: re-attach it.
+    assert calls[1] == ("https://api.massive.com/page2", {"apiKey": "k"})
+
+
+def test_fetch_articles_rest_omits_lte_without_until(monkeypatch):
+    calls = []
+
+    def fake_request(session, url, params):
+        calls.append((url, params))
+        return {"results": []}
+
+    monkeypatch.setattr(mr, "_request", fake_request)
+    mr.fetch_articles_rest("NVDA", "2025-01-01", key="k")
+    assert "published_utc.lte" not in calls[0][1]
+
+
 ARTICLE_A = {
     "article_url": "https://example.com/a",
     "published_utc": "2026-06-09T10:00:00Z",

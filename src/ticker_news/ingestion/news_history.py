@@ -6,24 +6,16 @@ half. Produces a CSV with one row per (ticker, article) pair:
     ticker,article_url,published_utc,sentiment,sentiment_reasoning,publisher_name
 
 sentiment/sentiment_reasoning come from the article's `insights` entry whose
-ticker matches the row's ticker. Retry/backoff plumbing is shared with the
-live poller via massive_rest._request.
+ticker matches the row's ticker. Fetching/pagination is shared with the
+live poller via massive_rest.fetch_articles_rest.
 """
 
 from __future__ import annotations
 
 import csv
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List
 
-import requests
-
-from ticker_news.ingestion.massive_rest import (
-    BASE_URL,
-    PAGE_LIMIT,
-    MassiveAPIError,
-    _request,
-)
-from ticker_news.shared.config import get_settings
+from ticker_news.ingestion.massive_rest import fetch_articles_rest
 
 CSV_HEADER = [
     "ticker",
@@ -38,32 +30,9 @@ CSV_HEADER = [
 def fetch_range(
     ticker: str, start_iso: str, end_iso: str, *, key: str | None = None
 ) -> list[dict]:
-    """All articles for `ticker` in [start, end] via /v2/reference/news pagination.
-
-    Follows next_url, re-attaching the apiKey (next_url carries the cursor +
-    filters but not the key).
-    """
-    key = key or get_settings().massive_api_key
-    if not key:
-        raise MassiveAPIError("MASSIVE_API_KEY is not set (put it in .env).")
-    out: list[dict] = []
-    params: Optional[dict] = {
-        "ticker": ticker,
-        "published_utc.gte": start_iso,
-        "published_utc.lte": end_iso,
-        "order": "asc",
-        "sort": "published_utc",
-        "limit": PAGE_LIMIT,
-        "apiKey": key,
-    }
-    url = BASE_URL
-    with requests.Session() as session:
-        while url:
-            payload = _request(session, url, params)
-            out.extend(payload.get("results", []) or [])
-            url = payload.get("next_url")
-            params = {"apiKey": key} if url else None
-    return out
+    """All articles for `ticker` in [start, end] — delegates to the shared
+    massive_rest pagination (one copy of the retry/cursor plumbing)."""
+    return fetch_articles_rest(ticker, start_iso, until_iso=end_iso, key=key)
 
 
 def _sentiment_for(article: dict, ticker: str) -> tuple[str, str]:

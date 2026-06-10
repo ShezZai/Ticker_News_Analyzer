@@ -64,13 +64,20 @@ def _parse_utc(value: str | None) -> Optional[datetime]:
         return None
 
 
-def fetch_articles_rest(ticker: str, since_iso: str) -> list[dict]:
-    """One blocking fetch of every article for `ticker` since `since_iso`.
+def fetch_articles_rest(
+    ticker: str,
+    since_iso: str,
+    *,
+    until_iso: str | None = None,
+    key: str | None = None,
+) -> list[dict]:
+    """One blocking fetch of every article for `ticker` since `since_iso`
+    (optionally bounded above by `until_iso`).
 
     Cursor pagination ported from the legacy _iter_articles: follow next_url,
     re-attaching the apiKey (next_url carries filters but not the key).
     """
-    key = get_settings().massive_api_key
+    key = key or get_settings().massive_api_key
     if not key:
         raise MassiveAPIError("MASSIVE_API_KEY is not set (put it in .env).")
     out: list[dict] = []
@@ -82,6 +89,8 @@ def fetch_articles_rest(ticker: str, since_iso: str) -> list[dict]:
         "limit": PAGE_LIMIT,
         "apiKey": key,
     }
+    if until_iso is not None:
+        params["published_utc.lte"] = until_iso
     url = BASE_URL
     with requests.Session() as session:
         while url:
