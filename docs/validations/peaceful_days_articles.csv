@@ -1,0 +1,939 @@
+article_id,published_et,market_date,primary_ticker,more_tickers,category,vix,sp500_mae_10d_pct,nasdaq_mae_10d_pct,title
+114,2024-11-01 21:30,2024-11-01,INTC,NVDA|MSFT,real news,21.88,0.454,0.853,Nvidia Stock Is Joining the Dow Jones Industrial Average Stock Index and Intel Is Being Booted | The Motley Fool
+149,2024-11-03 12:45,2024-11-01,GOOG,GOOGL|AMD,real news,21.88,0.454,0.853,"Google Delivers New AI Features To Maps, Google Earth, Waze Apps - Alphabet (NASDAQ:GOOGL)"
+173,2024-11-04 11:37,2024-11-04,MSFT,,real news,21.98,0.459,0.859,"Constellation Energy Q3: Earnings Beat, Revised FY24 EPS Guidance & More - Constellation Energy (NASDAQ:C"
+197,2024-11-05 05:55,2024-11-05,AVGO,,real news,20.49,0.574,0.983,"Broadcom Powers Telia's Modernization with VMware, Launches AI-Driven VeloRAIN & More - Broadcom (NASDAQ:"
+209,2024-11-05 10:00,2024-11-05,NOK,,real news,20.49,0.574,0.983,Nokia and Elisa become first in Europe to trial 100G PON over live fiber broadband network
+218,2024-11-05 16:15,2024-11-05,MCHP,,real news,20.49,0.574,0.983,Microchip Technology Increases Quarterly Cash Dividend 3.6% Year-Over-Year to 45.5 Cents Per Share - Micr
+224,2024-11-05 21:25,2024-11-05,AMZN,,real news,20.49,0.574,0.983,"Jeff Bezos Sells $214M Worth Of Amazon Shares In Latest Stock Move, Here's How Much He Still Owns - Amazo"
+451,2024-11-14 07:30,2024-11-14,BELFA,BELFB,real news,14.31,0.664,0.816,"Bel Closes Its Previously Announced Acquisition of Enercon Technologies - Bel Fuse (NASDAQ:BELFA), Bel Fu"
+452,2024-11-14 08:03,2024-11-14,MCHP,NVDA,real news,14.31,0.664,0.816,Microchip to Accelerate Real-time Edge AI with NVIDIA Holoscan
+454,2024-11-14 09:11,2024-11-14,GOOG,GOOGL|MSFT|NVDA,real news,14.31,0.664,0.816,The INX Digital Company Reports Q3 2024 Financial Results - INX Digital Co Inc (OTC:INXDF)
+556,2024-11-18 13:03,2024-11-18,CSCO,,real news,15.58,0.769,0.986,Cisco's 5.5-Year Pact With MGM Resorts Brings Next-Gen Tech To The Casino Floor And Beyond - Cisco System
+555,2024-11-18 17:54,2024-11-18,GEV,,real news,15.58,0.769,0.986,"Woodward Signs Agreement to Divest Its Heavy Duty Gas Turbines Combustion Parts Business Based in Greenville, S.C., to GE Vernova"
+565,2024-11-18 17:54,2024-11-18,GEV,,real news,15.58,0.769,0.986,Woodward Signs Agreement to Divest Its Heavy Duty Gas Turbines Combustion Parts Business Based in Greenvi
+568,2024-11-19 03:30,2024-11-19,NVDA,,real news,16.35,0.685,0.948,Temenos powers on-premises generative AI for real-time banking with NVIDIA accelerated computing
+573,2024-11-19 06:00,2024-11-19,COHR,INTC,real news,16.35,0.685,0.948,Tower Semiconductor Begins Production of 1.6Tbps Optical Transceivers on its Latest Silicon Photonics Platform
+587,2024-11-19 13:00,2024-11-19,MSFT,,real news,16.35,0.685,0.948,Cribl Now Available in the Microsoft Azure Marketplace
+608,2024-11-19 17:00,2024-11-19,HUBB,,real news,16.35,0.685,0.948,Garrick J. Rochow Elected to the Hubbell Incorporated Board of Directors
+613,2024-11-20 02:30,2024-11-20,NOK,,real news,17.16,0.439,0.664,Nokia wins multi-billion 5G extension deal from Bharti Airtel for its India operations
+623,2024-11-20 08:00,2024-11-20,GOOG,GOOGL|MSFT,real news,17.16,0.439,0.664,Rezolve Ai and Google Sign Strategic Partnership to Revolutionize Retail and Consumer Commerce with Exclusive AI-Powered Solutions
+645,2024-11-20 17:08,2024-11-20,MSFT,,real news,17.16,0.439,0.664,"Hedge Funder Linked To Credit Suisse Collapse Gets 18 Year Prison Sentence For Fraud, Market Manipulation"
+664,2024-11-21 09:22,2024-11-21,HPE,NVDA,real news,16.87,0.416,0.517,HPE Powers RWE's Renewable Energy with AI Weather Modeling - Hewlett Packard (NYSE:HPE)
+671,2024-11-21 09:43,2024-11-21,AMAT,,real news,16.87,0.416,0.517,Breaking New Ground In OLED: Applied Materials Unveils MAX OLED Solution For Bigger Displays - Applied Ma
+680,2024-11-21 16:15,2024-11-21,AMZN,GOOG|GOOGL|MSFT|NVDA,real news,16.87,0.416,0.517,"Google, Anthropic Deal In Jeopardy As US Justice Department Looks To Snap Online Search Monopoly - Amazon"
+685,2024-11-22 00:01,2024-11-22,AMZN,,real news,15.24,0.403,0.524,Amazon At Risk Of Major Fine As EU Investigates Alleged Preference For In-House Products Under Digital Ma
+694,2024-11-22 04:45,2024-11-22,NOK,,real news,15.24,0.403,0.524,Nokia Board of Directors resolved on issuing shares without consideration to the company and a subsequent directed issuance related to the planned completion of the Infinera Corporation acquisition
+690,2024-11-22 04:45,2024-11-22,NOK,,real news,15.24,0.403,0.524,Nokian hallitus päätti maksuttomasta osakeannista yhtiölle ja myöhemmin toteutettavasta suunnatusta osakeannista liittyen Infineran hankinnan suunniteltuun loppuunsaattamiseen
+697,2024-11-22 08:00,2024-11-22,GOOG,GOOGL|MSFT,real news,15.24,0.403,0.524,Rezolve Ai Strengthens Position in $7.6 Billion Conversational Commerce Market (Expected to Reach $34.41 Billion by 2034) following Strategic Partnerships with Microsoft and Google
+803,2024-11-26 11:12,2024-11-26,NOK,,real news,14.1,0.449,0.599,"Nokia, du Complete Transport Network Slicing Trial In UAE: Details - Nokia (NYSE:NOK)"
+815,2024-11-27 03:30,2024-11-27,NOK,,real news,14.1,0.474,0.633,Nokia wins new deal with Deutsche Telekom to roll out large-scale commercial O-RAN network in Germany
+860,2024-11-28 07:00,2024-11-27,NVDA,,real news,14.1,0.474,0.633,NextGen Digital Expands Cloud AI Hosting Fleet and Launches Marketing Campaign for PCSections.com
+952,2024-12-02 08:00,2024-12-02,APLD,,real news,13.34,0.362,0.525,"Applied Digital Closes $150 million Senior Secured Note With Macquarie Equipment Capital, Inc. to Refinance Existing Credit Facility With Former Senior Lender"
+990,2024-12-03 11:17,2024-12-03,CDNS,,real news,13.3,0.326,0.505,Space-Based Internet Gets A Boost: AST SpaceMobile And Cadence Collaborate On High-Bandwidth Satellite Ch
+1004,2024-12-04 06:00,2024-12-04,NOK,,real news,13.45,0.351,0.531,Kyndryl and Nokia announce expanded portfolio of partnership solutions to bring advanced data center networking services to enterprises
+1056,2024-12-05 08:18,2024-12-05,META,,real news,13.54,0.364,0.537,"Meta Readies $10 Billion AI Data Center in Louisiana, Its Largest Facility Globally - Meta Platforms (NAS"
+1070,2024-12-05 12:35,2024-12-05,NVDA,,real news,13.54,0.364,0.537,NVIDIA to Open Vietnam R&D Center to Bolster AI Development
+1072,2024-12-05 13:03,2024-12-05,AMZN,,real news,13.54,0.364,0.537,"Amazon Blasts Lawsuit Over Alleged Slow Deliveries To Certain Zip Codes, Tells AG: 'We're Protecting Driv"
+1114,2024-12-06 14:08,2024-12-06,AMZN,,real news,12.77,0.33,0.615,Blue Shield's $500 Million Drug Savings Initiative With Amazon Pharmacy Can Potentially Launch In January
+1121,2024-12-06 16:15,2024-12-06,CARR,,real news,12.77,0.33,0.615,Carrier Board of Directors Announces an 18 Percent Increase in Quarterly Dividend to $0.225 per Share - C
+1190,2024-12-09 08:02,2024-12-09,PLTR,,real news,14.19,0.35,0.66,Palantir Jumps After Securing USSOCOM Contract Boost - What's Going On? - Palantir Technologies (NASDAQ:P
+1186,2024-12-09 09:00,2024-12-09,AMZN,,real news,14.19,0.35,0.66,Battery Tender Introduces Line of Chargers for Golf Carts
+1192,2024-12-09 10:12,2024-12-09,TXN,,real news,14.19,0.35,0.66,LeddarTech Rockets As Texas Instruments Backs AI-Driven ADAS Tech With Royalty Deal
+1199,2024-12-09 16:30,2024-12-09,COHR,,real news,14.19,0.35,0.66,Coherent Announces General Availability of Industrial Temperature Range 100G ZR QSFP28-DCO
+1222,2024-12-10 11:00,2024-12-10,STM,LNVGY|META,real news,14.18,0.347,0.658,STMicroelectronics accélère l’IA embarquée avec ses nouveaux microcontrôleurs STM32 dotés d’un processeur neuronal
+1223,2024-12-10 11:44,2024-12-10,AVGO,,real news,14.18,0.347,0.658,Broadcom Enhances Open-Source Ecosystem with Bitnami Premium Release - Broadcom (NASDAQ:AVGO)
+1235,2024-12-10 18:39,2024-12-10,AMZN,,real news,14.18,0.347,0.658,"Amazon Autos: Buy Your Next Car Online, It's Just A Click Away - Amazon.com (NASDAQ:AMZN)"
+1248,2024-12-10 23:00,2024-12-10,NOK,,real news,14.18,0.347,0.658,Nokia and SK Broadband deploy quantum secure network to protect Korea Hydro and Nuclear Power’s IT infrastructure
+1265,2024-12-11 12:00,2024-12-11,NOK,,real news,13.58,0.372,0.771,Nokia building IP network to support AI workloads at Nscale’s new sustainable data center
+1267,2024-12-11 12:15,2024-12-11,PLTR,,real news,13.58,0.372,0.771,Palantir's Warp Speed Launches To Accelerate US Manufacturing With Advanced AI Integration - Palantir Tec
+1294,2024-12-12 10:45,2024-12-12,AMZN,GOOG|GOOGL|KEYS|MSFT|NVDA|SNPS,real news,13.92,0.394,0.777,"Synopsys Proposes Divesting Units, Including Ansys PowerArtist, For $35 Billion EU Deal Approval - Synops"
+1298,2024-12-12 11:26,2024-12-12,AMZN,NVDA,real news,13.92,0.394,0.777,"Healthcare Executives Embrace Generative AI to Boost Patient Outcomes - Amazon.com (NASDAQ:AMZN), AVAI BI"
+1331,2024-12-13 07:30,2024-12-13,AMAT,,real news,13.81,0.333,0.707,Applied Materials Announces Cash Dividend - Applied Materials (NASDAQ:AMAT)
+1327,2024-12-13 09:02,2024-12-13,HPE,NVDA,real news,13.81,0.333,0.707,Hewlett Packard Enterprise And LRZ Team Up For Supercomputing Breakthrough: Details - Hewlett Packard (NY
+1410,2024-12-16 08:50,2024-12-16,MCHP,,real news,14.69,0.358,0.734,Integrated and Compact CAN FD System Basis Chip Solution for Space-Constrained Applications
+1445,2024-12-17 09:00,2024-12-17,COHR,TEL,real news,15.87,0.395,0.726,Tabnine Introduces Ability to Flag Unlicensed Code in AI-generated Software
+1451,2024-12-17 10:00,2024-12-17,GOOG,GOOGL|META,real news,15.87,0.395,0.726,"Global Smart Glasses Market Estimated to Reach $4.129 Billion By 2030, a Big Boon for Tech Companies"
+1516,2024-12-20 10:53,2024-12-20,DELL,NVDA|SMCI,real news,18.36,0.685,0.967,"Nvidia Secures EU Approval For Run:ai Deal, US Probes China Export Breach - NVIDIA (NASDAQ:NVDA)"
+2222,2025-01-14 07:00,2025-01-14,AMZN,,real news,18.71,0.667,0.945,"iHerb Expands Global Reach with New Digital Storefronts on Albertsons Companies, Amazon UK and Amazon Australia"
+2541,2025-01-23 04:43,2025-01-23,META,MSFT|NVDA,real news,15.02,0.7,0.929,TikTok-Parent ByteDance Plans $12 Billion AI Chip Investment In 2025 To Bolster Global AI Ambitions Amid
+2559,2025-01-23 11:00,2025-01-23,NTAP,META|NVDA,real news,15.02,0.7,0.929,Pipeshift raises $2.5M to offer enterprises flexibility and control over their AI stack using open-source models
+2562,2025-01-23 12:04,2025-01-23,GOOG,GOOGL|META,real news,15.02,0.7,0.929,Google Taps HTC's Talent in $250 Million Deal to Lead AR/VR Innovation - Alphabet (NASDAQ:GOOGL)
+2584,2025-01-24 09:00,2025-01-24,MKSI,,real news,14.85,0.715,0.973,MKS Instruments Completes Repricing on its Secured Term Loan B USD and EUR Tranches and Makes a $100 Million Voluntary Prepayment on its Secured Term Loan B USD
+2600,2025-01-24 17:34,2025-01-24,MSFT,,real news,14.85,0.715,0.973,Tevogen Bio Broadens Relationship with Microsoft to Deepen Artificial Intelligence Collaboration and Develop PredicTcell Technology on Azure
+2916,2025-02-03 09:17,2025-02-03,DELL,,real news,18.62,0.678,0.99,Sophos Completes Secureworks Acquisition - Dell Technologies (NYSE:DELL)
+2923,2025-02-03 20:59,2025-02-03,NVDA,SMCI,real news,18.62,0.678,0.99,VCI Global 通过 Supermicro 采购尖端 NVIDIA H200 人工智能芯片以强化人工智能云业务
+2961,2025-02-05 03:00,2025-02-05,NOK,,real news,15.77,0.638,0.96,Nokia and Orange France extend long-term partnership with new 5G deal
+2988,2025-02-05 18:00,2025-02-05,SIMO,,real news,15.77,0.638,0.96,Silicon Motion Announces New $50 Million Share Repurchase Program
+2987,2025-02-05 18:00,2025-02-05,SIMO,,real news,15.77,0.638,0.96,"Silicon Motion Announces Results for the Period Ended December 31, 2024"
+3012,2025-02-06 10:36,2025-02-06,ORCL,,real news,15.5,0.618,0.988,"Oracle Enhances Cloud HCM With AI, Helping Businesses Improve HR Efficiency - Oracle (NYSE:ORCL)"
+3018,2025-02-06 14:16,2025-02-06,AMZN,ESTC|MSFT,real news,15.5,0.618,0.988,NexQloud Files Patent for Distributed Kubernetes Service (DKS) and Migrates Infrastructure from Amazon EKS
+3036,2025-02-06 16:35,2025-02-06,AMZN,,real news,15.5,0.618,0.988,"Amazon EPS Jumps 86%, Beats Forecasts | The Motley Fool"
+3022,2025-02-06 16:41,2025-02-06,CARR,,real news,15.5,0.618,0.988,75F Raises Additional $45M Series B to Increase Energy Savings and Make Building Automation Easier
+3131,2025-02-10 01:00,2025-02-10,NOK,INTC|HPE,real news,15.81,0.607,0.865,Sisäpiiritieto: Nokian johto vaihtuu – Justin Hotard nimitetty Pekka Lundmarkin seuraajaksi
+3129,2025-02-10 01:00,2025-02-10,HPE,INTC|NOK,real news,15.81,0.607,0.865,Inside information: Nokia announces a leadership transition – Justin Hotard appointed as successor to Pekka Lundmark
+3164,2025-02-10 16:29,2025-02-10,MSFT,,real news,15.81,0.607,0.865,"Elon Musk Co-Founded OpenAI, Now He's Bidding $97.4B To Take Back The Company - Microsoft (NASDAQ:MSFT)"
+3170,2025-02-11 04:00,2025-02-11,GOOG,GOOGL,real news,16.02,0.528,0.698,Bind Research launched to transform disordered proteins into effective drug targets
+3178,2025-02-11 07:45,2025-02-11,NVDA,,real news,16.02,0.528,0.698,Firefly Neuroscience Accepted into NVIDIA Connect Program
+3191,2025-02-11 10:48,2025-02-11,AMD,NVDA,real news,16.02,0.528,0.698,"AMD Expands AI Research With CEA Partnership, Aiming for Energy-Efficient Computing - Advanced Micro Devi"
+3221,2025-02-12 10:23,2025-02-12,VRT,,real news,15.89,0.516,0.65,"Vertiv Rides AI Boom To 26% Sales Growth, But Stock Slips On Mixed Outlook - Vertiv Holdings (NYSE:VRT)"
+3223,2025-02-12 11:44,2025-02-12,TEL,,real news,15.89,0.516,0.65,TE Connectivity Snaps Up Richards Manufacturing For $2.3 Billion: Details - TE Connectivity (NYSE:TEL)
+3230,2025-02-12 16:10,2025-02-12,EQIX,,real news,15.89,0.516,0.65,Equinix Increases Quarterly Dividend on Its Common Stock for 10th Consecutive Year Since REIT Conversion
+3244,2025-02-13 06:00,2025-02-13,GOOG,GOOGL|NVDA,real news,15.1,0.568,0.776,Apptronik Raises $350 Million to Scale Production of AI-Powered Humanoid Robots and Meet Significant Customer Demand
+3252,2025-02-13 08:00,2025-02-13,SNOW,,real news,15.1,0.568,0.776,LaunchDarkly Announces Snowflake Native App for Data Warehouse Native Experimentation and Product Analytics
+3381,2025-02-18 09:00,2025-02-18,AMZN,,real news,15.35,0.477,0.676,"Kabrita, the #1 Goat Milk Formula Brand Worldwide, Launches Their Infant Formula in Canada"
+3396,2025-02-18 16:02,2025-02-18,GOOG,GOOGL|META,real news,15.35,0.477,0.676,"Dan Loeb's Third Point Boosts Meta Holdings, Now A Top 4 Position - Meta Platforms (NASDAQ:META)"
+3409,2025-02-18 17:29,2025-02-18,ARM,CDNS|NVDA|TSM,real news,15.35,0.477,0.676,Cadence Systems: Q4 EPS Tops Forecast | The Motley Fool
+3404,2025-02-19 04:00,2025-02-19,NVDA,,real news,15.27,0.434,0.548,MFH's Majority-Owned Subsidiary Aifinity Base Limited Plans to Manufacture Advanced Liquid Cooling Solutions for Nvidia® Chip-Powered AI Data Centers and High-Performance Computing
+3402,2025-02-19 04:00,2025-02-19,NVDA,,real news,15.27,0.434,0.548,MFH's Majority-Owned Subsidiary Aifinity Base Limited Plans to Manufacture Advanced Liquid Cooling Solutions for Nvidia® Chip-Powered AI Data Centers and High-Performance Computing
+3414,2025-02-19 07:01,2025-02-19,MCHP,MSFT,real news,15.27,0.434,0.548,Artificial Intelligence Meets Embedded Development with Microchip’s MPLAB® AI Coding Assistant
+3455,2025-02-20 10:55,2025-02-20,PWR,,real news,15.66,0.435,0.576,"Quanta Services Profits Surge In Q4, Projects $27.1 Billion In 2025 Revenue - Quanta Services (NYSE:PWR)"
+3542,2025-02-23 10:45,2025-02-21,AMZN,GOOG|GOOGL|HPQ|MSFT|NVDA|QCOM|TSM,real news,18.21,0.571,0.745,"Consumer Tech News (Feb 17-Feb 21): Mexico Warns Alphabet Over Naming of the ""Gulf of Mexico"" On Maps, Ap"
+3569,2025-02-24 09:00,2025-02-24,FORM,,real news,18.98,0.525,0.73,FormFactor Announces the Closing of FICT Transaction
+3577,2025-02-24 12:00,2025-02-24,INTC,,real news,18.98,0.525,0.73,Eviden unveils new generation of enterprise servers for AI and critical applications
+3632,2025-02-25 09:39,2025-02-25,AMZN,,real news,19.43,0.507,0.768,Extra Week Helps Home Depot Beat Q4 Forecasts | The Motley Fool
+3643,2025-02-26 03:00,2025-02-26,NOK,,real news,19.1,0.504,0.758,Nokia launches MX Context to accelerate Industry 4.0 with AI-powered contextual awareness suites #MWC25
+3666,2025-02-26 11:00,2025-02-26,MDB,,real news,19.1,0.504,0.758,"Introducing Contentstack EDGE, the World’s First Adaptive Digital Experience Platform"
+5619,2025-05-07 08:00,2025-05-07,CSCO,,real news,23.55,0.756,0.964,Testsigma announces autonomous testing capabilities - ushering in the era of agentic AI
+5622,2025-05-07 08:24,2025-05-07,DLR,,real news,23.55,0.756,0.964,"Mortgage Applications Jump 11% As Buyers Rush In Ahead Of Fed Decision - BRT Apartments (NYSE:BRT), Digit"
+5628,2025-05-07 11:00,2025-05-07,NOW,,real news,23.55,0.756,0.964,Zoom and ServiceNow Announce Strategic Integration to Elevate Customer and Employee Experiences
+5627,2025-05-07 11:00,2025-05-07,NOW,,real news,23.55,0.756,0.964,Apiiro Joins Forces with ServiceNow to Power its CMDB with AI-Native Code-to-Runtime Software Inventory
+5687,2025-05-09 08:30,2025-05-09,MCHP,NVDA|AVGO,real news,21.9,0.555,0.671,Microchip Technology Stock Gains On Uplifting Forecast - Microchip Technology (NASDAQ:MCHP)
+5699,2025-05-09 20:00,2025-05-09,MDB,,real news,21.9,0.555,0.671,"Shopify Inc to Join the Nasdaq-100 Index® Beginning May 19, 2025"
+5916,2025-05-19 00:43,2025-05-19,NBIS,NVDA,real news,18.14,0.74,0.961,NVIDIA Announces DGX Cloud Lepton to Connect Developers to NVIDIA’s Global Compute Ecosystem
+5913,2025-05-19 00:43,2025-05-19,NVDA,,real news,18.14,0.74,0.961,NVIDIA Powers World’s Largest Quantum Research Supercomputer
+5924,2025-05-19 08:02,2025-05-19,NVDA,VRT,real news,18.14,0.74,0.961,"Vertiv Develops Power Solutions In Sync With NVIDIA's AI Roadmap - NVIDIA (NASDAQ:NVDA), Vertiv Holdings"
+5928,2025-05-19 10:23,2025-05-19,AMD,SANM,real news,18.14,0.74,0.961,AMD Sells Off A $5 Billion Powerhouse: What's The Catch In This $3 Billion Deal? - Advanced Micro Devices
+5935,2025-05-19 13:06,2025-05-19,HPE,NVDA,real news,18.14,0.74,0.961,"Hewlett Packard, Nvidia Deepen Collaboration On AI Factory Solutions - Hewlett Packard (NYSE:HPE)"
+5942,2025-05-19 18:00,2025-05-19,MU,SIMO,real news,18.14,0.74,0.961,"Lightning-Fast Speeds, Massive Capacities: Crucial SSDs Elevate Gaming and Creative Endeavors"
+5949,2025-05-19 22:45,2025-05-19,GFS,,real news,18.14,0.74,0.961,GlobalFoundries Partners with A*STAR to Accelerate Advanced Packaging Innovation
+5950,2025-05-20 02:30,2025-05-20,MSFT,,real news,18.09,0.691,0.913,Temenos launches Gen AI Copilot for banks to deliver better products faster
+5952,2025-05-20 04:00,2025-05-20,ARM,,real news,18.09,0.691,0.913,lowRISC Welcomes Javier Orensanz Martinez as CEO
+6014,2025-05-22 03:00,2025-05-22,NOK,,real news,20.28,0.751,0.947,Nokia and Three Sweden expand access to fast broadband through 5G Fixed Wireless Access for improved connectivity
+6060,2025-05-22 15:27,2025-05-22,ADI,,real news,20.28,0.751,0.947,Analog Devices Q2 Earnings Top Forecasts | The Motley Fool
+6046,2025-05-22 16:00,2025-05-22,IPGP,,real news,20.28,0.751,0.947,IPG Photonics Appoints Mira Sahney as Senior Vice President of Global Laser Systems
+6051,2025-05-22 18:32,2025-05-22,AMZN,,real news,20.28,0.751,0.947,Bill Ackman's Pershing Square Builds New Stake In Amazon At 'Extremely Attractive' Price - Amazon.com (NA
+6150,2025-05-27 05:00,2025-05-27,NOK,DELL,real news,18.96,0.684,0.858,Nokia accelerates mass market multi-Gig broadband with new high-density 25G PON line card
+6164,2025-05-27 12:55,2025-05-27,BELFA,BELFB,real news,18.96,0.684,0.858,Farouq Tuweiq Assumes CEO Role
+6175,2025-05-28 04:00,2025-05-28,NOK,,real news,19.31,0.676,0.748,Nokia and blackned to create next-generation deployable tactical networks for the defense sector
+6181,2025-05-28 06:24,2025-05-28,NOK,,real news,19.31,0.676,0.748,"Nokia Advances Multi-PON Fiber Tech, Powers blackned's Defense Networks - Nokia (NYSE:NOK)"
+6197,2025-05-28 11:00,2025-05-28,ARM,,real news,19.31,0.676,0.748,Cerence AI Partners with Arm to Deliver Enhanced LLM Capabilities at the Edge
+6214,2025-05-28 11:04,2025-05-28,PLAB,,real news,19.31,0.676,0.748,Photronics PLAB Q2 2025 Earnings Call Transcript | The Motley Fool
+6202,2025-05-28 11:11,2025-05-28,PLTR,,real news,19.31,0.676,0.748,Fannie Mae Launches AI Fraud Detection Technology Partnership with Palantir - FANNIE MAE by Fannie Mae (O
+6213,2025-05-29 03:00,2025-05-29,NOK,,real news,19.18,0.703,0.716,Nokia brings Wi-Fi 7 to all with launch of Beacon 4 and 9 home devices
+6218,2025-05-29 05:45,2025-05-29,AMD,NVDA,real news,19.18,0.703,0.716,AMD Deepens AI Ecosystem With Enosemi Acquisition - Advanced Micro Devices (NASDAQ:AMD)
+6298,2025-06-02 01:00,2025-06-02,NOK,,real news,18.36,0.658,0.746,"Vodafone Qatar selects Nokia in major network modernization deal to drive expanded 5G coverage, reliability, and services"
+6300,2025-06-02 04:00,2025-06-02,NVDA,,real news,18.36,0.658,0.746,Illumio Simplifies Zero Trust in Critical Infrastructure with NVIDIA Accelerated Computing
+6317,2025-06-02 10:47,2025-06-02,AVGO,,real news,18.36,0.658,0.746,Broadcom Shares Rise On New AI Tools To Help Businesses Cut Cloud Costs - Broadcom (NASDAQ:AVGO)
+6320,2025-06-02 16:57,2025-06-02,GLW,,real news,18.36,0.658,0.746,Harvard Bioscience Appoints John Duke to Board of Directors
+6369,2025-06-04 07:39,2025-06-04,META,SMCI,real news,17.61,0.673,0.819,"Constellation Energy and Meta Strike Nuclear Deal, Shares Whipsaw"
+6395,2025-06-04 17:09,2025-06-04,ETN,CDNS,real news,17.61,0.673,0.819,ChargePoint (CHPT) Q1 2026 Earnings Transcript | The Motley Fool
+6385,2025-06-04 17:13,2025-06-04,MCHP,,real news,17.61,0.673,0.819,StealthCores Joins Microchip Partner Program to Deliver Advanced Security for PolarFire FPGA and SoC Platforms
+6392,2025-06-05 04:00,2025-06-05,AMD,DELL|HPE|IBM|INTC|MSFT|NVDA,real news,18.48,0.553,0.761,SPEC Resumes Global Collaboration with Companies on U.S. BIS Entity List
+6412,2025-06-05 16:15,2025-06-05,AVGO,,real news,18.48,0.553,0.761,Broadcom Inc. Announces Second Quarter Fiscal Year 2025 Financial Results and Quarterly Dividend - Broadc
+6474,2025-06-08 14:28,2025-06-06,AMD,MSFT|GLW,real news,16.77,0.652,0.853,"ASUS Republic of Gamers Announces the ROG Xbox Ally and ROG Xbox Ally X, Raising the Standard for Gaming Handhelds"
+6480,2025-06-09 04:31,2025-06-09,AMZN,NVDA,real news,17.16,0.592,0.784,Boeing 737 MAX Deliveries To China Restart After Month-Long Pause Amid Trade Tensions With US Over Trump'
+6496,2025-06-09 13:35,2025-06-09,QCOM,,real news,17.16,0.592,0.784,Qualcomm Stock Is Rising Monday: What's Going On? - Qualcomm (NASDAQ:QCOM)
+6507,2025-06-10 03:00,2025-06-10,NOK,,real news,16.95,0.441,0.601,Nokia and Leonardo partner to deliver worldwide mission-critical private wireless networks for public safety and critical infrastructures
+6521,2025-06-10 11:13,2025-06-10,AMZN,GOOGL|GOOG,real news,16.95,0.441,0.601,"Smart Healthcare Is Taking Over. Here's Where the Money's Headed - Amazon.com (NASDAQ:AMZN), AVAI BIO INC"
+6525,2025-06-11 02:24,2025-06-11,IREN,NVDA,real news,17.26,0.412,0.6,IREN prices upsized $500 million convertible notes offering
+6528,2025-06-11 03:58,2025-06-11,META,PLTR,real news,17.26,0.412,0.6,Anduril CEO Palmer Luckey Confirms IPO Plans To Compete For Trillion-Dollar Defense Contracts: 'We Are De
+6537,2025-06-11 05:57,2025-06-11,NBIS,NVDA,real news,17.26,0.412,0.6,NVIDIA Partners With Europe Model Builders and Cloud Providers to Accelerate Region’s Leap Into AI
+6555,2025-06-11 16:53,2025-06-11,AAOI,NVDA,real news,17.26,0.412,0.6,What's Going On With Applied Optoelectronics Stock? - Applied Optoelectronics (NASDAQ:AAOI)
+6563,2025-06-11 17:09,2025-06-11,ORCL,,real news,17.26,0.412,0.6,Oracle Earnings See Cloud Acceleration | The Motley Fool
+6561,2025-06-11 17:29,2025-06-11,AMD,CSCO|NVDA,real news,17.26,0.412,0.6,"Saudi Arabia Taps AMD, Cisco For Cloud Project: Report - Advanced Micro Devices (NASDAQ:AMD)"
+6560,2025-06-12 01:00,2025-06-12,GOOG,GOOGL,real news,18.02,0.412,0.585,Codeproof Technologies Revolutionizes Device Management with Zero-Touch Enrollment for Android and iOS
+6568,2025-06-12 05:00,2025-06-12,NOK,,real news,18.02,0.412,0.585,O2 Czech Republic deploys Nokia 5G Standalone Core to deliver advanced network services
+6567,2025-06-12 05:00,2025-06-12,HPQ,,real news,18.02,0.412,0.585,Multiverse Computing Raises $215M to Scale Ground-Breaking Technology that Compresses LLMs by up to 95%
+6574,2025-06-12 09:09,2025-06-12,MSFT,,real news,18.02,0.412,0.585,Mattel Teams Up With OpenAI To Develop AI-Powered Interactive Toys - Mattel (NASDAQ:MAT)
+6579,2025-06-12 14:46,2025-06-12,AMD,MU,real news,18.02,0.412,0.585,Micron HBM Designed into Leading AMD AI Platform
+6596,2025-06-13 16:35,2025-06-13,COHR,,real news,20.82,0.513,0.682,Coherent Launches Best-In-Class 18 W 880 nm Single-Emitter Laser Diode For High-Performance DPSS Systems
+6649,2025-06-16 07:00,2025-06-16,NOK,DELL|JBL|ORCL|HPE,real news,19.11,0.552,0.766,Nokia announces changes to Group Leadership Team
+6646,2025-06-16 07:00,2025-06-16,NOK,DELL|JBL|ORCL|HPE,real news,19.11,0.552,0.766,Nokia ilmoittaa muutoksista johtoryhmän kokoonpanossa
+6655,2025-06-16 09:00,2025-06-16,AMAT,,real news,19.11,0.552,0.766,Applied Materials and CEA-Leti Expand Joint Lab To Drive Innovation in Specialty Chips
+6684,2025-06-17 19:06,2025-06-17,META,,real news,21.6,0.58,0.777,"Meta Teams Up With Oakley, Prada For Next-Gen AI Smart Glasses - Meta Platforms (NASDAQ:META)"
+6700,2025-06-18 16:40,2025-06-18,COHR,,real news,20.14,0.579,0.758,Coherent Introduces Class-Leading Disposable Surgical Fiber Assemblies for Laser Lithotripsy and Advanced Medical Applications
+6702,2025-06-18 20:40,2025-06-18,INTC,,real news,20.14,0.579,0.758,Pacific Urban Investors Expands Portland Metro Portfolio with 304-Unit Acquisition
+6724,2025-06-19 10:00,2025-06-18,MSFT,,real news,20.14,0.579,0.758,Atos et la Société Financière IGM finalisent avec succès le passage au cloud public
+6726,2025-06-19 16:35,2025-06-18,COHR,,real news,20.14,0.579,0.758,"Coherent Expands Factor Series Diode Pumps with Higher Power, Improved Efficiency, and New Wavelength Options"
+6755,2025-06-20 17:27,2025-06-20,GOOG,GOOGL,real news,20.62,0.583,0.725,"Just As Tesla Lined Up Its Big Move, Waymo Went Bigger - Tesla (NASDAQ:TSLA)"
+6786,2025-06-23 16:24,2025-06-23,NVDA,,real news,19.83,0.58,0.7,Nvidia's Best Chips May Be Powering China's Military—Via DeepSeek - NVIDIA (NASDAQ:NVDA)
+6789,2025-06-23 18:59,2025-06-23,AMZN,,real news,19.83,0.58,0.7,Amazon's Prime Day Secret Weapon? Lipstick And Luxury - Amazon.com (NASDAQ:AMZN)
+6808,2025-06-24 11:14,2025-06-24,AMZN,MSFT,real news,17.48,0.681,0.812,Microsoft's AI Gets $80 Billion—While Pink Slips Print By The Thousand - Microsoft (NASDAQ:MSFT)
+6809,2025-06-24 13:46,2025-06-24,PLTR,,real news,17.48,0.681,0.812,"Palantir Buys Into Flying Startup- Nano-Cap Stock Took Off - Palantir Technologies (NASDAQ:PLTR), Surf Ai"
+6812,2025-06-25 00:01,2025-06-25,NOK,,real news,16.76,0.63,0.779,Verizon Business wins multisite private 5G contract fueling a multibillion dollar regeneration project
+6824,2025-06-25 05:37,2025-06-25,NOK,,real news,16.76,0.63,0.779,"Verizon Teams Up With Nokia To Bring High-Tech 5G Boost To Busy British Ports - Nokia (NYSE:NOK), Verizon"
+6857,2025-06-25 17:29,2025-06-25,MU,,real news,16.76,0.63,0.779,Micron Earnings: Rocketing AI Demand | The Motley Fool
+6852,2025-06-26 03:00,2025-06-26,NOK,,real news,16.59,0.68,0.826,Nokian henkilöstöjohtaja Lorna Gibb jättää yhtiön
+6854,2025-06-26 03:00,2025-06-26,NOK,,real news,16.59,0.68,0.826,"Chief People Officer, Lorna Gibb to leave Nokia"
+6865,2025-06-26 06:00,2025-06-26,IBM,MSFT|ORCL|CDNS,real news,16.59,0.68,0.826,The Eclipse Foundation’s Jakarta EE Working Group Announces Jakarta EE 11 Release
+6873,2025-06-26 08:00,2025-06-26,CARR,CORZ|GEV,real news,16.59,0.68,0.826,AirJoule Technologies Announces Two New Appointments to its Board of Directors
+6874,2025-06-26 08:00,2025-06-26,APLD,,real news,16.59,0.68,0.826,Hyperscale Data Highlights AI Infrastructure Growth and Corporate Transition in Stockholder Letter
+6892,2025-06-26 16:15,2025-06-26,AMZN,META|ESTC,real news,16.59,0.68,0.826,Amazon Loses Top AI Leader In High-Stakes Talent Shuffle - Amazon.com (NASDAQ:AMZN)
+6898,2025-06-26 23:30,2025-06-26,AMD,,real news,16.59,0.68,0.826,Crusoe Introduces Crusoe Spark: Modular AI Data Centers for Scalable Edge Computing
+6928,2025-06-27 14:43,2025-06-27,NVDA,,real news,16.32,0.69,0.855,Nvidia Is Acquiring Its Way Into AI - NVIDIA (NASDAQ:NVDA)
+6980,2025-06-30 09:17,2025-06-30,HPE,,real news,16.73,0.626,0.772,Why Is Hewlett Packard Stock Soaring On Monday? - Hewlett Packard (NYSE:HPE)
+6989,2025-06-30 14:28,2025-06-30,MSFT,,real news,16.73,0.626,0.772,Tevogen CEO Contributes to Build-Out and First-Year Operations of New Headquarters
+7016,2025-07-02 01:19,2025-07-02,ADBE,GOOG|GOOGL|MSFT,real news,16.64,0.494,0.705,"Figma Targets Wall Street Debut After $20 Billion Adobe Deal Collapse - Adobe (NASDAQ:ADBE), Salesforce ("
+7037,2025-07-02 13:02,2025-07-02,ADBE,,real news,16.64,0.494,0.705,"Figma's Crypto Playbook Revealed Ahead Of IPO: $69 Million In Bitcoin ETFs, $30 Million More Coming Soon"
+7047,2025-07-03 00:38,2025-07-03,ADI,,real news,16.38,0.571,0.794,Bond Introduces World's First Perpetual Smart Ring with Patent-Pending LifeDrive System
+7068,2025-07-03 16:33,2025-07-03,ADBE,,real news,16.38,0.571,0.794,JCPal Unveils Award-Winning Range of Shortcut Keyboards for Creative Professionals
+7120,2025-07-07 01:00,2025-07-07,NOK,,real news,17.79,0.592,0.835,"Indosat Ooredoo Hutchison and Nokia partner to reduce energy demand and support AI-powered, sustainable operations"
+7134,2025-07-07 11:49,2025-07-07,CSCO,NVDA|EQIX|META,real news,17.79,0.592,0.835,Nvidia's AI Chip Rival Groq Launches First European Data Center - NVIDIA (NASDAQ:NVDA)
+7133,2025-07-07 12:49,2025-07-07,CORZ,,real news,17.79,0.592,0.835,"CoreWeave, Core Scientific Shares Move Lower On $9 Billion All-Stock Deal - Core Scientific (NASDAQ:CORZ)"
+7164,2025-07-08 08:30,2025-07-08,GFS,,real news,16.81,0.499,0.744,GlobalFoundries to Acquire MIPS to Accelerate AI and Compute Capabilities - GLOBALFOUNDRIES (NASDAQ:GFS)
+7180,2025-07-08 22:10,2025-07-08,AMZN,,real news,16.81,0.499,0.744,Jeff Bezos Offloads Nearly $666 Million In Amazon Stock — Adds To Post-Wedding Sell-Off Streak - Amazon.c
+7191,2025-07-09 08:00,2025-07-09,MSFT,,real news,15.94,0.449,0.695,Resilinc Launches Agentic AI for Supply Chain Risk and Compliance Built on Microsoft Azure
+7195,2025-07-09 08:35,2025-07-09,AMZN,MSFT|GOOGL,real news,15.94,0.449,0.695,AES Surges Premarket on Sale Talks—A Rare Value in Renewable Infrastructure
+7194,2025-07-09 09:00,2025-07-09,AMZN,CSCO|ADBE,real news,15.94,0.449,0.695,Aisera and AWS Sign Strategic Collaboration Agreement to Accelerate Autonomous AI Adoption
+7193,2025-07-09 09:00,2025-07-09,GOOG,GOOGL,real news,15.94,0.449,0.695,"Ria Money Transfer and Xe Join Forces with Google to Collaborate on Seamless, Cross-Border Money Transfers"
+7211,2025-07-10 04:00,2025-07-10,MSFT,,real news,15.78,0.471,0.673,"TSplus Announces Strategic Partnership with ImsCloud to Deliver Secure, Accessible Cloud Solutions to French IT Resellers"
+7222,2025-07-10 05:30,2025-07-10,GOOG,GOOGL|MSFT,real news,15.78,0.471,0.673,"Docker Brings Agentic Apps to Life with New Compose Support, Cloud Offload, and Partner Integrations"
+7249,2025-07-11 04:00,2025-07-11,NVDA,QCOM,real news,16.4,0.428,0.598,XPENG Opens Order Books for All-New Smart Coupe SUV G6 and Smart Premium SUV G9 in Europe
+7319,2025-07-14 03:00,2025-07-14,GOOG,GOOGL|NOK,real news,17.2,0.398,0.572,"Nokia network APIs now available on Google Cloud Marketplace, making it even easier for developers to utilize"
+7330,2025-07-14 06:59,2025-07-14,APLD,,real news,17.2,0.398,0.572,"Hyperscale Data Reduces Debt by Over $20 Million, Strengthens Balance Sheet Ahead of Planned Michigan AI Data Center Expansion"
+7335,2025-07-14 09:00,2025-07-14,NOK,,real news,17.2,0.398,0.572,"Nokia to deploy private 5G network for Memphis Light, Gas and Water's grid modernization initiative"
+7362,2025-07-15 00:28,2025-07-15,HPE,,real news,17.38,0.393,0.543,WatchGuard Technologies Names Frédéric Saint-Joigny as Vice President of EMEA Sales
+7371,2025-07-15 05:00,2025-07-15,GOOG,GOOGL,real news,17.38,0.393,0.543,Verse8 Officially Launches: AI-Powered Game Platform Opens to Players and Creators
+7374,2025-07-15 07:00,2025-07-15,EQIX,,real news,17.38,0.393,0.543,Accelsius Brings NeuCool™ to Equinix’s Co-Innovation Facility in Ashburn
+7373,2025-07-15 09:00,2025-07-15,AMD,ANET|HPE|INTC|AVGO|PWR,real news,17.38,0.393,0.543,Broadcom Ships Tomahawk Ultra: Reimagining the Ethernet Switch for HPC and AI Scale-up
+7377,2025-07-15 10:00,2025-07-15,MSFT,SNOW,real news,17.38,0.393,0.543,Cyberlocke Launches CDIE Framework to Simplify Large-Scale Cloud Data Ingestion
+7386,2025-07-15 12:07,2025-07-15,CORZ,NVDA|NBIS|MSFT,real news,17.38,0.393,0.543,"CoreWeave Makes AI Bet Ahead Of $9B Core Scientific Deal - Core Scientific (NASDAQ:CORZ), CoreWeave (NASD"
+7392,2025-07-15 14:24,2025-07-15,AVGO,NVDA,real news,17.38,0.393,0.543,Can Broadcom’s New Switch Justify Its AI-Driven Premium Valuation?
+7393,2025-07-15 16:15,2025-07-15,POWL,,real news,17.38,0.393,0.543,Powell Industries Announces Agreement to Acquire Remsdaq Ltd. - Powell Industries (NASDAQ:POWL)
+7394,2025-07-15 16:58,2025-07-15,IBM,,real news,17.38,0.393,0.543,Brand Engagement Network Appoints Janine Grasso as Interim CEO
+7399,2025-07-16 01:00,2025-07-16,ASML,IBM,real news,17.16,0.423,0.487,ASML reports €7.7 billion total net sales and €2.3 billion net income in Q2 2025
+7408,2025-07-16 08:00,2025-07-16,PANW,,real news,17.16,0.423,0.487,1PointFive Announces Carbon Removal Credit Agreement with Palo Alto Networks
+7419,2025-07-16 10:53,2025-07-16,ETN,,real news,17.16,0.423,0.487,Eaton's Latest Acquisition To Modernize EV Charging Infrastructure - Eaton Corp (NYSE:ETN)
+7429,2025-07-16 17:06,2025-07-16,META,,real news,17.16,0.423,0.487,Scale AI Slashes 14% Of Workforce After Meta's $14 Billion Investment - Meta Platforms (NASDAQ:META)
+7435,2025-07-16 19:09,2025-07-16,NVDA,,real news,17.16,0.423,0.487,Nvidia Reloads China — Jensen's Pitch: Let Me Sell The Good Stuff - NVIDIA (NASDAQ:NVDA)
+7498,2025-07-18 12:36,2025-07-18,MSFT,,real news,16.41,0.367,0.37,Tevogen.AI Receives International Patent Publication for AI Technology Predicting Immunologically Active Peptides
+7578,2025-07-21 13:03,2025-07-21,NVDA,,real news,16.65,0.312,0.316,"Nvidia's CEO Hits Beijing Like A Rockstar, Stirs Jensen-Mania In China - NVIDIA (NASDAQ:NVDA)"
+7582,2025-07-21 19:14,2025-07-21,ORCL,,real news,16.65,0.312,0.316,$500 Billion Stumble: SoftBank–OpenAI's Massive AI Vision Faces Setbacks - Oracle (NYSE:ORCL)
+7583,2025-07-21 21:53,2025-07-21,LNVGY,NVDA,real news,16.65,0.312,0.316,WeRide משתפת פעולה עם Lenovo בהשקת פלטפורמת HPC 3.0 מלאה ברמת הדרישות של תעשיית הרכב על בסיס על בסיסי שבבי DRIVE AGX Thor של NVIDIA
+7597,2025-07-22 07:00,2025-07-22,MPWR,,real news,16.5,0.307,0.352,ECARX and Monolithic Power Systems Form Strategic Partnership to Accelerate Deployment of Global Automotive Intelligence and Robotics Solutions
+7602,2025-07-22 10:00,2025-07-22,AMZN,,real news,16.5,0.307,0.352,"DoseSpot Collaborates with Amazon Pharmacy to Improve Prescription Medication Pricing Transparency, Give Patients More Fulfillment Options"
+7610,2025-07-22 12:00,2025-07-22,NOK,,real news,16.5,0.307,0.352,Inside Information: Nokia lowers 2025 operating profit guidance due to currency
+7608,2025-07-22 12:00,2025-07-22,CSCO,,real news,16.5,0.307,0.352,"Carahsoft Authorized as Cisco Public Sector Distributor, Delivering Comprehensive Networking and Security Solutions"
+7611,2025-07-22 12:00,2025-07-22,NOK,,real news,16.5,0.307,0.352,Sisäpiiritieto: Nokia alentaa koko vuoden 2025 liikevoiton näkymiään valuuttakurssien vuoksi
+7656,2025-07-23 12:00,2025-07-23,HPQ,,real news,15.37,0.333,0.319,Hybrid Software Group: 2025 Interim Report
+7661,2025-07-23 12:13,2025-07-23,AMZN,META,real news,15.37,0.333,0.319,"Amazon Buys Into AI Wearables: Meet Bee, The Company That Listens And Records Your Conversations - Amazon"
+7663,2025-07-23 14:46,2025-07-23,STX,,real news,15.37,0.333,0.319,Leil Storage kündigt HAMR-Unterstützung für SaunaFS an und ermöglicht größere Speicherkapazitäten für On-Premises-Bereitstellungen
+7674,2025-07-23 16:08,2025-07-23,IBM,,real news,15.37,0.333,0.319,IBM RELEASES SECOND-QUARTER RESULTS - IBM (NYSE:IBM)
+7670,2025-07-23 17:00,2025-07-23,NVDA,,real news,15.37,0.333,0.319,Digi Power X Announces Closing of $15 Million Registered Direct Offering of Common Stock
+7703,2025-07-24 12:47,2025-07-24,FLEX,,real news,15.39,0.308,0.327,Root Brands Leads the Way in Accepting HSA and FSA Funds for Natural Supplements
+7711,2025-07-24 16:30,2025-07-24,STM,,real news,15.39,0.308,0.327,STMicroelectronics to strengthen position in sensors with acquisition of NXP's MEMS sensors business - N
+7721,2025-07-24 22:27,2025-07-24,AMZN,,real news,15.39,0.308,0.327,Nasdaq Q2 Revenue Jumps 13 Percent | The Motley Fool
+7737,2025-07-25 11:13,2025-07-25,AVGO,,real news,14.93,0.315,0.329,Broadcom’s $61 Billion VMware Deal Faces EU Court Challenge - Broadcom (NASDAQ:AVGO)
+7744,2025-07-25 15:30,2025-07-25,NVDA,,real news,14.93,0.315,0.329,VCI Global Launches SecureGPU™ – First Encrypted AI Compute Server for Sovereign and Defense Applications
+7770,2025-07-26 11:42,2025-07-25,LNVGY,,real news,14.93,0.315,0.329,"WeRide Wins Permit for Autonomous Robotaxi Service in Shanghai, Partnering with Chery to Revolutionize Urban Mobility"
+7803,2025-07-28 08:22,2025-07-28,MSFT,,real news,15.03,0.298,0.336,"RWE Taps Infosys To Revamp Workplace Tech, Boost Efficiency - Infosys (NYSE:INFY)"
+7805,2025-07-28 09:00,2025-07-28,AMZN,,real news,15.03,0.298,0.336,"Ex-Amazon, Coinbase engineers launch Drizz with $2.7M for Vision AI mobile app testing agent"
+7802,2025-07-28 09:00,2025-07-28,IBM,MSFT|ORCL|SNOW,real news,15.03,0.298,0.336,Varonis Introduces Next-Gen Database Activity Monitoring
+7827,2025-07-28 12:02,2025-07-28,GOOG,GOOGL,real news,15.03,0.298,0.336,Alphabet Posts 14% Revenue Gain in Q2 | The Motley Fool
+7811,2025-07-28 12:22,2025-07-28,TSM,,real news,15.03,0.298,0.336,Taiwan Semiconductor Stock Slips As Samsung Scores $16.5 Billion Tesla Chip Deal - Taiwan Semiconductor (
+7820,2025-07-28 18:18,2025-07-28,CLS,,real news,15.03,0.298,0.336,"Celestica Stock Surges On Q2 Earnings Beat, Company Raises 2025 Outlook On 'Strengthening' Demand - Celes"
+7831,2025-07-29 05:34,2025-07-29,IBM,,real news,15.98,0.282,0.356,Datavault AI Debuts Enterprise Commercialization for AI Agents Built with IBM watsonx for AI-Powered Data Monetization
+7833,2025-07-29 05:48,2025-07-29,MSFT,,real news,15.98,0.282,0.356,"Lucinity Launches AI-Native Customer 360, Powered by Agentic AI"
+7837,2025-07-29 08:00,2025-07-29,AMD,,real news,15.98,0.282,0.356,Teramount raises $50M to address growing demand for AI infrastructure optical connectivity
+7841,2025-07-29 09:00,2025-07-29,LRCX,ONTO|UMC,real news,15.98,0.282,0.356,Multibeam Secures $31 Million in Series B Financing to Accelerate Global Deployment of E-Beam Lithography Production Solutions
+7864,2025-07-29 12:21,2025-07-29,HUBB,,real news,15.98,0.282,0.356,Hubbell Posts 11 Percent EPS Jump in Q2 | The Motley Fool
+7866,2025-07-29 18:30,2025-07-29,IBM,,real news,15.98,0.282,0.356,Datavault AI Debuts Enterprise Commercialization for AI Agents Built with IBM watsonx for AI-Powered Data Monetization
+7880,2025-07-30 08:00,2025-07-30,DDOG,GOOG|GOOGL,real news,15.48,0.261,0.345,Retab raises $3.5M and launches most powerful document AI platform on the market
+7883,2025-07-30 10:00,2025-07-30,AMD,NVDA,real news,15.48,0.261,0.345,RAVEL Expands Its Orchestrate AI Software and Launches New Turnkey AI Workload Solution Pre-Configured for Supermicro Systems to Accelerate AI Adoption
+7897,2025-07-30 11:49,2025-07-30,PANW,,real news,15.48,0.261,0.345,Palo Alto Networks Stock Is Falling Today: What's Going On? - Palo Alto Networks (NASDAQ:PANW)
+7893,2025-07-30 12:00,2025-07-30,MDB,,real news,15.48,0.261,0.345,"Augment Code Launches Easy MCP: One-Click Integration With CircleCI, MongoDB, Redis, Sentry, and Stripe"
+7898,2025-07-30 15:00,2025-07-30,NVDA,,real news,15.48,0.261,0.345,Astrocade Rolls Out AI Agent-Powered Game Creation Experience; Opening the Door for Everyone to Create - and Remix - Games in minutes
+7904,2025-07-30 18:00,2025-07-30,SIMO,,real news,15.48,0.261,0.345,"Silicon Motion Announces Results for the Period Ended June 30, 2025"
+7908,2025-07-30 19:00,2025-07-30,NOK,,real news,15.48,0.261,0.345,Optus partners with Nokia to strengthen reliability of Voice with cloud-native solution supporting the deployment of new 5G enhanced voice services
+7915,2025-07-31 04:00,2025-07-31,NVDA,LNVGY,real news,16.72,0.237,0.274,"WeRide Accelerates Global Growth, Robotaxi Revenue Grew 836.7%"
+7981,2025-08-01 06:02,2025-08-01,EQIX,,real news,20.38,0.394,0.492,Equinix (EQIX) Q2 EPS Jumps 19% | The Motley Fool
+8004,2025-08-01 14:33,2025-08-01,META,,real news,20.38,0.394,0.492,Innodata Lifts 2025 Growth Outlook | The Motley Fool
+8009,2025-08-01 15:20,2025-08-01,NVDA,,real news,20.38,0.394,0.492,AEye (LIDR) Q2 Loss Narrows 61% | The Motley Fool
+8002,2025-08-01 17:09,2025-08-01,STM,META|GLW,real news,20.38,0.394,0.492,CORRECTION – Sony Joins the AR Alliance to Advance the Future of Augmented Reality Wearable Devices
+8015,2025-08-02 03:31,2025-08-01,ORCL,,real news,20.38,0.394,0.492,Bloom Energy (BE) Q2 Revenue Jumps 20% | The Motley Fool
+8046,2025-08-04 07:00,2025-08-04,ON,,real news,17.52,0.527,0.65,onsemi Powers Xiaomi’s YU7 Electric SUV Line-Up
+8067,2025-08-04 17:00,2025-08-04,AMD,,real news,17.52,0.527,0.65,Arteris To Provide FlexGen Smart NoC IP In Next-Generation AMD AI Chiplet Designs
+8068,2025-08-04 17:00,2025-08-04,ANET,AVGO,real news,17.52,0.527,0.65,"Broadcom Ships Jericho4, Enabling Distributed AI Computing Across Data Centers"
+8084,2025-08-04 20:29,2025-08-04,AMAT,ASML|ICHR|LRCX,real news,17.52,0.527,0.65,Ichor (ICHR) Q2 Revenue Jumps 18% | The Motley Fool
+8077,2025-08-04 21:00,2025-08-04,NOK,,real news,17.52,0.527,0.65,Nokia selected by Empyrion Digital to power KR1 Gangnam Data Center connectivity
+8097,2025-08-05 09:00,2025-08-05,ORCL,,real news,17.85,0.576,0.676,Skydance Media Announces Full Slate of Board Designees for Paramount
+8099,2025-08-05 09:00,2025-08-05,ORCL,,real news,17.85,0.576,0.676,Skydance Media Announces Full Slate of Board Designees for Paramount
+8119,2025-08-05 14:00,2025-08-05,IBM,INTC|ORCL,real news,17.85,0.576,0.676,Infoblox Appoints Joshua Husk as Chief Revenue Officer to Accelerate Global Growth
+8120,2025-08-05 14:32,2025-08-05,MSFT,,real news,17.85,0.576,0.676,Tevogen.AI Expands Collaboration With Databricks and Microsoft to Build the Beta Version of Its PredicTcell™ Model With a Focus on Oncology
+8152,2025-08-06 03:26,2025-08-06,STM,,real news,16.77,0.568,0.736,Atomera (ATOM) Q2 Loss Widens 6% | The Motley Fool
+8143,2025-08-06 05:57,2025-08-06,ORCL,MSFT,real news,16.77,0.568,0.736,"Quest Software Adds Executive Heavyweights to Drive AI Innovation, Growth, and Strengthen Execution"
+8144,2025-08-06 06:45,2025-08-06,GOOG,GOOGL,real news,16.77,0.568,0.736,Brookfield Asset Management Announces Strong Second Quarter Results
+8147,2025-08-06 09:00,2025-08-06,AMZN,CSCO|ADBE,real news,16.77,0.568,0.736,Aisera Launches Unify - The AI Industry’s First Open Architecture for Multi-Agent Orchestration
+8158,2025-08-06 13:00,2025-08-06,NOW,MSFT,real news,16.77,0.568,0.736,Built with Now: Staffbase announces integration with ServiceNow to deliver seamless digital employee experience
+8161,2025-08-06 15:59,2025-08-06,MSFT,,real news,16.77,0.568,0.736,Tevogen Sees Significant Institutional Ownership Growth; 73% of Holders Increase Positions
+8176,2025-08-06 23:18,2025-08-06,MKSI,,real news,16.77,0.568,0.736,Mks (MKSI) Q2 Revenue Jumps 9.7% | The Motley Fool
+8196,2025-08-07 09:28,2025-08-07,DDOG,,real news,16.57,0.573,0.753,Datadog (DDOG) Q2 Revenue Jumps 28% | The Motley Fool
+8197,2025-08-07 20:58,2025-08-07,NVDA,,real news,16.57,0.573,0.753,Cloudera Data Services 将私有 AI 引入数据中心
+8217,2025-08-08 10:00,2025-08-08,PLAB,,real news,15.15,0.609,0.827,Photronics Extends Capability with the First Installation of a Merchant Multi-beam Mask Writer in the United States
+8219,2025-08-08 10:30,2025-08-08,CORZ,,real news,15.15,0.609,0.827,"Two Seas Capital Opposes Core Scientific–CoreWeave Merger, Calls Deal Undervalued, Risky For Shareholders"
+8290,2025-08-11 11:00,2025-08-11,CSCO,DELL|HPE|LNVGY|SMCI|NVDA|PWR,real news,16.25,0.626,0.824,NVIDIA RTX PRO Servers With Blackwell Coming to World’s Most Popular Enterprise Systems
+8340,2025-08-12 09:01,2025-08-12,GOOG,GOOGL,real news,14.73,0.706,0.924,"Epic Games Wins Partial Victory Against Apple, Google In Australian Court: What Happened? - Apple (NASDAQ"
+8344,2025-08-12 09:19,2025-08-12,HUBB,,real news,14.73,0.706,0.924,Hubbell Expands Grid Infrastructure Capabilities With DMC Power Deal - Hubbell (NYSE:HUBB)
+8368,2025-08-12 17:32,2025-08-12,AMD,AVGO|NVDA,real news,14.73,0.706,0.924,Stock Market Today: Nvidia Hits New High as U.S. Strikes Revenue-Sharing Deal on China Chip Sales | The Motley Fool
+8365,2025-08-13 04:00,2025-08-13,MSFT,NVDA,real news,14.49,0.728,0.924,Inworld Runtime: The first AI runtime for consumer applications
+8384,2025-08-13 13:41,2025-08-13,IBM,SNOW|MSFT|ORCL|MDB,real news,14.49,0.728,0.924,Striim Announces 5.2 - Major Release adds new AI Agents for Predictive Analytics and Vector generation for building novel Gen AI Enterprise Applications with real-time Intelligence
+8395,2025-08-13 16:01,2025-08-13,COHR,,real news,14.49,0.728,0.924,Coherent Announces Agreement to Sell Aerospace and Defense Business to Advent for $400 Million - Coherent
+8404,2025-08-13 16:33,2025-08-13,GEV,,real news,14.49,0.728,0.924,AirJoule Beats Q2 EPS With No Revenue | The Motley Fool
+8405,2025-08-13 18:23,2025-08-13,COHR,,real news,14.49,0.728,0.924,Coherent Posts Record Q4 Revenue | The Motley Fool
+8407,2025-08-13 18:26,2025-08-13,ASX,,real news,14.49,0.728,0.924,Ainos Posts Wider Loss in Fiscal Q2 | The Motley Fool
+8411,2025-08-14 08:00,2025-08-14,GFS,,real news,14.83,0.691,0.921,GlobalFoundries Completes Acquisition of MIPS
+8430,2025-08-14 09:04,2025-08-14,MSFT,,real news,14.83,0.691,0.921,Csp Posts 18 Percent Revenue Gain in Q3 | The Motley Fool
+8421,2025-08-14 09:20,2025-08-14,MRVL,,real news,14.83,0.691,0.921,Infineon successfully completes acquisition of Marvell's Automotive Ethernet business - INFINEON TECHS AG
+8434,2025-08-14 12:30,2025-08-14,AMZN,SMCI,real news,14.83,0.691,0.921,Amazon: Aggressive Grocery Expansion Puts Walmart+ on the Defensive | Investing.com
+8436,2025-08-14 18:29,2025-08-14,NVDA,SMCI,real news,14.83,0.691,0.921,"Digi Power X Reports Solid Mid-Year Financial Position, Removal of ‘Going Concern’ Risk and Positive Adjusted EBITDA in Q2 2025"
+8450,2025-08-15 06:00,2025-08-15,GLW,,real news,15.09,0.55,0.738,T1 Energy and Corning Deal Accelerates ‘Made in America’ Solar Momentum
+8463,2025-08-15 12:55,2025-08-15,ASX,TSM,real news,15.09,0.55,0.738,InspireSemi Provides Business Update and Announces Private Placement
+8549,2025-08-19 01:34,2025-08-19,META,,real news,15.57,0.404,0.627,"Salesforce Bets Big On 'Agentic AI,' Acquires Regrello To End Manual Work, Enable AI-Powered Automations"
+8585,2025-08-19 16:36,2025-08-19,KEYS,,real news,15.57,0.404,0.627,Keysight Revenue Jumps 11% in Fiscal Q3 | The Motley Fool
+8580,2025-08-19 17:43,2025-08-19,AMZN,META,real news,15.57,0.404,0.627,AI Startup ChatBlu Secures $500K in Pre-Seed Funding to Automate Inventory for Online Retailers
+8586,2025-08-20 00:30,2025-08-20,NOK,,real news,15.69,0.354,0.572,Nokia and Netplus deliver advanced IPTV services for enhanced customer experience in India
+8598,2025-08-20 06:00,2025-08-20,GLW,CDNS,real news,15.69,0.354,0.572,T1 Energy Reports Second Quarter 2025 Results
+8604,2025-08-20 07:00,2025-08-20,NVDA,,real news,15.69,0.354,0.572,Bitget Debuts First-Ever RWA Index Perpetuals Featuring Major Real-World Assets
+8608,2025-08-20 09:00,2025-08-20,MSFT,ASML,real news,15.69,0.354,0.572,"Gradle, Inc. Releases Develocity 360 to Boost Toolchain Observability for GenAI Software Delivery"
+8612,2025-08-20 09:27,2025-08-20,EQIX,NVDA|MSFT,real news,15.69,0.354,0.572,Quantum Computing Could Break the Internet. Some Are Already Building the Fix - Equinix (NASDAQ:EQIX)
+8631,2025-08-21 04:00,2025-08-21,NOK,,real news,16.6,0.386,0.572,Nokia and INX-ZA future-proof internet connectivity for South Africa’s digital communities
+8661,2025-08-22 04:13,2025-08-22,GOOG,GOOGL|MSFT,real news,14.22,0.461,0.662,OpenAI Expands Into 2nd-Largest Market With India Office Launch After Introducing $4.60 ChatGPT Go Subscr
+8758,2025-08-25 06:00,2025-08-25,CSCO,NVDA|STM|INTC,real news,14.79,0.486,0.654,Xscape Photonics and Tower Semiconductor Unveil the Industry’s First Optically Pumped On-Chip Multi-Wavelength Laser Platform for AI Datacenter Fabrics
+8768,2025-08-25 10:00,2025-08-25,NVDA,,real news,14.79,0.486,0.654,"Crusoe Expands Iceland Data Center Capacity with atNorth, Secures $175M Credit Facility from Victory Park Capital"
+8772,2025-08-25 11:00,2025-08-25,AMZN,NVDA|META,real news,14.79,0.486,0.654,"NVIDIA Blackwell-Powered Jetson Thor Now Available, Accelerating the Age of General Robotics"
+8792,2025-08-25 18:03,2025-08-25,WOLF,,real news,14.79,0.486,0.654,Wolfspeed Posts 2% Revenue Drop in Q4 | The Motley Fool
+8791,2025-08-26 05:21,2025-08-26,AMD,NVDA,real news,14.62,0.421,0.56,"Mohammed bin Salman-Backed Humain Begins Building 100MW AI Data Centers With Nvidia, AMD's Latest Chips -"
+8798,2025-08-26 09:00,2025-08-26,TSM,NVDA|PWR|CDNS|SNPS|CSCO|DELL|HPE|LNVGY|NBIS,real news,14.62,0.421,0.56,Industry Leaders Transform Enterprise Data Centers for the AI Era With NVIDIA RTX PRO Servers
+8803,2025-08-26 12:00,2025-08-26,ORCL,,real news,14.62,0.421,0.56,DTEX Appoints Mike Price as Chief Revenue Officer to Accelerate Global Growth of AI-Driven Insider Risk and Data Security Solutions
+8804,2025-08-26 13:00,2025-08-26,AVGO,,real news,14.62,0.421,0.56,Broadcom Selected as Strategic Vendor for Virtualization Software Solutions for Walmart
+8808,2025-08-26 14:00,2025-08-26,GOOG,GOOGL,real news,14.62,0.421,0.56,SMX Partners with Google Public Sector to Launch Pilot Program for AI-Driven Intelligence
+8817,2025-08-26 17:17,2025-08-26,AMZN,GOOG|GOOGL,real news,14.62,0.421,0.56,Sabio Reports 25% YoY Revenue Growth in Q2 2025 with Record Second Quarter and First-Half Revenues - SABI
+8833,2025-08-27 07:00,2025-08-27,PLAB,,real news,14.85,0.41,0.566,Photronics Reports Third Quarter Fiscal 2025 Financial Results
+8845,2025-08-27 11:00,2025-08-27,AMBA,NVDA|QCOM,real news,14.85,0.41,0.566,AVCC and MLCommons Release New MLPerf Automotive v0.5 Benchmark Results
+8864,2025-08-27 17:01,2025-08-27,HPQ,,real news,14.85,0.41,0.566,HP Posts 3% Revenue Gain in Fiscal Q3 | The Motley Fool
+8891,2025-08-28 08:00,2025-08-28,MCHP,,real news,14.43,0.444,0.619,"Easily Integrate Position, Navigation and Timing Technology With Microchip’s Portfolio of GNSS Disciplined Oscillator Modules"
+8903,2025-08-28 12:00,2025-08-28,QCOM,,real news,14.43,0.444,0.619,VoxelSensors to Advance Next-Generation Depth Sensing Technology with 10x Power Savings for XR Applications
+8927,2025-08-28 17:34,2025-08-28,AMBA,,real news,14.43,0.444,0.619,Ambarella Lifts 2026 Outlook on AI Surge | The Motley Fool
+8939,2025-08-29 11:48,2025-08-29,NVDA,AMD|PLTR|INTC,real news,15.36,0.48,0.693,China Doesn’t Need Nvidia: Alibaba’s Chip Challenges Washington - Alibaba Gr Hldgs (NYSE:BABA)
+8980,2025-09-01 00:30,2025-08-29,NOK,,real news,15.36,0.48,0.693,"Nokia upgrades Vortex’s IP edge and transport network to enhance broadband services across Maharashtra, Goa and Gujarat"
+8993,2025-09-01 16:00,2025-08-29,FLEX,,real news,15.36,0.48,0.693,HatchPath Announces New HSA and FSA Eligibility for All Clients
+8996,2025-09-01 22:00,2025-08-29,NOK,,real news,15.36,0.48,0.693,Nokia partners with Extreme Broadband to improve security and future-proof data centers in Malaysia
+9001,2025-09-02 05:06,2025-09-02,AMZN,,real news,17.17,0.552,0.772,"Amazon Invests $4.4 Billion In New Zealand Cloud Infrastructure, Bolsters Global Expansion - Amazon.com ("
+9024,2025-09-03 04:00,2025-09-03,AMZN,FLEX,real news,16.35,0.552,0.729,WeightWatchers Advances International Growth With Strategic Leadership Appointment
+9027,2025-09-03 04:00,2025-09-03,AMZN,FLEX,real news,16.35,0.552,0.729,WeightWatchers treibt internationales Wachstum mit strategischer Verstärkung im Führungsteam voran
+9052,2025-09-03 12:00,2025-09-03,GOOG,GOOGL|MSFT,real news,16.35,0.552,0.729,AI Assistants Go Mobile: Comscore Reports Surge in Mobile AI Tool Usage
+9067,2025-09-04 02:05,2025-09-04,AMD,AMZN,real news,15.3,0.609,0.76,ITS launches Single Stock ETF on shares of seven leading U.S. companies
+9080,2025-09-04 05:00,2025-09-04,NVDA,,real news,15.3,0.609,0.76,WeRide Launches 24/7 Fully Driverless Robotaxi Service in Guangzhou's Huangpu District
+9105,2025-09-04 08:47,2025-09-04,AMZN,MSFT,real news,15.3,0.609,0.76,Amazon Steps Up Its Game In The AI Agent Race With New 'Quick Suite' Software: Report - Amazon.com (NASDA
+9108,2025-09-04 09:00,2025-09-04,NOW,,real news,15.3,0.609,0.76,Covasant Launches AI Agent Control Tower to Bring Order to the Chaotic Enterprise AI Landscape
+9123,2025-09-04 09:35,2025-09-04,CRDO,,real news,15.3,0.609,0.76,Credo Posts Record Q1 Profit Surge | The Motley Fool
+9125,2025-09-04 10:23,2025-09-04,AI,AMZN|GOOG|GOOGL|MSFT,real news,15.3,0.609,0.76,C3.ai Reports 19% Revenue Fall in Q1 | The Motley Fool
+9127,2025-09-04 11:00,2025-09-04,CIEN,COHR,real news,15.3,0.609,0.76,Ciena Sets Q3 Order and Revenue Records
+9128,2025-09-04 16:15,2025-09-04,AVGO,,real news,15.3,0.609,0.76,Broadcom Inc. Announces Third Quarter Fiscal Year 2025 Financial Results and Quarterly Dividend - Broadco
+9135,2025-09-04 17:18,2025-09-04,PATH,,real news,15.3,0.609,0.76,UiPath Revenue Jumps 15% in Fiscal Q2 | The Motley Fool
+9218,2025-09-08 04:00,2025-09-08,AMZN,MSFT|HPQ,real news,15.11,0.469,0.587,Margaret Dawson prend la tête de la Direction marketing de SUSE
+9221,2025-09-08 04:00,2025-09-08,AMZN,MSFT|HPQ,real news,15.11,0.469,0.587,SUSE Appoints Margaret Dawson as Chief Marketing Officer
+9227,2025-09-08 07:00,2025-09-08,QCOM,,real news,15.11,0.469,0.587,"ECARX Powers Launch of Lynk & Co 10 EM-P, Integrating Pikes® Computing Platform"
+9244,2025-09-08 14:12,2025-09-08,GOOG,GOOGL,real news,15.11,0.469,0.587,"Google Meet Outage Reported: What To Know - Alphabet (NASDAQ:GOOG), Alphabet (NASDAQ:GOOGL)"
+9248,2025-09-08 16:00,2025-09-08,GEV,,real news,15.11,0.469,0.587,GE Vernova Stock Climbs On Dublin Bay Power Plant Modernization Deal - GE Vernova (NYSE:GEV)
+9269,2025-09-09 06:00,2025-09-09,NVDA,,real news,15.04,0.448,0.602,Scintil Photonics Raises $58M to Scale Integrated Photonics for AI Factories
+9291,2025-09-09 12:00,2025-09-09,GOOG,GOOGL|TEL,real news,15.04,0.448,0.602,XM Cyber Delivers Innovative Security Solutions for Digital Resilience with Google Cloud
+9295,2025-09-09 13:53,2025-09-09,DELL,,real news,15.04,0.448,0.602,What's Going On With Dell Technologies Stock Tuesday? - Dell Technologies (NYSE:DELL)
+9303,2025-09-09 17:00,2025-09-09,PLTR,,real news,15.04,0.448,0.602,Liberty Appoints Anjana Rajan to Strategic Advisory Board and Announces Repricing of Warrants
+9316,2025-09-10 00:01,2025-09-10,TSM,,real news,15.35,0.435,0.56,Efinix®、Titanium® 製品ラインを倍増
+9309,2025-09-10 00:01,2025-09-10,TSM,,real news,15.35,0.435,0.56,Efinix® Doubles Titanium Product Line
+9331,2025-09-10 07:30,2025-09-10,NOK,,real news,15.35,0.435,0.56,U.S. PQFIF Highlights BTQ's QSSN for Post-Quantum Digital Money; QuINSA Unanimously Advances QSSN as a Gl
+9392,2025-09-11 12:10,2025-09-11,AMD,ORCL|NVDA,real news,14.71,0.496,0.611,Absci Boosts AI-Powered Drug Discovery With Oracle And AMD Collaboration - Absci (NASDAQ:ABSI)
+9408,2025-09-11 14:05,2025-09-11,AMZN,MSFT,real news,14.71,0.496,0.611,Rubrik Revenue Jumps 51% in Fiscal Q2 | The Motley Fool
+9405,2025-09-11 16:19,2025-09-11,ADBE,,real news,14.71,0.496,0.611,Adobe Stock Climbs On Record Q3 Revenue And More - Adobe (NASDAQ:ADBE)
+9404,2025-09-11 16:58,2025-09-11,NVDA,SMCI,real news,14.71,0.496,0.611,SMCI Stock Climbs On Shipments Of NVIDIA Blackwell Solutions - Super Micro Computer (NASDAQ:SMCI)
+9416,2025-09-11 18:30,2025-09-11,ADBE,,real news,14.71,0.496,0.611,Adobe Reports Record Q3 Revenue | The Motley Fool
+9542,2025-09-16 03:00,2025-09-16,NOK,,real news,16.36,0.397,0.506,InterLAN supercharges network across Europe with Nokia’s advanced IP routing solutions
+9537,2025-09-16 03:00,2025-09-16,AMZN,KEYS,real news,16.36,0.397,0.506,"Jitterbit’s bahnbrechende Agentic AI vereint intelligente Apps, Agenten und Datenautomatisierung in einer Plattform"
+9573,2025-09-16 05:10,2025-09-16,INTC,,real news,16.36,0.397,0.506,Intel Targets Lower Spending With Altera Sale Complete | The Motley Fool
+9570,2025-09-16 09:06,2025-09-16,GOOG,GOOGL|IBM|CSCO,real news,16.36,0.397,0.506,Experiential Agency George P. Johnson Expands Creative Capabilities with Acquisition of Miami-Based Agenc
+9569,2025-09-16 09:29,2025-09-16,GEV,,real news,16.36,0.397,0.506,What's Going On With GE Vernova Stock Tuesday? - GE Vernova (NYSE:GEV)
+9574,2025-09-16 09:50,2025-09-16,CRWD,,real news,16.36,0.397,0.506,"What's Going On With CrowdStrike Stock Tuesday? - Salesforce (NYSE:CRM), CrowdStrike Holdings (NASDAQ:CRW"
+9585,2025-09-16 13:29,2025-09-16,AMZN,,real news,16.36,0.397,0.506,What's Going On With Freight Technologies Stock Tuesday? - Freight Technologies (NASDAQ:FRGT)
+9603,2025-09-17 02:45,2025-09-17,STM,,real news,15.72,0.355,0.436,STMicroelectronics introduit la prochaine génération de la technologie d’assemblage de puces avec une nouvelle ligne pilote PLP à Tours
+9604,2025-09-17 02:45,2025-09-17,STM,,real news,15.72,0.355,0.436,"STMicroelectronics to advance next-generation chip manufacturing technology with new PLP pilot line in Tours, France"
+9613,2025-09-17 04:52,2025-09-17,FLEX,,real news,15.72,0.355,0.436,Job&Talent strengthens Board of Directors to drive next phase of AI-led growth
+9618,2025-09-17 05:55,2025-09-17,NVDA,,real news,15.72,0.355,0.436,"China Bans Nvidia Chip Purchases For Major Tech Firms, Stock Falls In Wednesday Pre-Market - Alibaba Gr H"
+9620,2025-09-17 06:00,2025-09-17,HPE,INTC|NOK,real news,15.72,0.355,0.436,Nokia announces changes to its leadership team and the creation of Technology and AI and Corporate Development Organizations
+9619,2025-09-17 06:00,2025-09-17,HPE,INTC|NOK,real news,15.72,0.355,0.436,Nokia ilmoittaa muutoksista johtoryhmän kokoonpanossa sekä muodostaa uudet Teknologia ja tekoäly sekä Strategia ja kehitys -organisaatiot
+9658,2025-09-17 14:56,2025-09-17,AVGO,,real news,15.72,0.355,0.436,Lloyds Banking Group breidt strategisch partnerschap met Broadcom uit om digitale transformatie te versnellen
+9657,2025-09-17 14:56,2025-09-17,AVGO,,real news,15.72,0.355,0.436,Lloyds Banking Group développe son partenariat stratégique avec Broadcom en vue d’accélérer la transformation numérique
+9661,2025-09-17 14:56,2025-09-17,AVGO,DELL,real news,15.72,0.355,0.436,Lloyds Banking Group estende la partnership strategica con Broadcom per accelerare la trasformazione digitale
+9662,2025-09-17 14:56,2025-09-17,AVGO,,real news,15.72,0.355,0.436,Lloyds Banking Group weitet strategische Partnerschaft mit Broadcom zur Beschleunigung der digitalen Transformation aus
+9671,2025-09-17 21:30,2025-09-17,META,,real news,15.72,0.355,0.436,EssilorLuxottica: EssilorLuxottica and Meta build on their successful partnership with new AI glasses that offer a glimpse into the future
+9696,2025-09-18 15:00,2025-09-18,NVDA,,real news,15.7,0.318,0.432,NVIDIA Announces £2 Billion Investment in the United Kingdom AI Startup Ecosystem
+9701,2025-09-18 16:01,2025-09-18,TXN,,real news,15.7,0.318,0.432,"TI increases dividend 4% to $1.42 per share, marking 22 consecutive years of increases - Texas Instrument"
+9708,2025-09-18 16:33,2025-09-18,INTC,NVDA,real news,15.7,0.318,0.432,"Intel Stock's Best Day Ever, Nvidia Will Be 'Very Large' Customer - Intel (NASDAQ:INTC)"
+9713,2025-09-19 09:00,2025-09-19,NVDA,,real news,15.45,0.311,0.5,Cloudastructure Launches MotionGi to Redefine Video Processing Efficiency
+9719,2025-09-19 11:06,2025-09-19,ARM,NVDA,real news,15.45,0.311,0.5,"SoftBank, OpenAI Joint Venture Start Slips Past Schedule - SOFTBANK GRP UNSP/ADR by Softbank Group Corp ("
+9732,2025-09-22 03:03,2025-09-22,INTC,MU|NVDA|AMD,real news,16.1,0.334,0.524,"Nvidia Greenlights Samsung's AI Chip Technology, Sets Stage For HBM4 Battle: Report - Intel (NASDAQ:INTC)"
+9740,2025-09-22 09:39,2025-09-22,IBM,CRWD,real news,16.1,0.334,0.524,Why Is Accenture Stock Gaining Monday? - Accenture (NYSE:ACN)
+9751,2025-09-22 16:43,2025-09-22,NVDA,,real news,16.1,0.334,0.524,Nvidia Stock Climbs On $100 Billion Deal To Supercharge OpenAI - NVIDIA (NASDAQ:NVDA)
+9752,2025-09-23 08:30,2025-09-23,NOW,,real news,16.64,0.365,0.582,"Blue Mantis Acquires Coreio Inc., Expanding ServiceNow Capabilities, Nearshore Delivery and Canadian Mark"
+9753,2025-09-23 09:03,2025-09-23,GOOG,GOOGL,real news,16.64,0.365,0.582,"Google Fights Antitrust Trial To Avoid Ad Tech Breakup: 'Too Great A Risk,' Says DOJ - Alphabet (NASDAQ:G"
+9758,2025-09-23 09:04,2025-09-23,AMZN,,real news,16.64,0.365,0.582,"Amazon Sues New York State Over New Labor Law, Citing 'Unconstitutional Power Grab' - Amazon.com (NASDAQ:"
+9778,2025-09-23 15:02,2025-09-23,INTC,MSFT|NVDA|ORCL|SMCI,real news,16.64,0.365,0.582,Nvidia: $100B OpenAI Deal Reinforces Its Role as the Core AI Infrastructure Provid
+9770,2025-09-23 16:34,2025-09-23,BBAI,,real news,16.64,0.365,0.582,BigBear.ai Stock Roars Back On Military AI Demo - BigBear.ai Holdings (NYSE:BBAI)
+9771,2025-09-23 23:30,2025-09-23,AMAT,GFS,real news,16.64,0.365,0.582,Applied Materials and GlobalFoundries Partner to Accelerate AI-Powered Photonics
+9774,2025-09-24 01:10,2025-09-24,INTC,,real news,16.18,0.368,0.612,Himax WiseEye Ultralow Power AI Sensing Technology Adopted in Acer’s New Ultra-Thin and Lightweight AI PC
+9773,2025-09-24 03:00,2025-09-24,NOK,,real news,16.18,0.368,0.612,Nokia and Boldyn Networks power the future of mining at Callio Pyhäjärvi with private 5G network
+9777,2025-09-24 06:00,2025-09-24,NOK,,real news,16.18,0.368,0.612,Nokia and Microscan partner to build high-capacity metro and regional optical network in Western India
+9793,2025-09-24 09:10,2025-09-24,AMZN,NVDA|SMCI,real news,16.18,0.368,0.612,Alibaba Balances E-Commerce Strength With AI Leadership to Reinvent Valuation
+9796,2025-09-25 04:32,2025-09-25,JBL,,real news,16.74,0.331,0.591,"Earnings Scheduled For September 25, 2025 - Accenture (NYSE:ACN), BlackBerry (NYSE:BB)"
+9801,2025-09-25 09:00,2025-09-25,INTC,MSFT|NVDA,real news,16.74,0.331,0.591,"Corintis raises $24M to target the next AI bottleneck, and collaborates with Microsoft for chip cooling breakthrough"
+9802,2025-09-25 09:00,2025-09-25,MSFT,,real news,16.74,0.331,0.591,Napster Partners with Microsoft on Implementation of Azure AI Foundry
+9818,2025-09-25 09:20,2025-09-25,IBM,SMCI,real news,16.74,0.331,0.591,IBM Stock Momentum Reflects Growing Conviction in Quantum Revenue Streams
+9814,2025-09-25 14:07,2025-09-25,AMZN,META,real news,16.74,0.331,0.591,Amazon Settles FTC Prime Lawsuit For $2.5 Billion - Amazon.com (NASDAQ:AMZN)
+9819,2025-09-25 16:56,2025-09-25,META,,real news,16.74,0.331,0.591,Verizon to be the first carrier to offer the new AI-powered Meta Ray-Ban Display glasses
+9822,2025-09-25 19:08,2025-09-25,NVDA,ORCL,real news,16.74,0.331,0.591,OpenAI's $850 Billion Build-Out Needs Power Of 17 Nuclear Plants - Oracle (NYSE:ORCL)
+9825,2025-09-26 06:46,2025-09-26,MSFT,,real news,15.29,0.385,0.591,"Microsoft Partially Disables Services For Israeli Military Unit Amid Surveillance Allegations, Pro-Palest"
+9923,2025-09-29 11:51,2025-09-29,GOOG,GOOGL|MSFT,real news,16.12,0.36,0.545,Rezolve Ai Rejects Fuzzy Panda's Misleading Report – Exposes Self-Serving Attempt to Drive Misinformation
+9927,2025-09-29 17:00,2025-09-29,AMZN,MU,real news,16.12,0.36,0.545,"Viomi Celebrates 7th Nasdaq Anniversary with New Brand Campaign and U.S. Launch of AI Alkaline Mineral Water Purifier, MASTER M1"
+9942,2025-09-30 07:00,2025-09-30,QCOM,,real news,16.28,0.384,0.569,Lantronix Launches EdgeFabric.ai Visual Orchestration Platform to Accelerate Edge AI Deployment
+9947,2025-09-30 10:00,2025-09-30,DELL,,real news,16.28,0.384,0.569,Presidio Appoints Paula Cipollone Chief Transformation Officer
+9961,2025-09-30 12:38,2025-09-30,META,NVDA|MSFT|SMCI,real news,16.28,0.384,0.569,CoreWeave Deepens AI Moat With $14.2B Meta Deal After OpenAI Expansion
+9960,2025-09-30 13:00,2025-09-30,HPQ,,real news,16.28,0.384,0.569,"Notre Dame de Namur University Announces Two New Members to Its Board of Trustees – Nandini Nayak, PhD and Nicole Nielsen"
+9980,2025-09-30 17:33,2025-09-30,META,,real news,16.28,0.384,0.569,Stock Market Today: Snap Declines on Neutral Analyst Outlook | The Motley Fool
+9975,2025-10-01 02:45,2025-10-01,KEYS,,real news,16.29,0.405,0.578,InstrumentiX secures Keysight Technologies investment to advance trading infrastructure monitoring worldwide
+9982,2025-10-01 04:59,2025-10-01,AMZN,,real news,16.29,0.405,0.578,Nova Klúbburinn hf.: Sylvía tekin við sem forstjóri Nova
+10007,2025-10-01 09:48,2025-10-01,META,NVDA,real news,16.29,0.405,0.578,Meta To Acquire Rivos To Power AI Ambitions: Report - Meta Platforms (NASDAQ:META)
+10014,2025-10-01 15:29,2025-10-01,AMZN,,real news,16.29,0.405,0.578,Dalfen Industrial Expands Florida Footprint with Acquisition of Prime Infill Property in Miami Lakes
+10073,2025-10-02 17:13,2025-10-02,AMAT,,real news,16.63,0.37,0.523,Applied Materials Stock Is Sliding After Hours: Here's Why - Applied Materials (NASDAQ:AMAT)
+10076,2025-10-02 18:18,2025-10-02,IBM,,real news,16.63,0.37,0.523,"Datavault AI Converts $13.3 Million in Convertible Debt, Strengthens Balance Sheet"
+10082,2025-10-02 19:55,2025-10-02,QCOM,,real news,16.63,0.37,0.523,Penyelesaian Dron Lantronix Edge AI Mengintegrasikan Platform Gremsy dan Teledyne FLIR untuk Masa Penerbangan yang Lebih Lama dan Lebih Cekap
+10077,2025-10-02 19:55,2025-10-02,QCOM,,real news,16.63,0.37,0.523,"Edge-AI-Drohnenlösung von Lantronix integriert FLIR-Plattformen von Gremsy und Teledyne für längere, effizientere Flugzeiten"
+10079,2025-10-02 19:55,2025-10-02,QCOM,,real news,16.63,0.37,0.523,Lantronix 边缘 AI 无人机解决方案集成 Gremsy 与 Teledyne FLIR 平台，实现更长续航与更高效飞行
+10081,2025-10-02 19:55,2025-10-02,QCOM,,real news,16.63,0.37,0.523,ラントロニクス、エッジAIドローンソリューションにグレムジーおよびテレダインFLIRのプラットフォームを統合し、より長く効率的な飛行時間を実現
+10080,2025-10-02 19:55,2025-10-02,QCOM,,real news,16.63,0.37,0.523,Lantronix 邊緣 AI 無人機解決方案整合 Gremsy 與 Teledyne FLIR 平台，實現高效能長航時
+10084,2025-10-02 19:55,2025-10-02,QCOM,,real news,16.63,0.37,0.523,"랜트로닉스 (Lantronix), 그렘시·텔레다인 FLIR 플랫폼 통합한 엣지 AI 드론 솔루션 출시"
+10101,2025-10-03 09:21,2025-10-03,GOOG,GOOGL|ORCL,real news,16.65,0.349,0.479,"Oracle Customers Targeted In Extortion Scheme Following Major Hacking Campaign - Alphabet (NASDAQ:GOOG),"
+10116,2025-10-03 16:04,2025-10-03,ACLS,VECO,real news,16.65,0.349,0.479,"Deal Dispatch: This Week's Major Auctions Include Stellantis, Snyk - Axcelis Technologies (NASDAQ:ACLS)"
+10121,2025-10-03 19:17,2025-10-03,AMZN,,real news,16.65,0.349,0.479,Mactores Signs Strategic AWS Partnership to Accelerate Enterprise GenAI Adoption by 80%
+10122,2025-10-04 03:12,2025-10-03,NVDA,CBRS|AVGO|MRVL,real news,16.65,0.349,0.479,Nvidia Competitor Cerebras Shelves IPO Plans Days After Touching $8 Billion Valuation - NVIDIA (NASDAQ:NV
+10191,2025-10-06 07:00,2025-10-06,AMD,MSFT,real news,16.37,0.337,0.48,AMD and OpenAI Announce Strategic Partnership to Deploy 6 Gigawatts of AMD GPUs
+10196,2025-10-06 08:20,2025-10-06,AMD,AVGO|NVDA,real news,16.37,0.337,0.48,Why Is AMD Stock Skyrocketing Monday? - Advanced Micro Devices (NASDAQ:AMD)
+10201,2025-10-06 10:44,2025-10-06,AMD,NVDA|SMCI,real news,16.37,0.337,0.48,AMD-OpenAI Partnership Redefines AI Infrastructure Competition Beyond Nvidia | Investing.com
+10223,2025-10-06 16:01,2025-10-06,GOOG,GOOGL|MSFT|NVDA|PLTR,real news,16.37,0.337,0.48,Hobart Private Capital Expands AI Exposure With New Stake in AIQ ETF | The Motley Fool
+10234,2025-10-07 04:30,2025-10-07,AMZN,CRWD|MSFT|S,real news,17.24,0.32,0.453,Pax8 Unveils Transformational Agent Store
+10245,2025-10-07 08:00,2025-10-07,APLD,,real news,17.24,0.32,0.453,Applied Digital and Macquarie Asset Management Execute First Funding Milestone in $5.0 Billion AI Infrastructure Partnership
+10249,2025-10-07 10:00,2025-10-07,NOK,,real news,17.24,0.32,0.453,Nokia unveils world’s first 50G PON solution for post-quantum enterprise connectivity
+10252,2025-10-07 10:13,2025-10-07,IBM,AMD,real news,17.24,0.32,0.453,Why IBM Shares Are Seeing Blue Skies On Tuesday? - IBM (NYSE:IBM)
+10277,2025-10-08 04:00,2025-10-08,MSFT,,real news,16.3,0.348,0.531,Talkdesk expands global footprint with new India office
+10279,2025-10-08 04:48,2025-10-08,ARM,INTC,real news,16.3,0.348,0.531,Softbank Takes Over ABB Robotics In A $5.4 Billion Deal To Bolster AI Portfolio - ABB LTD SPONS ADR by AB
+10281,2025-10-08 06:39,2025-10-08,AMD,INTC,real news,16.3,0.348,0.531,Intel To Reportedly Unveil Details Of Upcoming Laptop Chip This Week - Intel (NASDAQ:INTC)
+10286,2025-10-08 08:02,2025-10-08,IBM,AMD,real news,16.3,0.348,0.531,"S&P Global Uses IBM AI To Boost Efficiency - IBM (NYSE:IBM), S&P Global (NYSE:SPGI)"
+10291,2025-10-08 09:00,2025-10-08,MSFT,,real news,16.3,0.348,0.531,Varonis Launches Interceptor: AI-Native Email Security to Stop Data Breaches Before They Start
+10292,2025-10-08 09:00,2025-10-08,FLEX,,real news,16.3,0.348,0.531,Flex Partners with AppFolio to Transform the Rental Payment Experience
+10299,2025-10-08 11:00,2025-10-08,CIEN,COHR,real news,16.3,0.348,0.531,Great Plains Communications Deploys Ciena Coherent Routing Solutions to Upgrade Network in Illinois and Indiana
+10306,2025-10-08 13:00,2025-10-08,ORCL,MDB,real news,16.3,0.348,0.531,"Milind Joshi Joins Striim as VP of Payment Solutions to Drive Enterprise Payments, ERP Integrations, and AI-Ready Data Innovation"
+10317,2025-10-09 03:00,2025-10-09,NVDA,,real news,16.43,0.33,0.489,KraneShares Global Humanoid & Embodied Intelligence Index UCITS ETF (KOID) Launches on the London Stock Exchange
+10323,2025-10-09 03:04,2025-10-09,SNPS,,real news,16.43,0.33,0.489,マルチビーム (Multibeam)、台湾でのマルチカラム電子ビームリソグラフィ (EBL) の販売加速に向けマーケテック (Marketech) と提携
+10324,2025-10-09 03:30,2025-10-09,AMZN,,real news,16.43,0.33,0.489,Cloudera Leverages AWS to Deliver a Sovereign-Ready Data and AI Platform as a Launch Partner for the AWS European Sovereign Cloud
+10350,2025-10-09 09:07,2025-10-09,MSFT,,real news,16.43,0.33,0.489,Microsoft Partners With Harvard Medical School To Bolster AI Sources: Report - Microsoft (NASDAQ:MSFT)
+10352,2025-10-09 09:25,2025-10-09,GOOG,GOOGL|MSFT,real news,16.43,0.33,0.489,Google Reportedly Requires Employees To Share Data With AI Healthcare Tool: Report - Alphabet (NASDAQ:GOO
+10397,2025-10-10 06:00,2025-10-10,GLW,,real news,21.66,0.543,0.801,T1 Energy Makes Strategic Investment in Talon
+10426,2025-10-10 17:30,2025-10-10,GOOG,GOOGL|MSFT,real news,21.66,0.543,0.801,Rezolve Ai PLC Announces Shareholder Transfer to a New Global Institutional Investor
+10473,2025-10-12 07:31,2025-10-10,AMD,GOOG|GOOGL|MSFT|NVDA|META|CSCO|PATH,real news,21.66,0.543,0.801,"Consumer Tech News (Oct 6-10): China Hits Nvidia, Tesla Tests Cybercab, Sunak Joins Microsoft & More - Ap"
+10499,2025-10-13 03:00,2025-10-13,NOK,COHR,real news,19.03,0.669,0.974,Nokia introduces new high-capacity shelves for the 1830 PSS to meet surging bandwidth demand
+10509,2025-10-13 04:51,2025-10-13,MSFT,,real news,19.03,0.669,0.974,Space42 Expands Access to Geospatial Intelligence with Launch of GIQ on Microsoft Azure
+10531,2025-10-13 10:08,2025-10-13,AMD,AVGO|NVDA|ORCL,real news,19.03,0.669,0.974,"OpenAI Makes $500B Chip Bet: Is Broadcom The Next AI Winner? - Broadcom (NASDAQ:AVGO), Oracle (NYSE:ORCL)"
+10534,2025-10-13 10:33,2025-10-13,WDC,,real news,19.03,0.669,0.974,Western Digital Expands SIT Lab For AI Boom - Western Digital (NASDAQ:WDC)
+10537,2025-10-13 11:00,2025-10-13,NVDA,ORCL|META,real news,19.03,0.669,0.974,NVIDIA Spectrum-X Ethernet Switches Speed Up Networks for Meta and Oracle
+10556,2025-10-13 12:39,2025-10-13,ASML,TSM,real news,19.03,0.669,0.974,Lineweaver Wealth Fully Exits $11.8 Million Stake in International Stock ETF | The Motley Fool
+10551,2025-10-13 13:42,2025-10-13,ADI,TXN,real news,19.03,0.669,0.974,Texas Instruments Stock Looks Pricey Compared To Peers - Texas Instruments (NASDAQ:TXN)
+10555,2025-10-13 14:45,2025-10-13,NOW,,real news,19.03,0.669,0.974,"Telnyx launches Voice AI Agent integrations with ServiceNow, Salesforce, and more, helping teams get more done, faster"
+10561,2025-10-13 17:00,2025-10-13,ETN,,real news,19.03,0.669,0.974,Waupaca Foundry Announces Strategic Sales Organization Expansion to Enhance Customer Focus and Drive Growth
+10567,2025-10-13 17:16,2025-10-13,AMZN,,real news,19.03,0.669,0.974,Dalfen Industrial Acquires Three IOS Properties in the Dallas-Fort Worth Metroplex
+10566,2025-10-13 19:39,2025-10-13,DELL,LNVGY|NVDA|COHR|CDNS|META|MSFT|HPQ,real news,19.03,0.669,0.974,NVIDIA DGX Spark Arrives for World’s AI Developers
+11012,2025-10-24 06:34,2025-10-24,AMZN,,real news,16.37,0.632,0.911,"Target To Slash 1,800 Jobs In Major Shake-Up, Reports Say - Amazon.com (NASDAQ:AMZN), Target (NYSE:TGT)"
+11018,2025-10-24 08:57,2025-10-24,INTC,ASX,real news,16.37,0.632,0.911,"Stock Market Today: S&P 500, Nasdaq, Dow Futures Rise As September CPI Comes In Cooler Than Expected —Int"
+11099,2025-10-27 06:00,2025-10-27,PLTR,,real news,15.79,0.597,0.815,Red Cat Successfully Completes Flight Testing of Palantir’s VNav Software on Black Widow™ Drone
+11111,2025-10-27 09:00,2025-10-27,AMZN,,real news,15.79,0.597,0.815,Former Salesforce President Alexandre Dayon Joins Dataiku’s Board of Directors
+11116,2025-10-27 09:49,2025-10-27,PLTR,,real news,15.79,0.597,0.815,Red Cat Shares Jump On Palantir-Powered Drone Test Success Red Cat Holdings Shares Jump From Palantir-Pow
+11124,2025-10-27 11:00,2025-10-27,MSFT,,real news,15.79,0.597,0.815,RIB Software Partners with Microsoft to Accelerate AI in Construction
+11135,2025-10-27 11:15,2025-10-27,MSFT,,real news,15.79,0.597,0.815,"Capricorn Fund Loads Up on Phreesia (PHR) With a 484,000 Share Purchase | The Motley Fool"
+11130,2025-10-27 12:31,2025-10-27,PLTR,META|MU,real news,15.79,0.597,0.815,Palantir's AI In The Sky: The Data-Driven Future Of Drones - Palantir Technologies (NASDAQ:PLTR)
+11155,2025-10-27 14:10,2025-10-27,MSFT,PANW|APH|META,real news,15.79,0.597,0.815,Ayrshire Loads Up PANW With 37K Shares Worth $7.6 Million | The Motley Fool
+11141,2025-10-27 15:00,2025-10-27,AMD,HPE|ORCL|MSFT,real news,15.79,0.597,0.815,"AMD Powers U.S. Sovereign AI Factory Supercomputers, Accelerating an Open American AI Stack"
+11143,2025-10-27 16:00,2025-10-27,GOOG,GOOGL,real news,15.79,0.597,0.815,NewHydrogen Reveals Massive Source of Heat for ThermoLoop
+11146,2025-10-27 16:15,2025-10-27,ON,,real news,15.79,0.597,0.815,onsemi Completes Acquisition of Vcore Power Technology from Aura Semiconductor - ON Semiconductor (NASDA
+11147,2025-10-27 17:00,2025-10-27,GFS,,real news,15.79,0.597,0.815,GlobalFoundries Announces Chief Financial Officer Transition
+11150,2025-10-27 17:22,2025-10-27,AMZN,MU|PLTR,real news,15.79,0.597,0.815,"Amazon To Cut Up To 30,000 Jobs - Amazon.com (NASDAQ:AMZN)"
+11158,2025-10-28 04:00,2025-10-28,NOK,,real news,16.42,0.611,0.83,E.ON and Nokia join forces for a five-year strategic collaboration for telecommunications network modernization for distribution system operators
+11160,2025-10-28 04:15,2025-10-28,META,NVDA,real news,16.42,0.611,0.83,Nvidia Supplier Foxconn Goes All-In On AI With $1.37 Billion Supercomputing Investment - Apple (NASDAQ:AA
+11170,2025-10-28 06:30,2025-10-28,MSFT,,real news,16.42,0.611,0.83,"Sapiens Launches Decision Analytics, Bringing Real-Time Visibility and Optimization to AI Decisioning"
+11177,2025-10-28 09:00,2025-10-28,SNOW,,real news,16.42,0.611,0.83,Tealium releases new AI features to accelerate real-time customer engagement
+11179,2025-10-28 09:06,2025-10-28,GOOG,GOOGL|NOW,real news,16.42,0.611,0.83,"Project Worldwide Completes NOMOBO Acquisition, Creating a Global Leader in Integrated Production and Exp"
+11181,2025-10-28 09:34,2025-10-28,META,,real news,16.42,0.611,0.83,Mark Zuckerberg Secretly Met AG Pam Bondi For Advice On Discussing 'Meta's Concerns' With Trump: Report -
+11189,2025-10-28 13:48,2025-10-28,NVDA,,real news,16.42,0.611,0.83,NVIDIA Makes the World Robotaxi-Ready With Uber Partnership to Support Global Expansion
+11192,2025-10-28 13:52,2025-10-28,NVDA,ORCL,real news,16.42,0.611,0.83,NVIDIA and Oracle to Build US Department of Energy’s Largest AI Supercomputer for Scientific Discovery
+11196,2025-10-28 14:30,2025-10-28,NVDA,,real news,16.42,0.611,0.83,RADCOM Launches High-Capacity User Analytics Solution - Radcom (NASDAQ:RDCM)
+11200,2025-10-28 15:28,2025-10-28,CRWD,NVDA,real news,16.42,0.611,0.83,CrowdStrike Stock Climbing After NVIDIA Partnership Announcement - CrowdStrike Holdings (NASDAQ:CRWD)
+11214,2025-10-29 04:00,2025-10-29,NOK,NVDA,real news,16.92,0.571,0.837,Nokia deploys future-ready network architecture to enhance Zayo’s leading IP network infrastructure
+11217,2025-10-29 05:00,2025-10-29,NVDA,,real news,16.92,0.571,0.837,"CMR Surgical Adopts NVIDIA IGX THOR for AI-Powered, Next Generation Surgical Robotics"
+11231,2025-10-29 10:20,2025-10-29,NVDA,ORCL,real news,16.92,0.571,0.837,"Nvidia, Oracle To Build DOE's Largest AI Supercomputer - NVIDIA (NASDAQ:NVDA)"
+11244,2025-10-29 14:00,2025-10-29,MSFT,,real news,16.92,0.571,0.837,Egnyte Joins the Pax8 Marketplace
+11248,2025-10-29 14:26,2025-10-29,NVDA,,real news,16.92,0.571,0.837,"Eli Lilly Advances AI And Access: Supercomputer With NVIDIA, Zepbound Via Walmart - Eli Lilly (NYSE:LLY),"
+11257,2025-10-29 17:19,2025-10-29,AMZN,MSFT,real news,16.92,0.571,0.837,Microsoft Says Azure Recovery Underway After Major Outage; AWS Says Services Operating Normally (UPDATED)
+11259,2025-10-29 18:44,2025-10-29,GOOG,GOOGL,real news,16.92,0.571,0.837,Allied Announces Third-Quarter Results
+11272,2025-10-30 06:00,2025-10-30,ON,,real news,16.91,0.613,0.943,onsemi Unveils Vertical GaN Semiconductors: A Breakthrough for AI and Electrification
+11277,2025-10-30 08:00,2025-10-30,MCHP,,real news,16.91,0.613,0.943,Next-Generation of Optical Ethernet PHY Transceivers Deliver Precision Time Protocol and MACsec Encryption for Long-Reach Networking
+11281,2025-10-30 09:00,2025-10-30,NVDA,,real news,16.91,0.613,0.943,EndoQuest to Advance Next-Generation Surgical Robotics powered by NVIDIA IGX Thor
+11287,2025-10-30 10:05,2025-10-30,NVDA,,real news,16.91,0.613,0.943,Why Is Eli Lilly Stock Trading Higher After Earnings? - Eli Lilly (NYSE:LLY)
+11291,2025-10-30 12:00,2025-10-30,GLW,,real news,16.91,0.613,0.943,All Weather Group and Corning Forge Path Toward the Future of Window Performance
+11311,2025-10-30 18:00,2025-10-30,SIMO,,real news,16.91,0.613,0.943,"Silicon Motion Announces Results for the Period Ended September 30, 2025"
+11320,2025-10-31 02:00,2025-10-31,NVDA,,real news,17.44,0.589,0.867,NVIDIA and Hyundai Motor Group Team on AI Factory to Power AI-Driven Mobility Solutions
+11318,2025-10-31 02:00,2025-10-31,NVDA,SNPS,real news,17.44,0.589,0.867,NVIDIA and SK Group Build AI Factory to Drive Korea’s Manufacturing and Digital Transformation
+11319,2025-10-31 02:00,2025-10-31,NVDA,SNPS|CDNS,real news,17.44,0.589,0.867,NVIDIA and Samsung Build AI Factory to Transform Global Intelligent Manufacturing
+11328,2025-10-31 04:15,2025-10-31,NVDA,,real news,17.44,0.589,0.867,"Nvidia To Supply Over 260,000 AI Chips To South Korean Government, Samsung, Hyundai, SK Group - Apple (NA"
+11338,2025-10-31 10:02,2025-10-31,AMAT,,real news,17.44,0.589,0.867,Carlyle Group Shares Fall As Buyout Fund Declines Drag Q3 Results. - Carlyle Group (NASDAQ:CG)
+11378,2025-11-02 07:27,2025-10-31,APLD,CDNS,real news,17.44,0.589,0.867,Applied Digital Director Sells $2.6 Million in Stock Amid 400% Rally | The Motley Fool
+11375,2025-11-02 08:39,2025-10-31,AMD,AMZN|NVDA|GFS|PLTR,real news,17.44,0.589,0.867,"Consumer Tech News (Oct 27-31): Nvidia Surpasses $5T Market Cap, Trump-Xi Meeting Concludes, Big Tech Rep"
+11434,2025-11-03 08:31,2025-11-03,MSFT,NVDA,real news,17.17,0.504,0.897,Elevation Capital Advisory Loads Up Principal U.S. Mega-Cap ETF Shares in Q3 | The Motley Fool
+11417,2025-11-03 10:17,2025-11-03,VRT,,real news,17.17,0.504,0.897,Vertiv Holdings Acquires PurgeRite In $1B Deal To Expand Liquid Cooling Solutions - Vertiv Holdings (NYSE
+11420,2025-11-03 10:51,2025-11-03,ETN,VRT,real news,17.17,0.504,0.897,Eaton Makes $9.5 Billion Move Into AI Cooling Technology With Boyd Thermal Acquisition - Eaton Corp (NYSE
+11419,2025-11-03 11:00,2025-11-03,DELL,,real news,17.17,0.504,0.897,D&H Canada Expands Portfolio with Addition of Dell Solutions and Services
+11433,2025-11-03 16:28,2025-11-03,PLTR,,real news,17.17,0.504,0.897,"Palantir Q3 Earnings: Revenue, EPS Blow Past Estimates As US Commercial Business Booms - Palantir Technol"
+11510,2025-11-05 02:08,2025-11-05,MSFT,,real news,18.01,0.605,0.984,Onassis Holdings Appoints Esq. Paz Itzhaki-Weinberger to Advisory Board to Oversee International Law and
+11521,2025-11-05 06:00,2025-11-05,MSFT,,real news,18.01,0.605,0.984,Jabra Expands Meeting Room Portfolio with the Launch of Jabra Scheduler
+11524,2025-11-05 06:23,2025-11-05,AMZN,,real news,18.01,0.605,0.984,"Beta Technologies Raises Over $1 Billion In NYSE Debut, CEO Explains How New IPO Framework In Shutdown He"
+11541,2025-11-05 09:39,2025-11-05,CRWD,,real news,18.01,0.605,0.984,CrowdStrike Unveils Advanced Falcon Features & More - CrowdStrike Holdings (NASDAQ:CRWD)
+11540,2025-11-05 10:57,2025-11-05,CLS,NVDA,real news,18.01,0.605,0.984,Canadian General Investments: Investment Update - Unaudited
+11554,2025-11-05 17:03,2025-11-05,NVDA,,real news,18.01,0.605,0.984,Lucid Stock Slides On Q3 Earnings As EV Maker Announces Organizational Changes - Lucid Group (NASDAQ:LCID
+11556,2025-11-05 19:42,2025-11-05,GOOG,GOOGL,real news,18.01,0.605,0.984,Cipher Mining Inc. Announces Pricing of $1.4 Billion of Senior Secured Notes
+11562,2025-11-05 20:30,2025-11-05,NVDA,,real news,18.01,0.605,0.984,"WeRide Lists on Hong Kong Stock Exchange, Becoming World's First Publicly Traded Robotaxi Company in Hong"
+11559,2025-11-05 20:30,2025-11-05,NVDA,,real news,18.01,0.605,0.984,"WeRide Lists on Hong Kong Stock Exchange, Becoming World's First Publicly Traded Robotaxi Company in Hong Kong and US"
+11563,2025-11-05 23:30,2025-11-05,LNVGY,MSFT,real news,18.01,0.605,0.984,"Lakeside Software ने Azure India में नया SysTrack Cloud क्षेत्र शरूु कया, भारतीय उद्यमों के लए तज़े डटेा-प्रसस्ंकरण और स्थानीय डटेा-सरक्षाु को मलेगा समथन"
+11561,2025-11-05 23:30,2025-11-05,LNVGY,MSFT,real news,18.01,0.605,0.984,Lakeside Software Expands Global Footprint with New SysTrack Cloud Region in Azure India
+12086,2025-11-19 04:00,2025-11-19,GOOG,GOOGL|META,real news,23.66,0.685,0.996,TAHO Raises $3.5 Million Seed Round to Redefine Compute Infrastructure for the AI Era
+12110,2025-11-19 09:00,2025-11-19,DELL,HPE|IBM|LNVGY|NTAP|AVGO,real news,23.66,0.685,0.996,Broadcom Introduces the World’s First Quantum-Safe Gen 8 128G SAN Switch Portfolio
+12116,2025-11-19 10:30,2025-11-19,NVDA,,real news,23.66,0.685,0.996,iPR Software to Acquire Minority Shares from Founder Eric Schwartzman
+12121,2025-11-19 12:04,2025-11-19,ADBE,,real news,23.66,0.685,0.996,Semrush Rockets As Adobe Moves To Buy It For $1.9 Billion In Cash
+12126,2025-11-19 13:18,2025-11-19,ADBE,,real news,23.66,0.685,0.996,Adobe Stock Hits Fresh 52-Week Lows After All-Cash Deal For Semrush - Adobe (NASDAQ:ADBE)
+12134,2025-11-19 15:46,2025-11-19,AMZN,META|MSFT,real news,23.66,0.685,0.996,"Dan Loeb Raises Microsoft Stake 175% In Big-Tech Push, Dumps Workday And More (CORRECTED) - Amazon.com (N"
+12136,2025-11-19 15:53,2025-11-19,AMZN,IBM|INTC,real news,23.66,0.685,0.996,Infoblox Launches Predictive DNS-Based Threat Protection Solution on AWS
+12655,2025-12-03 03:00,2025-12-03,NOK,,real news,16.08,0.754,0.96,Nokia and du set new benchmark in 5G innovation with autonomous network slicing in industry first
+12658,2025-12-03 04:00,2025-12-03,NOK,,real news,16.08,0.754,0.96,Nokia powers Dutch digital services with next-generation 800G-ready KPN core and transport network
+12665,2025-12-03 05:23,2025-12-03,GOOG,GOOGL|MSFT|NVDA|AVGO,real news,16.08,0.754,0.96,"Nvidia CFO Says No 'Definitive Agreement' With OpenAI Yet, Dismisses Google TPU Threat - Alphabet (NASDAQ"
+12669,2025-12-03 06:00,2025-12-03,IREN,,real news,16.08,0.754,0.96,IREN Prices $2 Billion Convertible Notes Offering
+12673,2025-12-03 07:30,2025-12-03,AMD,HPE|NVDA,real news,16.08,0.754,0.96,What's Going On With Hewlett Packard Stock Wednesday? - Hewlett Packard (NYSE:HPE)
+12700,2025-12-03 13:30,2025-12-03,BELFA,BELFB,real news,16.08,0.754,0.96,Bel Announces Expected Impairment Charge Related to Innolectric Investment
+12708,2025-12-03 15:29,2025-12-03,CLS,NVDA,real news,16.08,0.754,0.96,Canadian General Investments: Investment Update - Unaudited
+12714,2025-12-03 16:15,2025-12-03,CARR,,real news,16.08,0.754,0.96,Carrier Board of Directors Announces Increase in Quarterly Dividend to $0.24 per Share - Carrier Global (
+12725,2025-12-04 02:21,2025-12-04,AMZN,GOOG|GOOGL|META|MSFT,real news,15.78,0.723,0.924,Mark Zuckerberg's Meta To Likely Face EU Antitrust Probe Over WhatsApp AI Tool: Report - Amazon.com (NASD
+12745,2025-12-04 06:55,2025-12-04,UMC,,real news,15.78,0.723,0.924,What's Going On With United Microelectronics Stock Thursday? - United Microelectronics (NYSE:UMC)
+12766,2025-12-04 14:41,2025-12-04,SNOW,,real news,15.78,0.723,0.924,"PROLIM Accelerates Agentic AI Capabilities with Acquisition of Kasmo Digital, a Leading Salesforce Summit"
+12783,2025-12-05 05:42,2025-12-05,NVDA,PLTR,real news,15.41,0.59,0.739,What's Going On With Palantir Stock Friday? - Palantir Technologies (NASDAQ:PLTR)
+12789,2025-12-05 06:45,2025-12-05,AMZN,NVDA,real news,15.41,0.59,0.739,Amazon's AI Chip Trainium2 Hits Multi-Billion Dollar Revenue Run Rate As CEO Andy Jassy Unveils 4X Faster
+12798,2025-12-05 09:36,2025-12-05,NVDA,PLTR,real news,15.41,0.59,0.739,What's Going On With Palantir Stock Friday? - Palantir Technologies (NASDAQ:PLTR)
+12800,2025-12-05 10:49,2025-12-05,IBM,,real news,15.41,0.59,0.739,"Verusen Appoints Stuart Lynch as Director, Customer Success & Value Realization"
+12891,2025-12-07 21:00,2025-12-05,DLR,ORCL,real news,15.41,0.59,0.739,Digital Realty Announces Access to Oracle Cloud Infrastructure in Singapore via FastConnect
+12899,2025-12-08 02:31,2025-12-08,IBM,PANW,real news,16.66,0.52,0.665,"IBM Reportedly Nears $11 Billion Deal To Acquire Confluent, In Big Push Into Real-Time AI Data - Salesfor"
+12907,2025-12-08 06:00,2025-12-08,LNVGY,,real news,16.66,0.52,0.665,Eshallgo Provides 2025 Update on Office-Solutions Operations and AI Development
+12910,2025-12-08 08:45,2025-12-08,GOOG,GOOGL|NVDA|QCOM|SNPS,real news,16.66,0.52,0.665,Global AI-Powered Humanoid Robots Market Size Expected to Reach $7.73 Billion as Engineering Drastically Improves
+12913,2025-12-08 09:30,2025-12-08,NVDA,,real news,16.66,0.52,0.665,CIMG Inc. Announces Execution of Computing Power Product Sales Contracts Totaling Approximately USD 1.779
+12918,2025-12-08 13:00,2025-12-08,NVDA,INTC,real news,16.66,0.52,0.665,"AlphaTON Capital Deploys First H200 GPUs on Cocoon AI Network, Launches Revolutionary #OwnYourNode Program to Democratize AI Infrastructure Ownership"
+12934,2025-12-09 03:16,2025-12-09,NVDA,,real news,16.93,0.381,0.409,US Arrests Chinese Duo In Nvidia Chip Smuggling Scheme As Trump Loosens China Export Rules - NVIDIA (NASD
+12948,2025-12-09 09:00,2025-12-09,PATH,,real news,16.93,0.381,0.409,UiPath and Talkdesk join forces to transform customer experience journeys
+12972,2025-12-09 15:30,2025-12-09,SNOW,,real news,16.93,0.381,0.409,Coalesce Announces General Availability of Coalesce Copilot: The AI-Powered Assistant for Modern Data Teams
+12985,2025-12-10 03:21,2025-12-10,AMZN,GOOG|GOOGL|INTC|MSFT,real news,15.77,0.354,0.374,"Amazon Pledges $35 Billion To Supercharge India's AI, Cloud Market And Create 1 Million Jobs By 2030 - Am"
+12990,2025-12-10 07:00,2025-12-10,PLAB,,real news,15.77,0.354,0.374,Photronics Reports Full Year and Fourth Quarter Fiscal 2025 Results
+12993,2025-12-10 07:03,2025-12-10,GOOG,GOOGL|META|MSFT,real news,15.77,0.354,0.374,"Google Faces EU Antitrust Probe On YouTube Rules, AI Model Training In Latest Crackdown (UPDATED) - Alpha"
+12996,2025-12-10 07:27,2025-12-10,AVGO,MSFT|NVDA,real news,15.77,0.354,0.374,"Nvidia Supplier SK Hynix Mulls New York Listing Amid Soaring AI Chip Demand - Broadcom (NASDAQ:AVGO), Mic"
+12997,2025-12-10 07:49,2025-12-10,LNVGY,,real news,15.77,0.354,0.374,Reborn Unisplendour Files For Hong Kong IPO
+13002,2025-12-10 09:00,2025-12-10,SNOW,MSFT,real news,15.77,0.354,0.374,ThoughtSpot Launches Four BI Agents that Work as a Team to Deliver Modern Analytics
+13007,2025-12-10 10:48,2025-12-10,CARR,,real news,15.77,0.354,0.374,Why Is APi Group Stock Surging Wednesday? - APi Group (NYSE:APG)
+13030,2025-12-10 17:30,2025-12-10,GFS,,real news,15.77,0.354,0.374,GlobalFoundries Appoints Sam Franklin as Chief Financial Officer
+13035,2025-12-11 02:00,2025-12-11,STM,,real news,14.85,0.308,0.318,La BEI et STMicroelectronics annoncent un accord de 1 milliard d’euros pour renforcer la compétitivité et l’autonomie stratégique de l’Europe
+13037,2025-12-11 02:00,2025-12-11,STM,,real news,14.85,0.308,0.318,EIB and STMicroelectronics announce €1 billion agreement to boost Europe’s competitiveness and strategic autonomy
+13044,2025-12-11 04:05,2025-12-11,MSFT,,real news,14.85,0.308,0.318,"Microsoft CEO Satya Nadella Meets Indian Tycoon Gautam Adani, Who Was Charged By US For Fraud: 'Always A"
+13062,2025-12-11 10:00,2025-12-11,CSCO,,real news,14.85,0.308,0.318,LVT Appoints Three C-Suite Executives to Support Rapid Company Growth
+13070,2025-12-11 13:00,2025-12-11,AMZN,,real news,14.85,0.308,0.318,Rogers Xfinity Introduces Amazon Luna
+13068,2025-12-11 13:00,2025-12-11,AMZN,,real news,14.85,0.308,0.318,Rogers Xfinity accueille Amazon Luna
+13110,2025-12-12 07:04,2025-12-12,GOOG,GOOGL,real news,15.74,0.361,0.422,"Google Unveils Gemini Deep Research The Same Day As OpenAI's GPT-5.2 Launch, Intensifying AI Face-Off - A"
+13111,2025-12-12 07:30,2025-12-12,AMAT,,real news,15.74,0.361,0.422,Applied Materials Announces Cash Dividend - Applied Materials (NASDAQ:AMAT)
+13204,2025-12-15 05:40,2025-12-15,INTC,NVDA,real news,16.5,0.33,0.443,Intel Eyes $1.6 Billion AI Chip Buy As It Takes On Nvidia's Turf - Intel (NASDAQ:INTC)
+13212,2025-12-15 08:20,2025-12-15,ADBE,NVDA,real news,16.5,0.33,0.443,EXCLUSIVE: Avalon GloboCare Buys AI Video Firm In $19.5 Million Deal - Avalon Globocare (NASDAQ:ALBT)
+13215,2025-12-15 09:36,2025-12-15,NOW,,real news,16.5,0.33,0.443,ServiceNow In Talks To Buy Cybersecurity Unicorn Armis - ServiceNow (NYSE:NOW)
+13234,2025-12-15 10:12,2025-12-15,AMZN,,real news,16.5,0.33,0.443,iRobot Files for Chapter 11 Amid Rising Competition and Tariff Pressures | The Motley Fool
+13241,2025-12-15 14:32,2025-12-15,ADBE,,real news,16.5,0.33,0.443,AI Competition And Budget Cuts Cloud Adobe's Growth Outlook - Adobe (NASDAQ:ADBE)
+13242,2025-12-15 16:01,2025-12-15,FORM,,real news,16.5,0.33,0.443,FormFactor Expands Silicon Photonics Test Capabilities With Acquisition of Keystone Photonics - FormFacto
+13246,2025-12-15 19:00,2025-12-15,MSFT,,real news,16.5,0.33,0.443,Carbon Streaming Announces Amendment to Azuero Reforestation Carbon Removal Stream
+13263,2025-12-16 05:12,2025-12-16,GOOG,GOOGL,real news,16.48,0.339,0.407,What's Going On With TotalEnergies Stock Tuesday? - TotalEnergies (NYSE:TTE)
+13271,2025-12-16 07:44,2025-12-16,AMZN,,real news,16.48,0.339,0.407,"Amazon, Mill Unveil AI-Powered Food Waste Fix For Grocers - Amazon.com (NASDAQ:AMZN)"
+13272,2025-12-16 09:00,2025-12-16,AMZN,,real news,16.48,0.339,0.407,CloudBolt Signs Strategic Collaboration Agreement with AWS
+13314,2025-12-17 01:32,2025-12-17,META,,real news,17.62,0.415,0.571,Mark Zuckerberg's Meta Turned Blind-Eye To China-Based Scam Ads To Fuel Billions In Revenue: Report (UPDA
+13323,2025-12-17 05:32,2025-12-17,PLTR,,real news,17.62,0.415,0.571,"Palantir, Accenture Team Up To Scale Enterprise AI - Palantir Technologies (NASDAQ:PLTR)"
+13326,2025-12-17 07:00,2025-12-17,NVDA,,real news,17.62,0.415,0.571,CMR Surgical secures 510(k) clearance of its Versius Plus robotic surgical system
+13333,2025-12-17 09:00,2025-12-17,AMZN,,real news,17.62,0.415,0.571,HAProxy Technologies Announces Availability of HAProxy Community Performance Packages Compiled with AWS-LC
+13375,2025-12-18 01:28,2025-12-18,NVDA,,real news,16.87,0.483,0.687,Nvidia Director Sells $44 Million Stake That He's Held Since 1997 — Long Before The AI Boom And Even The
+13401,2025-12-18 11:05,2025-12-18,GOOG,GOOGL|ORCL,real news,16.87,0.483,0.687,"Trump Media Fusion Deal: Donald Trump Joins Google, Chevron, Goldman Sachs In High‑Stakes Nuclear Energy"
+13488,2025-12-22 02:28,2025-12-22,NVDA,,real news,14.08,0.557,0.825,Tencent Taps Nvidia Blackwell AI Chips Through Japan Cloud Deal Despite Trump Warning They Won't Be Avail
+13505,2025-12-22 11:02,2025-12-22,NVDA,MCHP|AMD,real news,14.08,0.557,0.825,Hong Kong Chip Frenzy Enters AI Lane With This IPO
+13532,2025-12-23 07:47,2025-12-23,AMZN,GOOG|GOOGL|META|MSFT|NVDA|ORCL,real news,14.0,0.594,0.869,TikTok Parent ByteDance To Invest $23 Billion In AI To Compete With US Tech Giants: Report - Amazon.com (
+13538,2025-12-23 11:19,2025-12-23,NOW,,real news,14.0,0.594,0.869,ServiceNow Moves Into AI-Powered Cybersecurity With $7.75 Billion Acquisition - ServiceNow (NYSE:NOW)
+13548,2025-12-23 11:27,2025-12-23,CSCO,,real news,14.0,0.594,0.869,Radware (RDWR) Q3 2024 Earnings Call Transcript | The Motley Fool
+13567,2025-12-24 04:15,2025-12-24,NVDA,TSM,real news,13.47,0.563,0.858,Nvidia CEO Jensen Huang's Taiwan Visit Triggers TSMC Factory Frenzy As AI Chip Demand Forces Suppliers In
+13572,2025-12-24 07:17,2025-12-24,AMZN,SNOW,real news,13.47,0.563,0.858,Snowflake Mulls $1 Billion Observe Buyout To Sharpen AI Edge - Snowflake (NYSE:SNOW)
+13612,2025-12-26 02:51,2025-12-26,CSCO,NVDA,real news,13.6,0.541,0.841,"Chamath Palihapitiya Looks Set To Make A Windfall From Nvidia's Purchase Of Groq, Here Is What The SPAC K"
+13661,2025-12-28 16:45,2025-12-26,TXN,ASX,real news,13.6,0.541,0.841,Weebit Nano secures a license agreement with Texas Instruments
+13679,2025-12-29 09:00,2025-12-29,INTC,,real news,14.2,0.469,0.722,Nutriband Inc. Signs Agreement to Sell Majority Stake of Subsidiary Pocono Pharmaceutical for $5M USD to EarthVision Bio
+13695,2025-12-29 16:45,2025-12-29,APLD,NVDA,real news,14.2,0.469,0.722,"Applied Digital to Spin Out Cloud Business, Proposes Business Combination with EKSO to Launch ChronoScale"
+13691,2025-12-29 16:45,2025-12-29,APLD,NVDA,real news,14.2,0.469,0.722,"Applied Digital to Spin Out Cloud Business, Proposes Business Combination with EKSO to Launch ChronoScale"
+13712,2025-12-29 21:10,2025-12-29,AMD,AMZN|MSFT|NVDA,real news,14.2,0.469,0.722,"Nvidia, in the Last Days of 2025, Just Made a Game-Changing Move | The Motley Fool"
+13710,2025-12-30 06:55,2025-12-30,APLD,NVDA,real news,14.33,0.466,0.686,Why Is Ekso Bionics Stock Soaring Tuesday? - Applied Digital (NASDAQ:APLD)
+13721,2025-12-30 10:14,2025-12-30,META,SMCI,real news,14.33,0.466,0.686,Meta Uses the Manus Deal to Anchor AI Spending to Near-Term Revenue | Investing.com
+13725,2025-12-30 11:49,2025-12-30,META,,real news,14.33,0.466,0.686,"Meta Acquires Manus, Betting Big On Action-Driven AI - Meta Platforms (NASDAQ:META)"
+13731,2025-12-30 18:58,2025-12-30,GOOG,GOOGL|NVDA,real news,14.33,0.466,0.686,Nvidia Eyes Another Talent-Focused Acquisition: Report - NVIDIA (NASDAQ:NVDA)
+13742,2025-12-31 07:46,2025-12-31,AVGO,CRWD|DELL|HPE|IBM|LNVGY|NTAP,real news,14.95,0.513,0.738,The Quantum Shield: Hardening AI & Critical Infrastructure
+13749,2025-12-31 10:08,2025-12-31,SMCI,,real news,14.95,0.513,0.738,EdgeMode Issues Year-End Shareholder Letter Reflecting on 2025 Milestones and Momentum Heading Into 2026
+13787,2026-01-02 06:08,2026-01-02,NVDA,,real news,14.51,0.421,0.56,"Baidu Begins 2026 With A Strong AI Move, Stock Soars - Baidu (NASDAQ:BIDU)"
+13844,2026-01-05 05:00,2026-01-05,AMBA,,real news,14.9,0.412,0.491,Ambarella Launches Powerful Edge AI 8K Vision SoC With Industry-Leading AI and Multi-Sensor Perception Performance
+13870,2026-01-05 16:49,2026-01-05,NVDA,,real news,14.9,0.412,0.491,"NVIDIA Announces Alpamayo Family of Open-Source AI Models and Tools to Accelerate Safe, Reasoning-Based Autonomous Vehicle Development"
+13878,2026-01-05 18:00,2026-01-05,NVDA,FORM,real news,14.9,0.412,0.491,Magna to Offer DRIVE Hyperion-Compatible ECUs and Tier-1 Integration Services for NVIDIA DRIVE AV
+13874,2026-01-05 18:00,2026-01-05,MSFT,NVDA,real news,14.9,0.412,0.491,"Cerence xUI, Leveraging NVIDIA AI Enterprise and Running on Microsoft Azure, Drives Strong Traction with Automakers"
+13879,2026-01-05 18:00,2026-01-05,MSFT,NVDA|COHR,real news,14.9,0.412,0.491,VAST Data Redesigns AI Inference Architecture for the Agentic Era with NVIDIA
+13880,2026-01-05 18:00,2026-01-05,NVDA,AMD,real news,14.9,0.412,0.491,Nvidia Unveils Alpamayo AI: 'Chat-GPT Moment' For Cars - NVIDIA (NASDAQ:NVDA)
+13902,2026-01-06 05:00,2026-01-06,NVDA,,real news,14.75,0.411,0.425,What's Going On With CoreWeave Stock Tuesday? - CoreWeave (NASDAQ:CRWV)
+13908,2026-01-06 07:00,2026-01-06,AMZN,META|NVDA,real news,14.75,0.411,0.425,BitMEX Launches Equity Perps for 24/7 Stock Trading
+13916,2026-01-06 10:00,2026-01-06,NVDA,,real news,14.75,0.411,0.425,"Swift Navigation Breaks the Autonomy Cost Barrier, Integrating High-Integrity GNSS with NVIDIA DRIVE AGX Platform"
+13919,2026-01-06 10:15,2026-01-06,MRVL,,real news,14.75,0.411,0.425,Why Is Marvell Technology Stock Gaining Tuesday? - Marvell Technology (NASDAQ:MRVL)
+13942,2026-01-06 18:15,2026-01-06,AMZN,META|NVDA,real news,14.75,0.411,0.425,BitMEX lanza Equity Perps para trading de acciones 24/7
+13972,2026-01-07 09:00,2026-01-07,MSFT,,real news,15.38,0.38,0.389,Nerdio Strengthens Executive Team with Appointment of Scott Manchester as Chief Product and Technology Officer
+13984,2026-01-07 12:49,2026-01-07,NVDA,,real news,15.38,0.38,0.389,China Tells Tech Firms To Stop Nvidia H200 Chip Orders - NVIDIA (NASDAQ:NVDA)
+14000,2026-01-07 20:17,2026-01-07,ADBE,META,real news,15.38,0.38,0.389,"UPDATE - 2X Acquires Leading Clay Partner The Kiln, Expands Marketing-as-a-Service to Go-to-Market Orches"
+14006,2026-01-08 01:30,2026-01-08,MSFT,,real news,15.45,0.336,0.376,TomTom enhances maps and navigation with Microsoft Azure integration
+14016,2026-01-08 08:00,2026-01-08,MSFT,VRT|GEV|CARR,real news,15.45,0.336,0.376,"AirJoule Technologies Begins Net Zero Innovation Hub for Data Centers Program and Advances Commercial Deployment with Google, Microsoft, and Industry Leaders"
+14024,2026-01-08 09:00,2026-01-08,AVGO,,real news,15.45,0.336,0.376,11:11 Systems Successfully Completes Acquisition of Ntirety
+14022,2026-01-08 09:00,2026-01-08,AVGO,,real news,15.45,0.336,0.376,11:11 Systems Successfully Completes Acquisition of Ntirety
+14038,2026-01-08 11:25,2026-01-08,DDOG,SNOW,real news,15.45,0.336,0.376,Snowflake Strengthens AI Moat With Observe Deal - Snowflake (NYSE:SNOW)
+14044,2026-01-08 11:40,2026-01-08,NVDA,,real news,15.45,0.336,0.376,"What's Going On With SKYX Platforms Stock Thursday? - NVIDIA (NASDAQ:NVDA), SKYX Platforms (NASDAQ:SKYX)"
+14045,2026-01-08 12:11,2026-01-08,IBM,,real news,15.45,0.336,0.376,What's Going On With Datavault AI Stock Thursday? - Datavault AI (NASDAQ:DVLT)
+14053,2026-01-08 13:06,2026-01-08,CRWD,,real news,15.45,0.336,0.376,CrowdStrike Targets Next-Gen Identity Protection With SGNL - CrowdStrike Holdings (NASDAQ:CRWD)
+14059,2026-01-08 15:00,2026-01-08,DLR,,real news,15.45,0.336,0.376,"Digital Realty Leasing Gains May Be Limited, Analyst Warns - Digital Realty Trust (NYSE:DLR)"
+14067,2026-01-08 15:26,2026-01-08,NVDA,,real news,15.45,0.336,0.376,Nvidia Teams Up With Dow's 2025 Champion To Build The Next Era Of AI Machines - Caterpillar (NYSE:CAT)
+14072,2026-01-08 17:09,2026-01-08,INTC,,real news,15.45,0.336,0.376,Trump Says Federal Intel Stake Has Made 'Tens Of Billions': Stock Climbs - Intel (NASDAQ:INTC)
+14082,2026-01-09 03:58,2026-01-09,GOOG,GOOGL,real news,14.49,0.367,0.436,"Google Bets On AI To Fix Email Overload With Gemini-Enhanced Gmail— What's New? - Alphabet (NASDAQ:GOOG),"
+14090,2026-01-09 07:15,2026-01-09,META,,real news,14.49,0.367,0.436,"Oklo Stock Soars After Meta Locks In 1.2-GW Nuclear Project - Meta Platforms (NASDAQ:META), Oklo (NYSE:OK"
+14095,2026-01-09 08:32,2026-01-09,META,,real news,14.49,0.367,0.436,"Vistra Wins Mega Nuclear Deal With Meta, Stock Jumps - Meta Platforms (NASDAQ:META), Vistra (NYSE:VST)"
+14130,2026-01-10 01:05,2026-01-09,AMZN,,real news,14.49,0.367,0.436,"Amazon Proposes First Big-Box Retail Store In Orland Park - Amazon.com (NASDAQ:AMZN), Walmart (NASDAQ:WMT"
+14133,2026-01-10 01:33,2026-01-09,GOOG,GOOGL|NVDA,real news,14.49,0.367,0.436,Bitget amplía su colaboración con Ondo y cotiza 98 nuevas acciones y ETF de EE.UU.
+14141,2026-01-10 01:33,2026-01-09,GOOG,GOOGL|NVDA,real news,14.49,0.367,0.436,ビットゲット、Ondoとの提携を強化し、米国株とETF98銘柄を新規上場
+14175,2026-01-11 10:05,2026-01-09,GOOG,GOOGL,real news,14.49,0.367,0.436,"Commerce Supports Universal Commerce Protocol, Plans to Offer Buying Directly Across Google’s AI Surfaces"
+14178,2026-01-11 11:01,2026-01-09,AMD,AMZN|APLD|ARM|GOOG|GOOGL|INTC|META|MSFT|NVDA|SMCI|TSM,real news,14.49,0.367,0.436,"Consumer Tech News (Jan 5-9): Semiconductors Steal CES 2026 Spotlight, AI Regulation Tightens As Governme"
+14202,2026-01-12 05:05,2026-01-12,GOOG,GOOGL,real news,15.12,0.381,0.454,Honeywell Taps Google Cloud To Reinvent In-Store Shopping - Honeywell Intl (NASDAQ:HON)
+14201,2026-01-12 05:56,2026-01-12,GOOG,GOOGL,real news,15.12,0.381,0.454,Kroger Uses Gemini AI To Personalize Grocery Shopping Experience - Kroger (NYSE:KR)
+14210,2026-01-12 06:21,2026-01-12,GOOG,GOOGL,real news,15.12,0.381,0.454,Home Depot Goes All-In On Agentic AI With Google Cloud - Home Depot (NYSE:HD)
+14208,2026-01-12 10:00,2026-01-12,NVDA,,real news,15.12,0.381,0.454,NVIDIA and Lilly Announce Co-Innovation AI Lab to Reinvent Drug Discovery in the Age of AI
+14207,2026-01-12 10:00,2026-01-12,NVDA,,real news,15.12,0.381,0.454,NVIDIA BioNeMo Platform Adopted by Life Sciences Leaders to Accelerate AI-Driven Drug Discovery
+14240,2026-01-13 03:06,2026-01-13,GOOG,GOOGL|META|MSFT,real news,15.98,0.366,0.414,"Meta To Cut Over 10% Jobs In Reality Labs Division Amid AI Focus: Report - Alphabet (NASDAQ:GOOG), Alphab"
+14242,2026-01-13 08:00,2026-01-13,MSFT,,real news,15.98,0.366,0.414,Einfach bereitzustellende S1000 IP-DECT-Plattform von Spectralink löst Kommunikationsprobleme im Tagesgeschäft
+14243,2026-01-13 08:00,2026-01-13,MSFT,,real news,15.98,0.366,0.414,Spectralink lance la plateforme IP-DECT S1000 : une solution cloud prête à l’emploi pour les communications critiques de première ligne
+14254,2026-01-13 10:13,2026-01-13,META,,real news,15.98,0.366,0.414,What's Going On With Nano Nuclear Energy Stock Tuesday? - Nano Nuclear Energy (NASDAQ:NNE)
+14257,2026-01-13 12:57,2026-01-13,GOOG,GOOGL,real news,15.98,0.366,0.414,Wayfair Partners With Google AI To Bring Smarter Online Buying - Wayfair (NYSE:W)
+14292,2026-01-14 06:48,2026-01-14,DELL,,real news,16.75,0.403,0.49,Dell To Roll Out Single Enterprise Platform In Major Operational Revamp To Unlock AI Potential: Report -
+14293,2026-01-14 07:10,2026-01-14,AMD,,real news,16.75,0.403,0.49,"TCS, AMD Partner To Accelerate Enterprise AI Adoption At Scale - Advanced Micro Devices (NASDAQ:AMD)"
+14296,2026-01-14 09:38,2026-01-14,GOOG,GOOGL,real news,16.75,0.403,0.49,Quantum IPO Buzz Lifts Honeywell Stock After Quantinuum Filing - Honeywell Intl (NASDAQ:HON)
+14314,2026-01-14 15:30,2026-01-14,META,,real news,16.75,0.403,0.49,"BFA And Lesley Weaver Announce Transition in Consumer, Privacy & Antitrust Group"
+14354,2026-01-15 11:00,2026-01-15,GOOG,GOOGL,real news,15.84,0.356,0.44,Clearway Energy Signs $2.4 Billion Carbon-Free Deals With Google - Clearway Energy (NYSE:CWEN)
+14377,2026-01-15 19:22,2026-01-15,PLTR,,real news,15.84,0.356,0.44,Palantir's Tool Powering Real-Time ICE Raids: ELITE - Palantir Technologies (NASDAQ:PLTR)
+14378,2026-01-15 19:31,2026-01-15,MSFT,NVDA|GOOGL|GOOG|AMZN|AVGO|META,real news,15.84,0.356,0.44,CORRECTION -- Adams Diversified Equity Fund Announces 2025 Performance
+14391,2026-01-16 04:38,2026-01-16,AMZN,,real news,15.86,0.346,0.443,"Amazon Loses Fight To Block Saks Bankruptcy Financing, Warns Of ‘Drastic Remedies’ - Amazon.com (NASDAQ:A"
+14421,2026-01-16 16:41,2026-01-16,PLTR,,real news,15.86,0.346,0.443,"JPMorgan CEO Jamie Dimon Visits Palantir — Wall Street Meets The War Room - JPMorgan Chase (NYSE:JPM), Pa"
+14432,2026-01-17 04:00,2026-01-16,MU,,real news,15.86,0.346,0.443,"Micron Signs Letter of Intent to Purchase Tongluo Site, Begin Strategic Partnership with PSMC"
+14486,2026-01-19 07:00,2026-01-16,MCHP,,real news,15.86,0.346,0.443,Microchip Expands PolarFire® FPGA Smart Embedded Video Ecosystem with New SDI IP Cores and Quad CoaXPress™ Bridge Kit
+14503,2026-01-19 17:27,2026-01-16,INTC,STM,real news,15.86,0.346,0.443,BionIT Labs Launches Adam’s Hand for Humanoids and Service Robots
+14512,2026-01-20 03:00,2026-01-20,NOK,,real news,20.09,0.483,0.613,Proximus selects Nokia to modernize its charging system and voice core
+14531,2026-01-20 07:48,2026-01-20,PLTR,,real news,20.09,0.483,0.613,What's Going On With Palantir Technologies Stock Tuesday? - Palantir Technologies (NASDAQ:PLTR)
+14547,2026-01-20 12:21,2026-01-20,ENTG,,real news,20.09,0.483,0.613,"Entegris Taps Mike Sauer As Interim CFO, Reaffirms Outlook - Entegris (NASDAQ:ENTG)"
+14557,2026-01-20 13:02,2026-01-20,MSFT,,real news,20.09,0.483,0.613,"Bristol Myers, Microsoft Aim To Catch Lung Cancer Early With AI - Bristol-Myers Squibb (NYSE:BMY), Micros"
+14559,2026-01-20 14:32,2026-01-20,WDC,,real news,20.09,0.483,0.613,Morgan Stanley Snaps Up $110 Million Bay Area Factory - Morgan Stanley (NYSE:MS)
+14587,2026-01-21 05:12,2026-01-21,DELL,NVDA|PLTR,real news,16.9,0.539,0.666,"UK's Sovereign AI Taps Accenture, Palantir For Massive AI Buildout - Accenture (NYSE:ACN), Palantir Techn"
+14597,2026-01-21 08:45,2026-01-21,NVDA,,real news,16.9,0.539,0.666,AI-Powered Humanoid Robots Billion Dollar Market Emerging as a High-Growth Automation Play for Global Inv
+14599,2026-01-21 10:00,2026-01-21,ADBE,AVGO,real news,16.9,0.539,0.666,Base Acquires EverAfter to Build the First AI Engagement OS to Accelerate Customer Led Growth
+14600,2026-01-21 10:00,2026-01-21,ADBE,,real news,16.9,0.539,0.666,Base Acquires EverAfter to Build the First AI Engagement OS to Accelerate Customer Led Growth
+14635,2026-01-22 05:56,2026-01-22,MSFT,,real news,15.64,0.559,0.741,Microsoft's AI Hits The Track With Mercedes In F1 Shake-Up - Microsoft (NASDAQ:MSFT)
+14637,2026-01-22 06:30,2026-01-22,NVDA,,real news,15.64,0.559,0.741,What's Going On With Alibaba Stock Thursday? - Alibaba Gr Hldgs (NYSE:BABA)
+14648,2026-01-22 09:00,2026-01-22,MSFT,,real news,15.64,0.559,0.741,JD Machine Achieves Prestigious CMMC Level 2 Certification
+14653,2026-01-22 09:36,2026-01-22,MRVL,,real news,15.64,0.559,0.741,Buyouts at Scale: How Consolidation is Powering a New $5T Growth Cycle in Cyber and Security Tech
+14656,2026-01-22 09:36,2026-01-22,ORCL,,real news,15.64,0.559,0.741,"TikTok Deal Sealed: US, China Approve Historic American Spinoff - Oracle (NYSE:ORCL)"
+14666,2026-01-22 15:44,2026-01-22,GOOG,GOOGL|MSFT,real news,15.64,0.559,0.741,"PayPal Bets On Agentic Commerce, Acquires Israel-Based Cymbio (CORRECTED) - PayPal Holdings (NASDAQ:PYPL)"
+14662,2026-01-22 16:02,2026-01-22,IREN,,real news,15.64,0.559,0.741,"IREN to Release Q2 FY26 Results on February 5, 2026"
+14668,2026-01-22 18:13,2026-01-22,ALAB,,real news,15.64,0.559,0.741,UPDATE -- Astera Labs Broadens Scorpio X-Series Smart Fabric Switch Roadmap to Address Expanding Scale-Up Market Opportunities
+14675,2026-01-22 23:38,2026-01-22,AMZN,,real news,15.64,0.559,0.741,Amazon Plans Fresh Round Of Corporate Layoffs As Andy Jassy Pushes Overhaul Of 'Culture' At The Tech Gian
+14701,2026-01-23 07:41,2026-01-23,NVDA,,real news,16.09,0.561,0.725,Jensen Huang To Head To China In A Bid To Reopen Market For Nvidia Chips: Report - NVIDIA (NASDAQ:NVDA)
+14708,2026-01-23 10:13,2026-01-23,NVDA,,real news,16.09,0.561,0.725,Nvidia Gets a Lift as China Signals a Path Back for High-End AI Chips | Investing.com
+14712,2026-01-23 11:21,2026-01-23,DELL,ORCL,real news,16.09,0.561,0.725,"TikTok Strikes Deal To Spin Off US Business, Ending Standoff - Dell Technologies (NYSE:DELL), Oracle (NYS"
+14727,2026-01-23 16:39,2026-01-23,AMZN,GOOG|GOOGL|ETN|ORCL,real news,16.09,0.561,0.725,"Deal Dispatch: Cricket's RCB Auction, Nestlé Water Sale Heats Up - Amazon.com (NASDAQ:AMZN), Capital One"
+14794,2026-01-26 06:15,2026-01-26,NVDA,,real news,16.15,0.546,0.686,"IonQ Buys Chipmaker SkyWater In $1.8 Billion Deal - IonQ (NYSE:IONQ), SkyWater Technology (NASDAQ:SKYT)"
+14799,2026-01-26 08:48,2026-01-26,ARM,NVDA,real news,16.15,0.546,0.686,SoftBank's $50 Billion Data Center Bid To Power OpenAI Falls Apart - SOFTBANK GROUP CORP by Softbank Grou
+14810,2026-01-26 12:09,2026-01-26,NVDA,,real news,16.15,0.546,0.686,"Nvidia Has A Personal AI Factory In CoreWeave - CoreWeave (NASDAQ:CRWV), NVIDIA (NASDAQ:NVDA)"
+14809,2026-01-26 13:00,2026-01-26,META,,real news,16.15,0.546,0.686,Kelley Drye Expands Privacy Practice with Partner Kate Black and Special Counsel Mason Fitch
+14823,2026-01-26 21:30,2026-01-26,MU,,real news,16.15,0.546,0.686,Micron Breaks Ground on Advanced Wafer Fabrication Facility in Singapore
+14827,2026-01-27 03:15,2026-01-27,MU,,real news,16.35,0.57,0.751,Micron Plans Nearly $24 Billion Singapore Investment To Address AI-Driven Demand - Micron Technology (NAS
+14847,2026-01-27 10:00,2026-01-27,BBAI,IBM,real news,16.35,0.57,0.751,ShiftKey Appoints Technology Leader Mandy Long as Board Chair
+14882,2026-01-27 21:39,2026-01-27,AMZN,AVGO|GOOG|GOOGL|META|MSFT|NVDA,real news,16.35,0.57,0.751,Moomoo partners with Nasdaq in new era in options trading
+14889,2026-01-28 02:16,2026-01-28,NVDA,,real news,16.35,0.551,0.758,China Gives Nod To Import First Batch Of Nvidia's H200 AI Chips: Report - NVIDIA (NASDAQ:NVDA)
+14898,2026-01-28 05:15,2026-01-28,CRWD,,real news,16.35,0.551,0.758,CrowdStrike CEO Says North Korean Operatives Infiltrated US Companies Using AI-Generated Credentials — 'W
+14900,2026-01-28 06:04,2026-01-28,AI,,real news,16.35,0.551,0.758,C3.ai Stock Surges Nearly 16% In Wednesday Pre-Market: What's Going On? - C3.ai (NYSE:AI)
+14899,2026-01-28 07:00,2026-01-28,LNVGY,,real news,16.35,0.551,0.758,"Gearing Up for The Big Game: WeShop Announces Electronics Offerings with Best Buy, Samsung, Lenovo and eBay"
+14909,2026-01-28 11:12,2026-01-28,GLW,META,real news,16.35,0.551,0.758,What's Going On With Corning Stock Wednesday? - Corning (NYSE:GLW)
+14925,2026-01-28 16:08,2026-01-28,IBM,,real news,16.35,0.551,0.758,IBM RELEASES FOURTH-QUARTER RESULTS - IBM (NYSE:IBM)
+14928,2026-01-28 16:46,2026-01-28,LRCX,,real news,16.35,0.551,0.758,"Lam Research Beats Q2 Estimates, Strong Q3 Guidance - Lam Research (NASDAQ:LRCX)"
+14958,2026-01-29 09:00,2026-01-29,GOOG,GOOGL|META|MSFT,real news,16.88,0.522,0.729,AI Assistants Head into 2026 on a High Note: Comscore Reports Triple-Digit Growth on Mobile
+14968,2026-01-29 11:11,2026-01-29,NOK,,real news,16.88,0.522,0.729,"Nokia Beats Q4 Estimates, Optical Networks Sales Surge 17% - Nokia (NYSE:NOK)"
+14971,2026-01-29 12:58,2026-01-29,NVDA,,real news,16.88,0.522,0.729,شراكة بين DPI وPODTECH لتسريع نشر البنية التحتية للذكاء الاصطناعي عالميًا
+14996,2026-01-29 18:55,2026-01-29,MSFT,,real news,16.88,0.522,0.729,authID and MajorKey Selected by Global Retailer to Deliver High-Assurance Identity Onboarding and Privileged Access Protection
+15004,2026-01-29 21:24,2026-01-29,MU,NVDA|TSM,real news,16.88,0.522,0.729,"Nvidia CEO Jensen Huang Says AI Memory Needs Are Rising During Taiwan Trip, Backs TSMC's Global Expansion"
+15047,2026-01-30 16:53,2026-01-30,AI,AMZN,real news,17.44,0.525,0.799,"Deal Dispatch: Musk Merger Talk, LIV Golf Stakes, And A Flurry Of M&A From AI To Athleisure - C3.ai (NYSE"
+15088,2026-02-01 08:19,2026-01-30,AMZN,META|MSFT|MU|NVDA|SNDK|STM|STX|TXN|GOOGL|GOOG,real news,17.44,0.525,0.799,"Consumer Tech News (Jan 26-30): Meta Faces Lawsuits Over Youth Addiction Claims, IMF Warns AI Could Elimi"
+15136,2026-02-02 09:24,2026-02-02,LNVGY,,real news,16.34,0.566,0.848,Iplusmobot Files For Hong Kong IPO Counting Lenovo Among Key Backers
+15151,2026-02-02 12:27,2026-02-02,AMD,META|NVDA|ORCL,real news,16.34,0.566,0.848,Oracle Faces a New Risk Debate as Capital Needs Collide With AI Demand
+15154,2026-02-02 12:49,2026-02-02,QCOM,,real news,16.34,0.566,0.848,What's Going On With Qualcomm Stock Monday? - Qualcomm (NASDAQ:QCOM)
+15168,2026-02-02 16:00,2026-02-02,STM,,real news,16.34,0.566,0.848,STMicroelectronics expands sensors capabilities with closing of acquisition of NXP’s MEMS business
+15166,2026-02-02 16:00,2026-02-02,STM,,real news,16.34,0.566,0.848,STMicroelectronics étend son positionnement dans les capteurs avec la finalisation de l’acquisition de l’activité MEMS de NXP
+15180,2026-02-03 03:25,2026-02-03,GOOG,GOOGL|NVDA,real news,18.0,0.447,0.752,Liberty Global Strikes Five-Year Google Cloud Deal To Deploy Gemini AI Across Europe - Alphabet (NASDAQ:G
+15223,2026-02-03 16:14,2026-02-03,POWL,,real news,18.0,0.447,0.752,Powell Industries Declares an Increase to the Quarterly Cash Dividend - Powell Industries (NASDAQ:POWL)
+15228,2026-02-03 18:00,2026-02-03,SIMO,,real news,18.0,0.447,0.752,"Silicon Motion Announces Results for the Fourth Quarter and Year Ended December 31, 2025"
+15242,2026-02-04 02:43,2026-02-04,AMD,NVDA,real news,18.64,0.38,0.785,Nvidia's H200 Chip Sales To China Await State Department Approval Despite Trump's December Go-Ahead: Repo
+15263,2026-02-04 09:30,2026-02-04,TXN,,real news,18.64,0.38,0.785,Big Bang Semiconductor Deal: Texas Instruments Snaps Silicon Labs For $7.5 Billion - Silicon Laboratories
+15294,2026-02-04 16:53,2026-02-04,COHR,,real news,18.64,0.38,0.785,"Coherent Stock Jumps On Q2 Earnings, Revenue Beats - Coherent (NYSE:COHR)"
+15328,2026-02-05 08:00,2026-02-05,GOOG,GOOGL,real news,21.77,0.453,0.853,Teads Partners with Google TV™ to Expand CTV HomeScreen Availability Globally
+15347,2026-02-05 10:36,2026-02-05,AMZN,GOOG|GOOGL|MSFT|PLTR,real news,21.77,0.453,0.853,Palantir's Ukraine Expansion Highlights Growing Power Of Private AI In Modern Warfare - Amazon.com (NASDA
+15351,2026-02-05 12:27,2026-02-05,GOOG,GOOGL,real news,21.77,0.453,0.853,Harel Insurance Sold $330 Million of Invesco KBW Bank ETF | The Motley Fool
+15353,2026-02-05 12:39,2026-02-05,NVDA,,real news,21.77,0.453,0.853,Nvidia Stock Wobbles As AI 'Memory Crunch' Kills 2026 Gaming GPU Launch - NVIDIA (NASDAQ:NVDA)
+15349,2026-02-05 13:48,2026-02-05,HPQ,MSFT,real news,21.77,0.453,0.853,AI Producer Secures Another U.S. Patent for AI-Assisted Live Event Production
+15988,2026-02-19 03:00,2026-02-19,AMZN,NOK,real news,20.23,0.648,0.889,"Citymesh goes live with world’s first commercial mobile service on 5G Core SaaS, powered by Nokia and AWS"
+15996,2026-02-19 07:36,2026-02-19,META,,real news,20.23,0.648,0.889,"Meta Revives Abandoned 'Malibu 2' Smartwatch Project, Targets 2026 Launch: Report - Meta Platforms (NASDA"
+15998,2026-02-19 09:00,2026-02-19,AVGO,,real news,20.23,0.648,0.889,Broadcom Introduces Industry’s First 6G Digital Front-End SoC for Massive MIMO
+16002,2026-02-19 10:00,2026-02-19,NVDA,,real news,20.23,0.648,0.889,"SKYX Provides Corporate Update including New Product Launches, NVIDIA Collaboration, and $29 Million in Recent Investments from Fundamental Institutions"
+16005,2026-02-19 10:31,2026-02-19,CRWD,,real news,20.23,0.648,0.889,CrowdStrike (CRWD) Teams Up With Qualtrics To Secure Employee Experience Data - CrowdStrike Holdings (NAS
+16011,2026-02-19 13:05,2026-02-19,AVGO,,real news,20.23,0.648,0.889,Broadcom Unveils Revolutionary Hardware Chip For 5G/6G Infrastructure - Broadcom (NASDAQ:AVGO)
+16038,2026-02-20 06:26,2026-02-20,AMD,NVDA,real news,19.09,0.595,0.82,"AMD Backs $300 Million Loan For Crusoe's AI Chip Deployment, Mimicking Nvidia's Strategy: Report - Advanc"
+16040,2026-02-20 07:48,2026-02-20,PLTR,,real news,19.09,0.595,0.82,Adapt Or Stagnate: Accenture Makes AI Usage A Requirement For Senior Promotions - Accenture (NYSE:ACN)
+16043,2026-02-20 09:00,2026-02-20,AMZN,,real news,19.09,0.595,0.82,"Bath & Body Works Officially Launches in Amazon’s U.S. Stores, Expanding Access to Its Iconic Fragrances and Most Loved Products"
+16142,2026-02-23 11:00,2026-02-23,NVDA,,real news,21.01,0.506,0.716,Akamai Secures Critical Infrastructure with Agentless Zero Trust Segmentation Powered by NVIDIA
+16154,2026-02-23 12:35,2026-02-23,AMZN,GOOG|GOOGL|META|MSFT,real news,21.01,0.506,0.716,What's Going On With Dominion Energy Stock Monday? - Dominion Energy (NYSE:D)
+16179,2026-02-24 03:46,2026-02-24,AMZN,,real news,19.55,0.53,0.73,"Amazon Pledges $12 Billion For Louisiana Data Centers, Aims To Create Over 2,000 Jobs - Amazon.com (NASDA"
+16186,2026-02-24 06:55,2026-02-24,KEYS,,real news,19.55,0.53,0.73,Cybeats and Keysight Partner to OEM Cybeats' SBOM Platform for Software Supply Chain Security - CYBEATS T
+16188,2026-02-24 07:35,2026-02-24,AMD,INTC|NVDA|SMCI,real news,19.55,0.53,0.73,Intel Stock Moving Higher on Multi-Year AI Deal With SambaNova
+16195,2026-02-24 09:00,2026-02-24,GOOG,GOOGL,real news,19.55,0.53,0.73,"Wix Launches Integration With Google Search, Google Maps and Google AI Mode to Turn Queries Into Instant Bookings"
+16231,2026-02-24 21:00,2026-02-24,AMD,CSCO|DLR|LNVGY,real news,19.55,0.53,0.73,Digital Realty Expands Innovation Lab Network to Singapore and Japan to Accelerate AI and Hybrid Cloud Implementation
+16241,2026-02-25 04:34,2026-02-25,MSFT,NVDA,real news,17.93,0.588,0.798,"Microsoft, Nvidia-Backed Wayve Gets $1.5 Billion Funding Boost For Robotaxi Tech Rollout - Baidu (NASDAQ:"
+16260,2026-02-25 09:00,2026-02-25,GOOG,GOOGL|MSFT,real news,17.93,0.588,0.798,Netskope Announces NewEdge AI Fast Path: Industry-Leading Performance for Secure AI Adoption
+16265,2026-02-25 12:00,2026-02-25,CRWD,MSFT,real news,17.93,0.588,0.798,Splashtop Announces Integration with the CrowdStrike Falcon Platform
+16279,2026-02-25 13:28,2026-02-25,IBM,,real news,17.93,0.588,0.798,Why Is IBM Stock Gaining Wednesday? - IBM (NYSE:IBM)
+16280,2026-02-25 17:00,2026-02-25,DDOG,,real news,17.93,0.588,0.798,Datadog and Sakana AI Announce Strategic Partnership to Advance AI Innovation and Observability for Enterprises
+16291,2026-02-25 22:30,2026-02-25,SOUN,,real news,17.93,0.588,0.798,SoundHound AI Establishes New Innovation Hub in Bengaluru to Accelerate Global Agentic AI Expansion
+16302,2026-02-26 03:00,2026-02-26,NOK,,real news,18.63,0.641,0.9,Nokia to deploy AI-ready network solutions in Telefónica's Edge data centers throughout Spain
+16312,2026-02-26 05:24,2026-02-26,DDOG,,real news,18.63,0.641,0.9,What's Going On With Datadog Stock Thursday? - Datadog (NASDAQ:DDOG)
+16313,2026-02-26 07:02,2026-02-26,AMZN,GOOG|GOOGL|META|MSFT|ORCL,real news,18.63,0.641,0.9,Hidden AI Costs? Big Tech Hyperscalers Hold $662 Billion In Off-Balance-Sheet Data Center Leases: Report
+16346,2026-02-26 16:27,2026-02-26,DELL,,real news,18.63,0.641,0.9,Dell Stock Surges On Q4 Earnings Beat: What To Know - Dell Technologies (NYSE:DELL)
+16344,2026-02-26 16:56,2026-02-26,SOUN,,real news,18.63,0.641,0.9,"SoundHound AI Beats Q4 Estimates, Guides Up To $260M In 2026 Revenue - SoundHound AI (NASDAQ:SOUN)"
+16356,2026-02-27 02:05,2026-02-27,GOOG,GOOGL,real news,19.86,0.535,0.789,"Elon Musk's xAI Loses Half Its Founders As Toby Pohlen Steps Down Amid IPO Push - Alphabet (NASDAQ:GOOG),"
+16358,2026-02-27 03:43,2026-02-27,AMZN,,real news,19.86,0.535,0.789,Walmart To Pay $100 Million To Settle FTC Claims Over Deceptive Delivery Driver Pay Practices - Amazon.co
+16368,2026-02-27 07:12,2026-02-27,EQIX,,real news,19.86,0.535,0.789,"Equinix, CPP Bet $4 Billion On Nordic AI Boom With atNorth Deal - Equinix (NASDAQ:EQIX)"
+16390,2026-02-27 12:19,2026-02-27,AMZN,NVDA|SMCI,real news,19.86,0.535,0.789,Amazon Makes a $50B AI Bet as OpenAI Deal Deepens AWS Lock-In
+16394,2026-02-27 15:29,2026-02-27,AMZN,GOOG|GOOGL|MSFT|NVDA,real news,19.86,0.535,0.789,OpenAI Lines Up $110B In Private Round — What’s Driving the Long-Term Bet
+16396,2026-02-27 16:05,2026-02-27,EQIX,,real news,19.86,0.535,0.789,"Deal Dispatch: Funko For Sale? Caesars Casino Weighs Offers, iPic Bankrupt - Canaan (NASDAQ:CAN), Caesars"
+16428,2026-03-01 08:00,2026-02-27,AI,AMD|AMZN|ASML|GOOG|GOOGL|HPQ|KEYS|META|MSFT|NOK|NVDA|SNOW,real news,19.86,0.535,0.789,"Consumer Tech News (Feb 23-27): US–Taiwan Trade Tensions Escalates, Amazon Invests $12B In US & More - Ap"
+16448,2026-03-02 03:00,2026-03-02,DELL,HPQ|LNVGY|MSFT|AMD|INTC,real news,21.44,0.534,0.802,AMD Gives Consumers and Businesses More AI PC Options with Expanded Ryzen™ AI 400 Series Portfolio
+16458,2026-03-02 08:08,2026-03-02,CRWD,FLEX,real news,21.44,0.534,0.802,Why This Analyst Sees Nearly 40% Upside To CrowdStrike Stock Despite High Valuation? - CrowdStrike Holdin
+16463,2026-03-02 10:16,2026-03-02,IBM,META|NVDA|CBRS,real news,21.44,0.534,0.802,"Cerebras CEO Andrew Feldman On Challenging NVIDIA, IPO Plans"
+16467,2026-03-02 12:06,2026-03-02,LITE,NVDA,real news,21.44,0.534,0.802,"Why Is Lumentum Stock Soaring Monday? - Lumentum Holdings (NASDAQ:LITE), NVIDIA (NASDAQ:NVDA)"
+16483,2026-03-02 14:12,2026-03-02,AMZN,GOOG|GOOGL|NVDA,real news,21.44,0.534,0.802,Nvidia Plans to Release a New Speedier AI Chip That Could Be a Game Changer | The Motley Fool
+16502,2026-03-03 08:00,2026-03-03,INTC,ORCL|CBRS,real news,23.57,0.606,0.89,LayerX Security Appoints Rupal Hollenbeck as Chair of the Board of Directors
+16516,2026-03-03 12:19,2026-03-03,NVDA,,real news,23.57,0.606,0.89,Nvidia's Genomic Analysis Suite To Help Speed Up Residual Cancer Detection - NVIDIA (NASDAQ:NVDA)
+16532,2026-03-04 02:20,2026-03-04,ARM,,real news,21.15,0.626,0.941,Arm Holdings Under Probe By Malaysia's Anti-Graft Agency For $279 Million Deal - ARM Holdings (NASDAQ:ARM
+16539,2026-03-04 05:38,2026-03-04,GOOG,GOOGL|MSFT,real news,21.15,0.626,0.941,Google Identifies Cybersecurity Threat Used By Hackers To Target Older iOS Versions Possibly Developed By
+16544,2026-03-04 07:00,2026-03-04,DLR,,real news,21.15,0.626,0.941,"Digital Realty Enters Portugal, Strengthening Southern Europe’s Digital Backbone"
+16550,2026-03-04 09:00,2026-03-04,COHR,,real news,21.15,0.626,0.941,Coherent Launches WaveMaker® 4000A for Super C-Band DWDM System Testing
+16570,2026-03-04 14:14,2026-03-04,NOK,,real news,21.15,0.626,0.941,Nokia: What's Going On With On Wednesday? - Nokia (NYSE:NOK)
+16576,2026-03-04 16:15,2026-03-04,AVGO,,real news,21.15,0.626,0.941,Broadcom Inc. Announces First Quarter Fiscal Year 2026 Financial Results and Quarterly Dividend - Broadco
+16600,2026-03-05 06:57,2026-03-05,AMZN,GOOG|GOOGL|NVDA,real news,23.75,0.655,0.936,"OpenAI's Annualized Revenue Skyrockets Beyond $25 Billion: Report - Amazon.com (NASDAQ:AMZN), Alphabet (N"
+16616,2026-03-05 11:00,2026-03-05,SNPS,ADI|AVGO|IBM,real news,23.75,0.655,0.936,Breker Verification Systems Adds RISC-V Industry Expert Larry Lapides to its Advisory Board
+16619,2026-03-05 12:07,2026-03-05,PANW,TEL,real news,23.75,0.655,0.936,TASE Reports the Results of the Financial Statements for the Fourth Quarter and Full Year 2025 - TEL AVIV
+16626,2026-03-05 12:42,2026-03-05,NBIS,,real news,23.75,0.655,0.936,Nebius’ 1.2 GW Win: A $20B Bet on AI Infrastructure | Investing.com
+16640,2026-03-05 16:15,2026-03-05,BELFA,BELFB,real news,23.75,0.655,0.936,"Bel Fuse Inc. Announces Acquisition of dataMate, an advanced ethernet and broadband business, from Method"
+16797,2026-03-10 03:30,2026-03-10,STM,,real news,24.93,0.643,0.926,STMicroelectronics ouvre une nouvelle ère dans la technologie ultra-large bande pour les applications automobiles et les appareils intelligents
+16795,2026-03-10 03:30,2026-03-10,STM,,real news,24.93,0.643,0.926,STMicroelectronics propels new era of ultra-wideband technology for automotive and smart device applications
+16803,2026-03-10 06:55,2026-03-10,MSFT,,real news,24.93,0.643,0.926,BluTranslate from Bluente Now Available in the Microsoft Marketplace
+16805,2026-03-10 08:28,2026-03-10,AMZN,META,real news,24.93,0.643,0.926,"Bill Ackman Files For Combined IPOs Of Pershing Square, New Fund - Amazon.com (NASDAQ:AMZN), Chipotle Mex"
+16820,2026-03-10 14:17,2026-03-10,NOW,,real news,24.93,0.643,0.926,"Cohesity, ServiceNow Team Up To Make Enterprise AI Agents Crash-Proof - ServiceNow (NYSE:NOW)"
+16832,2026-03-10 16:00,2026-03-10,AMAT,,real news,24.93,0.643,0.926,Applied Materials and SK hynix Announce Long-Term R&D Partnership to Accelerate AI Memory Innovation at EPIC Center in Silicon Valley
+16836,2026-03-10 17:00,2026-03-10,NVDA,,real news,24.93,0.643,0.926,Lotus Tech Launches Pre-Sales for LOTUS For Me in China
+16851,2026-03-10 18:19,2026-03-10,PLTR,,real news,24.93,0.643,0.926,Polymarket Joins Forces with Palantir to Bring Its Industry-Leading Artificial Intelligence (AI) to the Prediction Markets | The Motley Fool
+16869,2026-03-11 08:00,2026-03-11,UMC,,real news,24.23,0.571,0.808,Adeia and UMC Expand Long-Term Collaboration in Hybrid Bonding Technologies
+16871,2026-03-11 08:00,2026-03-11,SMCI,,real news,24.23,0.571,0.808,SGN Announces BlockchAIn Has Established a Collaboration with Supermicro for AI Data Center Hardware
+16873,2026-03-11 09:00,2026-03-11,AVGO,,real news,24.23,0.571,0.808,Broadcom Delivers Industry’s First 400G/lane Optical DSP for Next-Generation AI Networks
+16879,2026-03-11 12:15,2026-03-11,NBIS,NVDA|LITE|COHR|SMCI,real news,24.23,0.571,0.808,Nebius Group Valuation Faces New Test After $2B Nvidia Investment
+16886,2026-03-11 13:28,2026-03-11,MSFT,,real news,24.23,0.571,0.808,Why Is Stryker Stock Falling Wednesday? - Stryker (NYSE:SYK)
+16901,2026-03-11 16:30,2026-03-11,TEL,,real news,24.23,0.571,0.808,TE Connectivity announces 10% increase in quarterly cash dividend to $0.78 - TE Connectivity (NYSE:TEL)
+16902,2026-03-11 17:00,2026-03-11,GOOG,GOOGL,real news,24.23,0.571,0.808,"GFiber and Stonepeak’s Astound to combine, creating a leading independent broadband provider"
+16905,2026-03-11 17:00,2026-03-11,GOOG,GOOGL,real news,24.23,0.571,0.808,"GFiber and Stonepeak's Astound to combine, creating a leading independent broadband provider"
+17077,2026-03-16 07:33,2026-03-16,META,NBIS|NVDA,real news,23.51,0.772,0.954,Nebius Secures Massive Meta AI Contract Worth Up To $27 Billion - Nebius Group (NASDAQ:NBIS)
+17088,2026-03-16 09:30,2026-03-16,MU,SMCI,real news,23.51,0.772,0.954,Micron Capacity Bet Reflects Rising AI Memory Demand
+17089,2026-03-16 10:00,2026-03-16,NOK,,real news,23.51,0.772,0.954,"Nokia brings PON-based out-of-band management to data centers to save space, power and cost"
+17099,2026-03-16 11:16,2026-03-16,AMD,CLS,real news,23.51,0.772,0.954,Celestica-AMD Partner For AI Rack-Scale Platform Deal - Celestica (NYSE:CLS)
+17107,2026-03-16 11:31,2026-03-16,S,,real news,23.51,0.772,0.954,SentinelOne Expanded Cybersecurity Partnership With Cloudflare - SentinelOne (NYSE:S)
+17108,2026-03-16 12:33,2026-03-16,META,MSFT|NBIS|NVDA,real news,23.51,0.772,0.954,Nebius Has $46 Billion In Deals And A $28 Billion Market Cap - Nebius Group (NASDAQ:NBIS)
+17109,2026-03-16 13:33,2026-03-16,META,NBIS|NVDA|AMD,real news,23.51,0.772,0.954,Nebius’ $27 Billion Meta Deal Rewrites Its Revenue Outlook | Investing.com
+17105,2026-03-16 14:30,2026-03-16,NVDA,,real news,23.51,0.772,0.954,NVIDIA DLSS 5 Delivers AI-Powered Breakthrough in Visual Fidelity for Games
+17124,2026-03-16 19:12,2026-03-16,ADBE,AMZN|META|MSFT|NVDA,real news,23.51,0.772,0.954,Nvidia Highlights $1 Trillion Opportunity: Jensen Huang Puts 13-Digit Figure In Reach - NVIDIA (NASDAQ:NV
+17126,2026-03-16 19:15,2026-03-16,NVDA,,real news,23.51,0.772,0.954,EXL advances EXLerate.ai agentic AI platform to support enterprise-scale adoption with NVIDIA technologies
+17129,2026-03-16 20:51,2026-03-16,NVDA,TER,real news,23.51,0.772,0.954,"Skild AI Expands Generalized Robot Intelligence Across Industries With ABB Robotics, Universal Robots, and NVIDIA"
+17131,2026-03-17 02:00,2026-03-17,NVDA,,real news,22.37,0.71,0.899,Tecan to create Data-Driven Labs with NVIDIA
+17134,2026-03-17 03:00,2026-03-17,NVDA,STM,real news,22.37,0.71,0.899,STMicroelectronics expands 800 VDC AI datacenter power conversion portfolio with new 12V and 6V architectures in collaboration with NVIDIA
+17138,2026-03-17 05:03,2026-03-17,GOOG,GOOGL,real news,22.37,0.71,0.899,Crypto Prediction Platform Polymarket Blocked In Argentina For Facilitating Unauthorized Betting: Report
+17143,2026-03-17 05:26,2026-03-17,NOK,NVDA,real news,22.37,0.71,0.899,"Nvidia, T-Mobile Power Next Wave Of Smart Cities With Edge AI - Nokia (NYSE:NOK), NVIDIA (NASDAQ:NVDA)"
+17146,2026-03-17 06:00,2026-03-17,AMZN,,real news,22.37,0.71,0.899,Lulus Expands Digital Wholesale Footprint With Amazon Storefront and New Partnership With Victoria’s Secret
+17148,2026-03-17 06:02,2026-03-17,MU,NVDA,real news,22.37,0.71,0.899,Samsung Stock Jumps As Nvidia CEO Jensen Huang Confirms New AI Chip Production Deal - Apple (NASDAQ:AAPL)
+17154,2026-03-17 07:08,2026-03-17,CRWD,NVDA,real news,22.37,0.71,0.899,CrowdStrike Expands AI MDR Collaboration With NVIDIA - CrowdStrike Holdings (NASDAQ:CRWD)
+17157,2026-03-17 07:40,2026-03-17,NVDA,,real news,22.37,0.71,0.899,"NVIDIA Meets Healthcare - Roche To Build Massive AI Factory With NVIDIA To Speed Up Diagnostics, Therapie"
+17164,2026-03-17 10:37,2026-03-17,IBM,NVDA,real news,22.37,0.71,0.899,IBM Partners To Scale Enterprise AI With NVIDIA - IBM (NYSE:IBM)
+17161,2026-03-17 10:55,2026-03-17,MSFT,ORCL,real news,22.37,0.71,0.899,Pipefy Accelerates 2026 U.S. Presence: Rodrigo Paiva Joins as VP of Sales
+17165,2026-03-17 11:05,2026-03-17,DELL,NVDA,real news,22.37,0.71,0.899,Penguin Solutions Selected by Deepgram to Enable Deployment of Optimized AI Inference Infrastructure for
+17186,2026-03-17 19:09,2026-03-17,MSFT,,real news,22.37,0.71,0.899,MediaTek Develops Active Optical Cable Technology with Microsoft Research to Deliver Significant Improvem
+17241,2026-03-19 02:00,2026-03-19,NOK,,real news,24.06,0.748,0.918,Nokia and Turkcell transform fixed network operations in Türkiye with proactive AI intelligence
+17255,2026-03-19 06:56,2026-03-19,NVDA,,real news,24.06,0.748,0.918,"Qnity Taps NVIDIA To Optimize Semiconductor Performance - Invesco S&P Spin-Off ETF (ARCA:CSD), NVIDIA (NA"
+17258,2026-03-19 08:40,2026-03-19,PLTR,,real news,24.06,0.748,0.918,Can AI Make Home Loans Cheaper? Palantir Thinks So - Palantir Technologies (NASDAQ:PLTR)
+17288,2026-03-19 13:39,2026-03-19,EQIX,,real news,24.06,0.748,0.918,"Land & Buildings Initiates Significant Position in Centerspace, a Midwest-Focused Apartment REIT | The Motley Fool"
+17297,2026-03-19 19:53,2026-03-19,GEV,,real news,24.06,0.748,0.918,Maxim Power Corp. Announces 2025 Fourth Quarter Financial and Operating Results
+18493,2026-04-16 01:55,2026-04-16,GEV,,real news,17.94,0.703,0.994,"Virtualware to Double Down on North America, now 40% of 2025 Revenue"
+18494,2026-04-16 02:01,2026-04-16,NOK,,real news,17.94,0.703,0.994,Nokia and Cinia partner to secure Finland’s critical infrastructure with advanced DDoS protection
+18495,2026-04-16 03:09,2026-04-16,AMZN,GOOG|GOOGL,real news,17.94,0.703,0.994,Kleene.ai Launches KAI Assistant — A Native AI Interface for Its Data and Analytics Platform
+18499,2026-04-16 06:00,2026-04-16,AMZN,GOOG|GOOGL|MSFT|ADBE,real news,17.94,0.703,0.994,SnapLogic Announces AI Gateway and Trusted Agent Identity to Power the Era of Digital Labor
+18505,2026-04-16 08:18,2026-04-16,GOOG,GOOGL,real news,17.94,0.703,0.994,Alphabet’s $122 Billion SpaceX Bombshell Just Surfaced In A Routine Alaska Filing - Alphabet (NASDAQ:GOOG
+18539,2026-04-16 17:08,2026-04-16,GOOG,GOOGL|CDNS,real news,17.94,0.703,0.994,Alphabet DeepMind Upgrade Adds New Angle to Automation Capex Outlook
+19072,2026-04-28 18:00,2026-04-28,SIMO,,real news,17.83,0.593,0.958,"Silicon Motion Announces Results for the Quarterly Period Ended March 31, 2026"
+19102,2026-04-29 09:12,2026-04-29,DELL,NVDA|ORCL|PLTR,real news,18.81,0.516,0.803,What's Going On With Nvidia Stock Today? - NVIDIA (NASDAQ:NVDA)
+19104,2026-04-29 11:33,2026-04-29,NVDA,,real news,18.81,0.516,0.803,"Gorilla Technology To Deploy 20,736 GPUs In India By 2026 - Gorilla Tech Gr (NASDAQ:GRRR)"
+19123,2026-04-29 16:23,2026-04-29,GOOG,GOOGL,real news,18.81,0.516,0.803,"Alphabet Stock Climbs After Q1 EPS Blows Past Estimates: Details - Alphabet (NASDAQ:GOOG), Alphabet (NASD"
+19126,2026-04-29 16:28,2026-04-29,PLTR,STX,real news,18.81,0.516,0.803,Ford Stock Drives Higher As Q1 Tops Estimates: What To Know - Ford Motor (NYSE:F)
+19130,2026-04-30 01:00,2026-04-30,GOOG,GOOGL,real news,16.89,0.591,0.855,Q1 2026 revenues
+19135,2026-04-30 03:28,2026-04-30,GOOG,GOOGL|META,real news,16.89,0.591,0.855,"Elon Musk Can Only Be Fired By Himself At SpaceX, Filing Shows Ahead Of IPO - Alphabet (NASDAQ:GOOG), Alp"
+19139,2026-04-30 04:44,2026-04-30,GOOG,GOOGL,real news,16.89,0.591,0.855,"Google 'Proudly' Defends Pentagon AI Ties Amid Internal Backlash: Report - Alphabet (NASDAQ:GOOG), Alphab"
+19148,2026-04-30 06:30,2026-04-30,NOK,,real news,16.89,0.591,0.855,Inseego to acquire Nokia's Fixed Wireless Access business to create a global wireless broadband leader -
+19154,2026-04-30 08:02,2026-04-30,AMZN,META|CBRS,real news,16.89,0.591,0.855,Amazon's AWS Bets Big On Agentic AI To Reinvent Software— CEO Matt Garman Says 'Everything Is Going To Be
+19175,2026-04-30 12:49,2026-04-30,PWR,,real news,16.89,0.591,0.855,Quanta Services Shares Rally On Record Infrastructure Demand - Quanta Services (NYSE:PWR)
+19192,2026-04-30 16:28,2026-04-30,WDC,,real news,16.89,0.591,0.855,Western Digital Stock Slips Even As Q3 Beats Expectations - Western Digital (NASDAQ:WDC)
+19247,2026-05-02 00:36,2026-05-01,AMZN,META|NVDA,real news,16.99,0.498,0.793,Meta Buys Robotics Startup Assured Robot Intelligence To Power Humanoid Push As $5 Trillion Market Race H
+19248,2026-05-02 00:59,2026-05-01,NVDA,,real news,16.99,0.498,0.793,Nvidia's China Exposure Back In Focus As Senator Coons Probes H200 Export Claims - NVIDIA (NASDAQ:NVDA)
+19296,2026-05-03 20:00,2026-05-01,AMAT,,real news,16.99,0.498,0.793,Applied Materials Broadens Advanced Packaging Portfolio with Acquisition of NEXX
+19306,2026-05-04 05:29,2026-05-04,AMAT,,real news,18.29,0.514,0.785,What's Going On With Applied Materials Stock Monday? - Applied Materials (NASDAQ:AMAT)
+19309,2026-05-04 06:23,2026-05-04,AMZN,,real news,18.29,0.514,0.785,"Why Is eBay Stock Soaring Monday? - eBay (NASDAQ:EBAY), GameStop (NYSE:GME)"
+19313,2026-05-04 08:00,2026-05-04,NVTS,,real news,18.29,0.514,0.785,Navitas Semiconductor Appoints Davin Lee as Independent Director to its Board
+19331,2026-05-04 11:29,2026-05-04,PLTR,,real news,18.29,0.514,0.785,AI Defense Spending Surge Puts a Premium on Proprietary Vision Tech -- and One Nasdaq Player Just Filed a
+19344,2026-05-04 13:28,2026-05-04,HUBB,,real news,18.29,0.514,0.785,What's Going On With Hubbell Stock Monday? - Hubbell (NYSE:HUBB)
+19350,2026-05-04 13:44,2026-05-04,AMD,NVDA|SMCI,real news,18.29,0.514,0.785,Nvidia's Forbidden Fruit: China Buyers Pay $1 Million Per Server - NVIDIA (NASDAQ:NVDA)
+19360,2026-05-04 16:35,2026-05-04,ON,,real news,18.29,0.514,0.785,"On Semiconductor Beats Q1 Earnings, Revenue Estimates — Stock Slides - ON Semiconductor (NASDAQ:ON)"
+19368,2026-05-05 01:35,2026-05-05,AMZN,GOOG|GOOGL|MSFT|ORCL,real news,17.38,0.529,0.829,Datalec Precision Installations Expands Middle East Footprint With New Saudi Arabia Entity
+19369,2026-05-05 04:00,2026-05-05,AMD,ARM|DELL|HPE|IBM|INTC|NVDA|ORCL,real news,17.38,0.529,0.829,"SPEC Releases the SPEC CPU 2026 Benchmark Suites to Address the Latest Advances in CPU, Memory, and Compiler Technology"
+19371,2026-05-05 04:42,2026-05-05,INTC,TSM,real news,17.38,0.529,0.829,"Apple Eyes US Chip Production With Intel, Samsung To Reduce TSMC Reliance: Report - Apple (NASDAQ:AAPL),"
+19370,2026-05-05 05:01,2026-05-05,AMZN,AVGO|GOOG|GOOGL|META|MSFT|NVDA,real news,17.38,0.529,0.829,"Roundhill Files for 'Magnificent Seven Plus' ETF With AI, Space Twist - Roundhill Magnificent Seven ETF ("
+19378,2026-05-05 07:01,2026-05-05,IREN,NVDA,real news,17.38,0.529,0.829,IREN Announces Acquisition of Mirantis to Strengthen AI Cloud Delivery Capabilities - IREN (NASDAQ:IREN)
+19387,2026-05-05 09:00,2026-05-05,AMD,ANET|AVGO|CRWD|INTC|NVDA,real news,17.38,0.529,0.829,"Broadcom Announces VMware Cloud Foundation 9.1, Enabling Secure and Cost-Effective Infrastructure for Production AI"
+19385,2026-05-05 09:05,2026-05-05,SOUN,,real news,17.38,0.529,0.829,SoundHound AI Launches Self-Learning Agentic AI Platform OASYS - SoundHound AI (NASDAQ:SOUN)
+19416,2026-05-05 13:45,2026-05-05,CLS,NVDA,real news,17.38,0.529,0.829,Canadian General Investments: Investment Update - Unaudited
+19420,2026-05-05 13:45,2026-05-05,AMD,AVGO|INTC|NVDA,real news,17.38,0.529,0.829,Broadcom Introduces Unified AI Cloud Infrastructure Solution - Broadcom (NASDAQ:AVGO)
+19419,2026-05-05 13:51,2026-05-05,MSFT,,real news,17.38,0.529,0.829,Sana Commerce nomme Brian Plackis Cheng au poste de PDG
+19432,2026-05-05 16:37,2026-05-05,SMCI,,real news,17.38,0.529,0.829,"Super Micro Stock Spikes After Q3 Earnings Beat, Strong Q4 Guidance - Super Micro Computer (NASDAQ:SMCI)"
+19431,2026-05-05 17:00,2026-05-05,AMZN,,real news,17.38,0.529,0.829,Cerence AI Files Complaint with the International Trade Commission Against Amazon
+19449,2026-05-06 05:44,2026-05-06,GOOG,GOOGL|NVDA,real news,17.39,0.567,0.868,Google Tests New AI Agent To Take On OpenClaw With Advanced Task Automation: Report - Alphabet (NASDAQ:GO
+19447,2026-05-06 07:06,2026-05-06,ASML,NVDA,real news,17.39,0.567,0.868,ASML CEO Says Jensen Huang 'Totally Right' On Exporting Products With An Eight-Generation Gap— Denies Top
+19452,2026-05-06 07:46,2026-05-06,ANET,,real news,17.39,0.567,0.868,Arista Lifts AI Revenue Target To $3.5 Billion After Q1 Beat - Arista Networks (NYSE:ANET)
+19455,2026-05-06 07:55,2026-05-06,DELL,NVDA,real news,17.39,0.567,0.868,TotalEnergies Pens AI Supercomputer Deal With Nvidia & Dell - TotalEnergies (NYSE:TTE)
+19454,2026-05-06 08:00,2026-05-06,APLD,SMCI,real news,17.39,0.567,0.868,ChronoScale Appoints Cenly Chen as Chief Executive Officer to Lead Next Phase of AI Compute Growth
+19524,2026-05-07 11:42,2026-05-07,AMZN,,real news,17.08,0.559,0.792,CMS To Offer Wegovy To Eligible Medicare Patients At $50 Monthly Copay Starting July 2026 - Novo Nordisk
+19523,2026-05-07 12:16,2026-05-07,AMZN,META|SMCI,real news,17.08,0.559,0.792,Coinbase Valuation Depends on Lower Costs as Trading Volumes Fall
+19532,2026-05-07 13:30,2026-05-07,GFS,,real news,17.08,0.559,0.792,GlobalFoundries Outlines Long-Term Growth Roadmap and Announces First-Ever Dividend at 2026 Investor Day
+19543,2026-05-07 16:15,2026-05-07,KLAC,,real news,17.08,0.559,0.792,KLA Corporation Announces Ten-to-One Stock Split and Quarterly Cash Dividend Payment - KLA (NASDAQ:KLAC)
+19544,2026-05-07 16:38,2026-05-07,IREN,,real news,17.08,0.559,0.792,IREN Expands AI Cloud Platform to Europe with Acquisition of Nostrum Group - IREN (NASDAQ:IREN)
+19539,2026-05-07 18:35,2026-05-07,IREN,NVDA,real news,17.08,0.559,0.792,IREN Secures $3.4bn AI Cloud Contract with NVIDIA
+19560,2026-05-08 09:00,2026-05-08,AVGO,ORCL|NBIS,real news,17.19,0.564,0.8,"CloudBolt Advances Its Cloud Management Platform With AI-Ready Control, Finer-Grained Governance, and Expanded Support for VMware Alternatives"
+19576,2026-05-08 14:10,2026-05-08,META,HUBB,real news,17.19,0.564,0.8,"Deal Dispatch: J.M. Smucker Considers Strategic Review, Meta Buys Assured Robot Intelligence, Buzzfeed On"
+19638,2026-05-10 08:00,2026-05-08,ADBE,AMD|ARM|AVGO|DDOG|GOOG|GOOGL|META|MSFT|NVDA|SMCI|TSM,real news,17.19,0.564,0.8,"Consumer Tech News (May 4- 8): Big Tech Gain On AI Momentum, Pentagon Awards $500M AI Contract & More - A"
+19659,2026-05-11 08:00,2026-05-11,GOOG,GOOGL,real news,18.38,0.569,0.79,"SEON Appoints Sagnik Nandy, CTO of Docusign, to Board of Directors"
+19668,2026-05-11 10:35,2026-05-11,AMD,AVGO|NVDA|CBRS,real news,18.38,0.569,0.79,"Nvidia, AMD, Broadcom And Now Cerebras: AI Chip Trade Gets A New Name - Advanced Micro Devices (NASDAQ:AM"
+19675,2026-05-11 12:12,2026-05-11,NVDA,TSM|CBRS|AMD|SMCI,real news,18.38,0.569,0.79,Cerebras’ $48 Billion IPO Tests the Market’s Inference Bet
+19695,2026-05-12 03:03,2026-05-12,AMZN,GOOG|GOOGL|MSFT,real news,17.99,0.536,0.771,OpenAI's IPO Dream Gets Massive Boost As Microsoft Reportedly Agrees To $38 Billion Revenue Cap— Nadella
+19696,2026-05-12 05:26,2026-05-12,META,,real news,17.99,0.536,0.771,"Meta Faces Fresh Controversy Over Facebook Scam Ads Exploiting Elderly Americans With Fake Trump, Oprah V"
+19713,2026-05-12 08:37,2026-05-12,AMZN,,real news,17.99,0.536,0.771,Amazon Takes On Walmart And Target With Aggressive 30-Minute Delivery Service: Which US Cities Qualify? -
+19715,2026-05-12 09:00,2026-05-12,AMZN,MSFT,real news,17.99,0.536,0.771,"Vapi raises $50M Series B as it reaches 1 billion calls, powering the next generation of enterprise voice AI"
+19731,2026-05-12 12:23,2026-05-12,ORCL,,real news,17.99,0.536,0.771,Oracle Expands Samsung Partnership To Boost Java Security - Oracle (NYSE:ORCL)
+19750,2026-05-12 16:09,2026-05-12,PLTR,,real news,17.99,0.536,0.771,"Palantir, Trump And Ukraine: Zelenskyy Signals Deeper Defense Tech Ties - Palantir Technologies (NASDAQ:P"
+19756,2026-05-13 03:17,2026-05-13,MSFT,,real news,17.87,0.59,0.887,"Inside Sam Altman's Dramatic Court Testimony: 'Complicated' Elon Musk Feelings, 'Hair-Raising' Tesla Talk"
+19773,2026-05-13 10:00,2026-05-13,NVDA,CBRS|AMD,real news,17.87,0.59,0.887,TSG Venture 50 Reaches Its First IPO with Cerebras Systems Listing
+19780,2026-05-13 11:17,2026-05-13,AMD,COHR|MRVL|MU|NVDA|AMZN,real news,17.87,0.59,0.887,Micron Got A New $950 Price Tag: BofA Raises 4 Other AI Chip Stocks - Micron Technology (NASDAQ:MU)
+19785,2026-05-13 12:54,2026-05-13,LNVGY,NVDA|QCOM,real news,17.87,0.59,0.887,"WeRide Q1 Revenue Jumps 58% As Global Robotaxi Fleet Hits 1,300 - WeRide (NASDAQ:WRD)"
+19795,2026-05-13 15:50,2026-05-13,NVDA,SMCI,real news,17.87,0.59,0.887,'Tip Of The Iceberg': Culper Research Targets Nvidia's Alleged China Problem - NVIDIA (NASDAQ:NVDA)
+19807,2026-05-13 21:02,2026-05-13,BELFA,BELFB,real news,17.87,0.59,0.887,Bel Fuse Inc. Announces Pricing of Upsized Public Offering of Class B Common Stock
+19819,2026-05-14 05:59,2026-05-14,AMZN,,real news,17.26,0.57,0.887,"Amazon Kills Rufus Chatbot, Rolls Out AI-Powered Alexa Shopping Assistant: Here's What To Know - Amazon.c"
+19833,2026-05-14 09:20,2026-05-14,NVDA,,real news,17.26,0.57,0.887,Ideal Power Reports First Quarter 2026 Financial Results - Ideal Power (NASDAQ:IPWR)
+19835,2026-05-14 10:22,2026-05-14,NVDA,CBRS,real news,17.26,0.57,0.887,Cerebras To Raise $5.55 Billion In Largest Nasdaq Debut Of 2026 - Cerebras Systems (NASDAQ:CBRS)
+19852,2026-05-14 13:50,2026-05-14,AMZN,,real news,17.26,0.57,0.887,Why Is Fiserv Stock Gaining Thursday? - Fiserv (NASDAQ:FISV)
+19857,2026-05-14 17:00,2026-05-14,GOOG,GOOGL,real news,17.26,0.57,0.887,NowVertical Signs $4M Three-Year AI and Google Cloud Agreement with Leading Latin American Fintech
+19880,2026-05-15 06:02,2026-05-15,AMZN,GOOG|GOOGL,real news,18.43,0.662,0.951,Tristan Thompson Reveals How NBA Dinners Around Warriors Games Landed Him An Anthropic Investment - Amazo
+19879,2026-05-15 06:19,2026-05-15,GOOG,GOOGL|META,real news,18.43,0.662,0.951,Meta's AI Chief Rejects 'Incorrect' Claims Of Mark Zuckerberg's Big-Money Talent Poaching: 'People Joined
+19908,2026-05-15 16:52,2026-05-15,NVDA,,real news,18.43,0.662,0.951,"SalesCloser Deepens Conversational AI Moat with Dedicated GPU Inference Cluster, Enabling Custom Model Fine-Tuning, Agentic Workflows, and Regulated-Industry Readiness"
+19911,2026-05-15 17:59,2026-05-15,NVDA,,real news,18.43,0.662,0.951,Axe Compute Inc. Reports First Quarter 2026 Financial Results and Provides Business Update
+19914,2026-05-16 02:36,2026-05-15,AMZN,GOOG|GOOGL|META|MSFT,real news,18.43,0.662,0.951,"NextEra Energy, Dominion In Talks To Create $400 Billion Utility Giant As Electricity Demand Surges Amid"
+19917,2026-05-16 04:09,2026-05-15,GOOG,GOOGL,real news,18.43,0.662,0.951,"OpenAI Merges ChatGPT And Codex, Taps Greg Brockman To Lead Product Strategy Ahead Of Potential IPO (UPDA"
+19920,2026-05-16 04:20,2026-05-15,NVT,,real news,18.43,0.662,0.951,nVent Announces Share Repurchase Authorization
+19946,2026-05-17 09:20,2026-05-15,AMAT,AMZN|CBRS|CSCO|META|MSFT|NVDA|PLTR|TSM|NOK,real news,18.43,0.662,0.951,"Consumer Tech News (May 11-15): Trump–Xi Talk Fails to Deliver Chip Deal, Elon Musk vs. OpenAI Trail & Mo"
+19969,2026-05-18 03:31,2026-05-18,GOOG,GOOGL|MSFT,real news,17.82,0.633,0.984,"Bill Gates Foundation Closes Microsoft Chapter, Offloads Last $3.2 Billion Stake - Microsoft (NASDAQ:MSFT"
+19980,2026-05-18 07:00,2026-05-18,IREN,,real news,17.82,0.633,0.984,IREN Acquires Awaken to Support Global Brand Growth
+19983,2026-05-18 07:00,2026-05-18,IREN,,real news,17.82,0.633,0.984,IREN Acquires Awaken to Support Global Brand Growth - IREN (NASDAQ:IREN)
+19999,2026-05-18 15:07,2026-05-18,AMZN,MSFT|NVDA|TSM|META|GOOGL|GOOG|KLAC|LRCX|ASML|AVGO,real news,17.82,0.633,0.984,"Dan Loeb Dumps Microsoft, Slashes Nvidia And Rail Stocks In Sweeping Q1 Portfolio Overhaul - Amazon.com ("
+20004,2026-05-18 15:55,2026-05-18,GOOG,GOOGL|META,real news,17.82,0.633,0.984,"Anthropic Buys Stainless, Acquiring Startup Behind OpenAI's Developer Libraries"
+20028,2026-05-19 06:09,2026-05-19,GOOG,GOOGL,real news,18.06,0.619,0.965,"What's Going On With Blackstone Stock Tuesday? - Blackstone (NYSE:BX), Alphabet (NASDAQ:GOOG), Alphabet ("
+20078,2026-05-19 16:15,2026-05-19,HPQ,,real news,18.06,0.619,0.965,HP Inc. Declares Dividend - HP (NYSE:HPQ)
+20074,2026-05-19 16:23,2026-05-19,KEYS,,real news,18.06,0.619,0.965,Keysight Stock Climbs On Record Q2 Earnings Beat: Details - Keysight Techs (NYSE:KEYS)
+20090,2026-05-20 04:12,2026-05-20,NVDA,,real news,17.44,0.582,0.917,Alibaba Takes Aim At Nvidia With New 3X Powerful AI Chip And Next-Gen LLM Model As China Tech War Heats U
+20103,2026-05-20 07:12,2026-05-20,CRWD,,real news,17.44,0.582,0.917,"CrowdStrike Expands In Germany, Boosts Falcon Platform Adoption - CrowdStrike Holdings (NASDAQ:CRWD)"
+20105,2026-05-20 08:12,2026-05-20,ADI,,real news,17.44,0.582,0.917,What's Going On With Analog Devices Stock Wednesday? - Analog Devices (NASDAQ:ADI)
+20146,2026-05-21 02:39,2026-05-21,AMZN,MSFT|NVDA|GOOGL|GOOG,real news,16.76,0.572,0.913,The Trillion-Dollar IPO Test: SpaceX and OpenAI Face Public Markets
+20148,2026-05-21 03:00,2026-05-21,GOOG,GOOGL|MSFT|DELL,real news,16.76,0.572,0.913,Audiencerate: Riccardo Fabbri Chief Technology Officer. Al via la fase AI-driven delle piattaforme per PMI e agenzie media
+20149,2026-05-21 03:00,2026-05-21,AMD,KEYS|LNVGY|NOK|SMCI,real news,16.76,0.572,0.913,Nokia launches AI networking lab to drive co-innovation with partners and accelerate next era of AI-native data center networking
+20150,2026-05-21 03:00,2026-05-21,GOOG,GOOGL|MSFT,real news,16.76,0.572,0.913,Audiencerate: Riccardo Fabbri Joins as Chief Technology Officer. The AI-Driven Phase of the Platforms for SMEs and Media Agencies Begins
+20159,2026-05-21 04:36,2026-05-21,INTC,NVDA,real news,16.76,0.572,0.913,NVIDIA's Next Gold Mine? Jensen Huang Sees 'Brand New' $200 Billion Opportunity In Vera CPUs - Intel (NAS
+20161,2026-05-21 07:12,2026-05-21,NBIS,NVDA,real news,16.76,0.572,0.913,NVIDIA-Backed Nebius Partners With Bloom Energy For AI Cloud Expansion - Nebius Group (NASDAQ:NBIS)
+20164,2026-05-21 08:18,2026-05-21,LNVGY,NOK|AMD|KEYS,real news,16.76,0.572,0.913,Nokia Targets AI Infrastructure Market With New Innovation Lab - Nokia (NYSE:NOK)
+20183,2026-05-21 13:51,2026-05-21,IBM,,real news,16.76,0.572,0.913,IBM Launches America's First Quantum Foundry - IBM (NYSE:IBM)
+20191,2026-05-21 16:34,2026-05-21,NVDA,,real news,16.76,0.572,0.913,"Webull Posts Q1 Revenue Beat, EPS In Line — Stock Fights Back - Webull (NASDAQ:BULL)"
+20197,2026-05-21 18:00,2026-05-21,AMZN,GOOG|GOOGL|META,real news,16.76,0.572,0.913,"Samba TV Launches Project Gravity, an Independent Data Activation Platform for the Agentic Era"
+20199,2026-05-21 18:44,2026-05-21,GOOG,GOOGL|MSFT,real news,16.76,0.572,0.913,Audiencerate : Riccardo Fabbri rejoint l’équipe en tant que directeur technique. Début de la phase pilotée par l’IA des plateformes pour PME et agences médias
+20198,2026-05-21 18:44,2026-05-21,GOOG,GOOGL|MSFT,real news,16.76,0.572,0.913,Audiencerate: Riccardo Fabbri wird Chief Technology Officer. Die KI-gesteuerte Phase der Plattformen für KMU und Medienagenturen beginnt
+20219,2026-05-22 06:56,2026-05-22,PWR,,real news,16.7,0.528,0.762,Quanta Services Announces Quarterly Cash Dividend and New $1 Billion Stock Repurchase Program - Quanta Se
+20258,2026-05-22 16:16,2026-05-22,SMCI,,real news,16.7,0.528,0.762,"NANO Nuclear Eyes AI Infrastructure Role With SMCI - Nano Nuclear Energy (NASDAQ:NNE), Super Micro Comput"
+20285,2026-05-23 12:50,2026-05-22,NVDA,LITE|GLW,real news,16.7,0.528,0.762,重要な発表：AGAE、東南アジアにおける希少な光ファイバーインフラのリーダー企業であるヒアルルートを買収するため株式を発行し、「光コンピューティング + 光伝送」を融合したグローバルAI光ネットワークプラットフォームへと変革、企業価値は40億米ドル (約6370億円)、基準価格1株あたり10.00米ドル (約1592円)
+20310,2026-05-24 09:36,2026-05-22,GOOG,GOOGL|META|MSFT|NVDA|TSM|KEYS|ADI|NOK|IBM|CRWD,real news,16.7,0.528,0.762,"Consumer Tech News (May 18-22): Meta Cuts 8,000 Jobs, Nvidia Posts Strong Earnings & More - Apple (NASDAQ"
+20383,2026-05-26 08:00,2026-05-26,MCHP,,real news,17.01,0.572,0.87,Microchip Launches 3.3 kV HV‑D3 mSiC® Power Modules to Enable Solid-State Transformers for AI Data Centers
+20387,2026-05-26 09:05,2026-05-26,META,MSFT,real news,17.01,0.572,0.87,TikTok Owner ByteDance Is Reportedly Offering AI Staff A Sweet Deal As Talent War Heats Up - Alibaba Gr H
+20432,2026-05-26 19:18,2026-05-26,IBM,,real news,17.01,0.572,0.87,Asset Workflows Secures Major Strategic Investment to Accelerate Growth Across Sectors and Regions
+20445,2026-05-27 05:00,2026-05-27,AMD,NVDA|SMCI|TSM,real news,16.29,0.559,0.806,Jensen Huang Says Nvidia Will Pour $150 Billion A Year Into 'Booming' AI Hub Taiwan - Advanced Micro Devi
+20459,2026-05-27 10:00,2026-05-27,NVDA,,real news,16.29,0.559,0.806,ResVR Launches AI-Powered Assistant to Transform How Buyers Design and Purchase Homes
+20480,2026-05-27 15:21,2026-05-27,AVGO,,real news,16.29,0.559,0.806,What's Going On With Broadcom Stock Wednesday? - Broadcom (NASDAQ:AVGO)
+20482,2026-05-27 16:20,2026-05-27,MRVL,,real news,16.29,0.559,0.806,Marvell Shares Climb After Q1 Results Beat Estimates: Details - Marvell Technology (NASDAQ:MRVL)
+20484,2026-05-27 16:31,2026-05-27,SNPS,,real news,16.29,0.559,0.806,Synopsys Stock Slips Despite Q2 Earnings Beat - Synopsys (NASDAQ:SNPS)
+20485,2026-05-27 16:45,2026-05-27,HPQ,,real news,16.29,0.559,0.806,HP Stock Mostly Flat After Q2 Results Beat Estimates: Details - HP (NYSE:HPQ)
+20491,2026-05-27 18:09,2026-05-27,DELL,MSFT,real news,16.29,0.559,0.806,"Dell Wins $9.7 Billion Pentagon Contract, Fueling Stock Rally - Dell Technologies (NYSE:DELL)"
+20503,2026-05-28 05:00,2026-05-28,MSFT,PANW,real news,15.74,0.558,0.777,"ESET Research APT Report: China-aligned groups spy in Venezuela and the Gulf, target AI robotics in S. Korea"
+20506,2026-05-28 06:04,2026-05-28,HPQ,,real news,15.74,0.558,0.777,Why Is HP Stock Falling Thursday? - HP (NYSE:HPQ)
+20512,2026-05-28 07:10,2026-05-28,MRVL,,real news,15.74,0.558,0.777,Marvell CEO Says Data Center Business Is 'On Fire' - Marvell Technology (NASDAQ:MRVL)
+20535,2026-05-28 12:51,2026-05-28,AMZN,SNOW,real news,15.74,0.558,0.777,Snowflake Deepens AWS Tie-Up As AI Data War With Databricks Escalates - Snowflake (NYSE:SNOW)
+20543,2026-05-28 14:10,2026-05-28,IBM,,real news,15.74,0.558,0.777,What's Going On With IBM Stock Thursday? - IBM (NYSE:IBM)
+20556,2026-05-28 16:40,2026-05-28,PATH,,real news,15.74,0.558,0.777,"UiPath Reports Mixed Q1: Earnings Miss, Revenue Beats - UiPath (NYSE:PATH)"
+20559,2026-05-28 17:56,2026-05-28,META,,real news,15.74,0.558,0.777,Meta Announces Quarterly Cash Dividend - Meta Platforms (NASDAQ:META)
+20564,2026-05-28 19:11,2026-05-28,MCHP,,real news,15.74,0.558,0.777,Essential Performance and Real-time Control Without the Baggage
+20567,2026-05-28 21:15,2026-05-28,NVDA,,real news,15.74,0.558,0.777,Infineon Joins NVIDIA's MGX™ AI Factory Ecosystem to Transform Power Delivery Architecture for Next-Gener
+20568,2026-05-28 22:47,2026-05-28,CARR,GEV,real news,15.74,0.558,0.777,AirJoule Technologies Announces $15.0 Million Registered Direct Offering of Common Stock
+20585,2026-05-29 07:52,2026-05-29,DELL,,real news,15.32,0.504,0.709,Dell Tells Some Of Its Biggest Customers It Can't Guarantee AI Server Prices For Years — Yet They're Sign
+20593,2026-05-29 10:16,2026-05-29,MSFT,,real news,15.32,0.504,0.709,OpenAI Gives Japan's Biggest Banks A Cybersecurity Weapon - Microsoft (NASDAQ:MSFT)
+20617,2026-05-29 17:00,2026-05-29,NVDA,,real news,15.32,0.504,0.709,Canborsa Launches Beta of the First Perpetual RWA DEX on Canton Network
