@@ -21,8 +21,9 @@ AFTER_HOURS_CLOSE = dtime(20, 0)
 
 AGGS_URL = "https://api.massive.com/v2/aggs/ticker/{ticker}/range/{multiplier}/{span}/{frm}/{to}"
 MAX_RETRIES = 4
-RETRY_BACKOFF = 1.5
+RETRY_BACKOFF = 2.0
 REQUEST_TIMEOUT = 30
+TRANSIENT_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 
 def _settings_key() -> str:
@@ -45,11 +46,14 @@ def get_json(url: str, params: dict) -> dict:
     for attempt in range(MAX_RETRIES):
         try:
             resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
-            if resp.status_code in (429, 500, 502, 503, 504):
+            if resp.status_code in TRANSIENT_STATUSES:
                 raise requests.HTTPError(f"transient {resp.status_code}", response=resp)
             resp.raise_for_status()
             return resp.json()
         except (requests.RequestException, ValueError) as exc:
+            resp_status = getattr(getattr(exc, "response", None), "status_code", None)
+            if resp_status is not None and resp_status not in TRANSIENT_STATUSES:
+                raise RuntimeError(f"Massive request failed for {url}: {exc!r}") from exc
             last = exc
             if attempt < MAX_RETRIES - 1:
                 _time.sleep(RETRY_BACKOFF * (2 ** attempt))

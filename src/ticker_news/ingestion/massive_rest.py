@@ -27,6 +27,7 @@ PAGE_LIMIT = 1000
 MAX_RETRIES = 4
 RETRY_BACKOFF = 2.0
 REQUEST_TIMEOUT = 30
+TRANSIENT_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 
 class MassiveAPIError(RuntimeError):
@@ -39,11 +40,14 @@ def _request(session: requests.Session, url: str, params: Optional[dict]) -> dic
     for attempt in range(MAX_RETRIES):
         try:
             resp = session.get(url, params=params, timeout=REQUEST_TIMEOUT)
-            if resp.status_code in (429, 500, 502, 503, 504):
+            if resp.status_code in TRANSIENT_STATUSES:
                 raise requests.HTTPError(f"transient {resp.status_code}", response=resp)
             resp.raise_for_status()
             return resp.json()
         except (requests.RequestException, ValueError) as exc:
+            resp_status = getattr(getattr(exc, "response", None), "status_code", None)
+            if resp_status is not None and resp_status not in TRANSIENT_STATUSES:
+                raise MassiveAPIError(f"Request to {url} failed: {exc}") from exc
             last_exc = exc
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_BACKOFF * (2 ** attempt))

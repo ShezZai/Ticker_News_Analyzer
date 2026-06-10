@@ -1,6 +1,53 @@
 from datetime import datetime, timedelta, timezone
 
-from ticker_news.ingestion.massive_rest import MassiveRestSource
+import pytest
+import requests
+
+from ticker_news.ingestion import massive_rest as mr
+from ticker_news.ingestion.massive_rest import MassiveAPIError, MassiveRestSource
+
+
+def _resp(status, payload=None):
+    class R:
+        status_code = status
+
+        def raise_for_status(self):
+            if status >= 400:
+                raise requests.HTTPError(f"{status}", response=self)
+
+        def json(self):
+            return payload or {}
+
+    return R()
+
+
+def _session(responses, calls):
+    class FakeSession:
+        def get(self, url, params=None, timeout=None):
+            calls.append(url)
+            return responses[len(calls) - 1]
+
+    return FakeSession()
+
+
+def test_request_does_not_retry_client_errors(monkeypatch):
+    calls = []
+    session = _session([_resp(404)], calls)
+    monkeypatch.setattr(mr.time, "sleep",
+                        lambda s: pytest.fail("sleep called for non-transient error"))
+    with pytest.raises(MassiveAPIError):
+        mr._request(session, "https://api.massive.com/news", None)
+    assert len(calls) == 1
+
+
+def test_request_retries_transient_then_succeeds(monkeypatch):
+    calls = []
+    sleeps = []
+    session = _session([_resp(503), _resp(200, {"results": [1]})], calls)
+    monkeypatch.setattr(mr.time, "sleep", lambda s: sleeps.append(s))
+    assert mr._request(session, "https://api.massive.com/news", None) == {"results": [1]}
+    assert len(calls) == 2
+    assert len(sleeps) == 1
 
 ARTICLE_A = {
     "article_url": "https://example.com/a",
