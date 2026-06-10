@@ -78,7 +78,7 @@ def tag(
 def load_universe(
     csv: Path = typer.Option(None, help="Universe CSV (default: repo-root consolidated CSV)."),
 ) -> None:
-    """Load the ticker → company/segment universe into ticker_data."""
+    """Load the ticker -> company/segment universe into ticker_data."""
     from ticker_news.enrichment import reference_data
 
     n = reference_data.load_universe(csv_path=csv or reference_data.DEFAULT_CSV)

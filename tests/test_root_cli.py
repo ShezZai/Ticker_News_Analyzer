@@ -104,6 +104,19 @@ def test_tag_command(monkeypatch):
     assert captured == {"only_missing": False, "build_index": False}
 
 
+def test_tag_command_defaults(monkeypatch):
+    captured = {}
+
+    def fake_tag_all(*, only_missing, build_index):
+        captured.update(only_missing=only_missing, build_index=build_index)
+        return 0
+
+    monkeypatch.setattr("ticker_news.enrichment.tagging.tag_all", fake_tag_all)
+    result = runner.invoke(cli.app, ["tag"])
+    assert result.exit_code == 0, result.output
+    assert captured == {"only_missing": True, "build_index": True}
+
+
 def test_load_universe_command(monkeypatch):
     captured = {}
     monkeypatch.setattr(

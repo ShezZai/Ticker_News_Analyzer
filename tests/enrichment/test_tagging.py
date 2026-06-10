@@ -20,7 +20,8 @@ def test_matcher_finds_cashtag_symbol():
 def test_ambiguous_symbol_needs_strict_context():
     find = build_matcher(DATA)
     assert "AI" not in find("AI is transforming everything, analysts say.")
-    assert "AI" in find("C3.ai (NYSE: AI) reported earnings.") or "AI" in find("$AI jumped 10%.")
+    assert "AI" in find("C3.ai (NYSE: AI) reported earnings.")
+    assert "AI" in find("$AI jumped 10%.")
 
 
 def test_compute_row_prefers_row_tickers():
@@ -37,3 +38,16 @@ def test_annotator_is_idempotent():
     annotate = build_annotator(DATA)
     once = annotate("NVDA reported strong results.")
     assert annotate(once) == once
+
+
+def test_compute_row_array_remainder_ordered_before_text_finds():
+    find = build_matcher(DATA)
+    primary, _segment, more_t, _more_s = compute_row(
+        ["NVDA", "AMD"],
+        "NVIDIA Corporation results. C3.ai (NYSE: AI) also reported.",
+        DATA,
+        find,
+    )
+    assert primary == "NVDA"
+    assert more_t[0] == "AMD"          # array remainder first
+    assert more_t.index("AMD") < more_t.index("AI")  # text-only finds after

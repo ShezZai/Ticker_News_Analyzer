@@ -1,4 +1,4 @@
-"""Text → vector for articles and queries.
+"""Text -> vector for articles and queries.
 
 Same model and truncation for stored vectors and search queries on purpose —
 do not fork the config. (text-embedding-3-small, unit-normalized, 1536 dims.)
