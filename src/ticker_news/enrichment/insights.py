@@ -118,9 +118,17 @@ def _box_chain():
 
 
 def generate_boxes(article_text: str, *, chain=None, config=None) -> tuple[list[str], str]:
-    """Run the analyst prompt over one article. Returns (boxes, model_used)."""
+    """Run the analyst prompt over one article. Returns (boxes, model_used).
+
+    NOTE: the prompt template is resolved via get_prompt() on each call; the
+    Langfuse client-side TTL cache absorbs the overhead. The chain itself is
+    lru_cached, so model config changes need a process restart.
+    """
+    from ticker_news.shared.prompts import get_prompt
+
     chain = chain if chain is not None else _box_chain()
-    result = chain.invoke(PROMPT_TEMPLATE.format(article=article_text[:MAX_ARTICLE_CHARS]), config=config)
+    template = get_prompt("extract-insights", PROMPT_TEMPLATE)
+    result = chain.invoke(template.format(article=article_text[:MAX_ARTICLE_CHARS]), config=config)
     return result["boxes"], result["model"]
 
 

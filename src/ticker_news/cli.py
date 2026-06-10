@@ -201,6 +201,19 @@ def backfill(
     typer.echo(f"backfill complete: {counts}")
 
 
+prompts_app = typer.Typer(help="Manage Langfuse prompt versions.")
+app.add_typer(prompts_app, name="prompts")
+
+
+@prompts_app.command("push")
+def prompts_push() -> None:
+    """Upsert the in-repo prompts to Langfuse with the production label."""
+    from ticker_news.shared import prompts as prompts_mod
+
+    n = prompts_mod.push_all()
+    typer.echo(f"pushed {n} prompt(s)")
+
+
 jobs_app = typer.Typer(help="Inspect and manage the pipeline job queue.")
 app.add_typer(jobs_app, name="jobs")
 

@@ -75,12 +75,19 @@ ARTICLE BODY:
 
 
 def build_classifier(model_name: str):
-    """prompt | structured-output Gemini, with retry on transient failures."""
+    """prompt | structured-output Gemini, with retry on transient failures.
+
+    NOTE: this function is lru_cached by _default_lite/_default_confirm, so
+    prompt updates from Langfuse take effect only after a process restart.
+    """
+    from ticker_news.shared.prompts import get_prompt
+
     llm = gemini_chat(model_name, timeout_s=GEMINI_TIMEOUT_S)
     structured = llm.with_structured_output(Classification).with_retry(
         stop_after_attempt=RETRIES, wait_exponential_jitter=True
     )
-    return ChatPromptTemplate.from_template(PROMPT_TEMPLATE) | structured
+    template = get_prompt("classify-article", PROMPT_TEMPLATE)
+    return ChatPromptTemplate.from_template(template) | structured
 
 
 @lru_cache(maxsize=1)

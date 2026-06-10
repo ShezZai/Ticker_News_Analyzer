@@ -270,6 +270,13 @@ def test_sentiment_command(monkeypatch):
     assert captured == {"limit": 10, "reprocess": False}
 
 
+def test_prompts_push_command(monkeypatch):
+    monkeypatch.setattr("ticker_news.shared.prompts.push_all", lambda: 6)
+    result = runner.invoke(cli.app, ["prompts", "push"])
+    assert result.exit_code == 0, result.output
+    assert "6" in result.output
+
+
 class _FakeConn:
     def close(self):
         pass
