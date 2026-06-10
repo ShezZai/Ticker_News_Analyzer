@@ -31,3 +31,11 @@ def test_read_jobs_parses_date_and_tickers(tmp_path):
     assert job.tickers == ["NVDA", "AMD"]
     assert job.published_utc == datetime(2024, 11, 1, 7, 20, tzinfo=timezone.utc)
     assert job.publisher == "Pub"
+
+
+def test_read_jobs_accepts_singular_ticker_column(tmp_path):
+    p = tmp_path / "c.csv"
+    p.write_text("ticker,article_url,published_utc,publisher_name\n"
+                 "NVDA,https://x.com/a,2024-11-01T07:20:00Z,Pub\n", encoding="utf-8")
+    job = list(read_jobs(str(p)))[0]
+    assert job.tickers == ["NVDA"]

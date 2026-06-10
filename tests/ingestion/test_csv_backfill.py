@@ -44,3 +44,35 @@ async def test_missing_optional_fields_are_none(csv_path):
 async def test_limit_caps_rows(csv_path):
     items = await _collect(CsvBackfillSource(csv_path, limit=1))
     assert len(items) == 1
+
+
+LEGACY_CSV = """\
+ticker,article_url,published_utc,sentiment,sentiment_reasoning,publisher_name
+NVDA,https://example.com/a,2026-01-02T03:04:05Z,positive,beats guidance,Benzinga
+AMD,https://example.com/a,2026-01-02T03:04:05Z,negative,loses share,Benzinga
+NVDA,https://example.com/b,2026-01-03T00:00:00Z,,,Reuters
+"""
+
+
+async def test_legacy_rows_merge_by_url_with_sentiments(tmp_path):
+    p = tmp_path / "legacy.csv"
+    p.write_text(LEGACY_CSV, encoding="utf-8")
+    items = await _collect(CsvBackfillSource(str(p)))
+    assert len(items) == 2
+    a = items[0]
+    assert a.url == "https://example.com/a"
+    assert a.tickers == ["NVDA", "AMD"]
+    assert a.source_meta["provider"] == "csv"
+    assert a.source_meta["sentiments"] == {
+        "NVDA": {"sentiment": "positive", "sentiment_reasoning": "beats guidance"},
+        "AMD": {"sentiment": "negative", "sentiment_reasoning": "loses share"},
+    }
+    b = items[1]
+    assert b.source_meta["sentiments"] == {}  # blank sentiment columns -> no entry
+
+
+async def test_limit_counts_articles_not_rows(tmp_path):
+    p = tmp_path / "legacy.csv"
+    p.write_text(LEGACY_CSV, encoding="utf-8")
+    items = await _collect(CsvBackfillSource(str(p), limit=1))
+    assert len(items) == 1 and items[0].tickers == ["NVDA", "AMD"]

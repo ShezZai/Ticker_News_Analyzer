@@ -23,7 +23,7 @@ def read_jobs(path: str) -> Iterator[ArticleJob]:
             url = (row.get("article_url") or "").strip()
             if not url:
                 continue
-            tickers = [t.strip() for t in (row.get("tickers") or "").split(",") if t.strip()]
+            tickers = [t.strip() for t in (row.get("tickers") or row.get("ticker") or "").split(",") if t.strip()]
             yield ArticleJob(
                 url=url,
                 tickers=tickers,
