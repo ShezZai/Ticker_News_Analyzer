@@ -56,3 +56,19 @@ def test_scrape_rejects_zero_concurrency(monkeypatch):
     result = runner.invoke(cli.app, ["scrape", "--csv", "x.csv", "--concurrency", "0"])
     assert result.exit_code != 0
     assert "yes" not in called
+
+
+def test_embed_command_passes_args(monkeypatch):
+    captured = {}
+
+    def fake_embed_all(*, batch_size, limit, reembed, build_index):
+        captured.update(batch_size=batch_size, limit=limit, reembed=reembed,
+                        build_index=build_index)
+        return 0
+
+    monkeypatch.setattr("ticker_news.embedding.pipeline.embed_all", fake_embed_all)
+    result = runner.invoke(
+        cli.app, ["embed", "--batch-size", "64", "--limit", "5", "--reembed", "--no-index"]
+    )
+    assert result.exit_code == 0, result.output
+    assert captured == {"batch_size": 64, "limit": 5, "reembed": True, "build_index": False}

@@ -31,3 +31,18 @@ def scrape(
     if concurrency is not None:
         settings = replace(settings, concurrency=concurrency)
     asyncio.run(pipeline.run(csv, settings, limit=limit, retry_errors=retry_errors))
+
+
+@app.command()
+def embed(
+    batch_size: int = typer.Option(256, min=1, help="Inputs per embeddings API request."),
+    limit: int | None = typer.Option(None, help="Only process the first N pending rows."),
+    reembed: bool = typer.Option(False, "--reembed", help="Recompute embeddings for every row."),
+    no_index: bool = typer.Option(False, "--no-index", help="Skip building the HNSW index."),
+) -> None:
+    """Embed articles missing an embedding into pgvector (resumable)."""
+    from ticker_news.embedding import pipeline
+
+    pipeline.embed_all(
+        batch_size=batch_size, limit=limit, reembed=reembed, build_index=not no_index
+    )
