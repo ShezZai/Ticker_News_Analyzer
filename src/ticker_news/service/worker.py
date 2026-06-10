@@ -115,8 +115,11 @@ async def serve(
     from ticker_news.scraping.store.db import Store
 
     scraper_settings = ScraperSettings()
-    store = Store(scraper_settings.db_dsn)
-    store.init_schema()
+    # One-shot setup store: only used for init_schema(), then closed immediately.
+    setup_store = Store(scraper_settings.db_dsn)
+    setup_store.init_schema()
+    setup_store.close()
+
     fetcher = Fetcher(scraper_settings)
     robots = (
         RobotsCache(scraper_settings.user_agent)
@@ -135,13 +138,6 @@ async def serve(
 
     class _ScrapeResources:
         pass
-
-    resources = _ScrapeResources()
-    resources.fetcher = fetcher
-    resources.store = store
-    resources.settings = scraper_settings
-    resources.limiter = limiter
-    resources.robots = robots
 
     wake = asyncio.Event()
     feed_done = asyncio.Event()
@@ -162,6 +158,17 @@ async def serve(
 
     async def worker_task(worker_id: int) -> None:
         conn = db.connect(vector=True)
+        # Each worker owns its own Store (one sync psycopg connection per worker;
+        # concurrent to_thread calls from different workers must not share a
+        # single sync connection).
+        worker_store = Store(scraper_settings.db_dsn)
+
+        resources = _ScrapeResources()
+        resources.fetcher = fetcher
+        resources.store = worker_store
+        resources.settings = scraper_settings
+        resources.limiter = limiter
+        resources.robots = robots
 
         def _runners() -> dict[str, StageRunner]:
             return {
@@ -189,6 +196,7 @@ async def serve(
                 ok = await process_article(job, runner_map, conn=conn)
                 processed["done" if ok else "failed"] += 1
         finally:
+            worker_store.close()
             conn.close()
 
     dsn = get_settings().database_url
@@ -206,6 +214,5 @@ async def serve(
             except (asyncio.CancelledError, Exception):
                 pass
         await fetcher.aclose()
-        store.close()
 
     return processed
