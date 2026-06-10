@@ -156,6 +156,13 @@ def _first_json_object(text: str) -> Optional[dict]:
     return None
 
 
+# NOTE: _extract_boxes/parse_boxes are not called by the structured-output
+# pipeline (ticker_news.enrichment.insights) — Gemini's JSON-schema mode
+# replaces raw-text repair. They are retained, tested, for repairing legacy
+# rows and any raw model output captured outside the chain. If still unused
+# after the research-tools port, delete in the cleanup phase.
+
+
 def _extract_boxes(completion: str) -> Optional[List[str]]:
     """Pull the ``boxes`` array out of the model's JSON completion.
 

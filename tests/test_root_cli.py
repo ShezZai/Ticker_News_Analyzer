@@ -135,7 +135,7 @@ def test_load_overviews_command(monkeypatch):
         captured.update(tickers=tickers, refresh=refresh, delay=delay)
 
     monkeypatch.setattr("ticker_news.enrichment.reference_data.load_overviews", fake_load)
-    result = runner.invoke(cli.app, ["load-overviews", "--tickers", "NVDA,AMD", "--refresh"])
+    result = runner.invoke(cli.app, ["load-overviews", "--tickers", "nvda,AMD", "--refresh"])
     assert result.exit_code == 0, result.output
     assert captured == {"tickers": ["NVDA", "AMD"], "refresh": True, "delay": 0.5}
 

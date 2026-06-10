@@ -13,7 +13,7 @@ import psycopg
 from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel
 
-from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE, gemini_chat
+from ticker_news.shared.llm import EMBED_DIM, GEMINI_FLASH, GEMINI_FLASH_LITE, gemini_chat
 
 try:  # optional progress bar
     from tqdm import tqdm
@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 GEMINI_TIMEOUT_S = 120.0
 MAX_ARTICLE_CHARS = 48_000
-EMBED_DIM = 1536
 RETRIES = 5  # lite-chain attempt count before handing off to flash fallback
 
 PROMPT_TEMPLATE = """You are an equity analyst extracting decision-useful insights from a news article.
@@ -447,7 +446,7 @@ def embed_missing(batch_size: int = 256, build_index: bool = True) -> int:
         for start in pbar:
             chunk = rows[start : start + batch_size]
             texts = [t for _, t in chunk]
-            embs = embed_texts(texts)
+            embs = embed_texts(texts, batch_size=batch_size)
             with conn.cursor() as cur:
                 cur.executemany(
                     "UPDATE public.article_insights SET embedding = %s WHERE id = %s",

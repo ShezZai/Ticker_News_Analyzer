@@ -94,7 +94,7 @@ def load_overviews(
     """Fetch Yahoo Finance company descriptions into ticker_overview."""
     from ticker_news.enrichment import reference_data
 
-    t = [x.strip() for x in tickers.split(",") if x.strip()] if tickers else None
+    t = [x.strip().upper() for x in tickers.split(",") if x.strip()] if tickers else None
     reference_data.load_overviews(tickers=t, refresh=refresh, delay=delay)
 
 
@@ -120,5 +120,5 @@ def insights(
     if not embed_only:
         mod.extract_all(reprocess=reprocess, limit=limit,
                         quote_threshold=quote_threshold, ids=id_list, workers=workers)
-    if not no_embed:
+    if embed_only or not no_embed:
         mod.embed_missing(build_index=not no_index)
