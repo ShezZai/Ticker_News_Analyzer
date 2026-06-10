@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Callable, List, Optional, Sequence, Tuple
 
 import psycopg
+from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel
 
 from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE, gemini_chat
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 GEMINI_TIMEOUT_S = 120.0
 MAX_ARTICLE_CHARS = 48_000
 EMBED_DIM = 1536
+RETRIES = 5  # lite-chain attempt count before handing off to flash fallback
 
 PROMPT_TEMPLATE = """You are an equity analyst extracting decision-useful insights from a news article.
 
@@ -91,22 +93,35 @@ class InsightBoxes(BaseModel):
 
 @lru_cache(maxsize=1)
 def _box_chain():
+    def _tagged(structured, model_name):
+        return structured | RunnableLambda(
+            lambda r, m=model_name: {"boxes": r.boxes, "model": m}
+        )
+
     lite = gemini_chat(GEMINI_FLASH_LITE, timeout_s=GEMINI_TIMEOUT_S)
     flash = gemini_chat(GEMINI_FLASH, timeout_s=GEMINI_TIMEOUT_S)
-    structured = lite.with_structured_output(InsightBoxes).with_retry(
-        stop_after_attempt=5, wait_exponential_jitter=True
+    lite_chain = _tagged(
+        lite.with_structured_output(InsightBoxes).with_retry(
+            stop_after_attempt=RETRIES, wait_exponential_jitter=True
+        ),
+        GEMINI_FLASH_LITE,
     )
-    fallback = flash.with_structured_output(InsightBoxes).with_retry(
-        stop_after_attempt=2, wait_exponential_jitter=True
+    flash_chain = _tagged(
+        flash.with_structured_output(InsightBoxes).with_retry(
+            stop_after_attempt=2, wait_exponential_jitter=True
+        ),
+        GEMINI_FLASH,
     )
-    return structured.with_fallbacks([fallback])
+    # NOTE: falls back on ANY lite-chain failure (legacy only swapped on 5xx/parse
+    # errors) — auth/quota errors will burn 5+2 attempts before surfacing.
+    return lite_chain.with_fallbacks([flash_chain])
 
 
-def generate_boxes(article_text: str, *, chain=None) -> list[str]:
-    """Run the analyst prompt over one article. Returns a list of box strings."""
+def generate_boxes(article_text: str, *, chain=None) -> tuple[list[str], str]:
+    """Run the analyst prompt over one article. Returns (boxes, model_used)."""
     chain = chain if chain is not None else _box_chain()
     result = chain.invoke(PROMPT_TEMPLATE.format(article=article_text[:MAX_ARTICLE_CHARS]))
-    return result.boxes
+    return result["boxes"], result["model"]
 
 
 # --------------------------------------------------------------------------- #
@@ -226,7 +241,7 @@ def annotate_box(stored_box: str, annotate: Optional[Callable[[str], str]]) -> s
 
 def _store_article_boxes(
     conn, aid, url, title, content, boxes, reprocess, quote_threshold, annotate=None,
-    model=GEMINI_FLASH_LITE,
+    model=GEMINI_FLASH_LITE,  # NOTE: callers must pass the actual producing model
 ) -> Tuple[int, int]:
     """Verbatimize quotes and write one article's boxes. Returns (n_boxes, dropped)."""
     from ticker_news.enrichment.insights_text import (
@@ -316,7 +331,7 @@ def extract_all(
             for fut in pbar:
                 aid, url, title, content = futures[fut]
                 try:
-                    boxes = fut.result()
+                    boxes, model_used = fut.result()
                 except Exception as exc:  # exhausted retries on a single article
                     n_failed += 1
                     logger.exception("article %s: %s", aid, exc)
@@ -325,7 +340,7 @@ def extract_all(
                 if boxes:
                     n_boxes, dropped = _store_article_boxes(
                         conn, aid, url, title, content, boxes, do_reprocess,
-                        quote_threshold, annotate=annotate,
+                        quote_threshold, annotate=annotate, model=model_used,
                     )
                     total_boxes += n_boxes
                     total_dropped += dropped

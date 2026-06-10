@@ -153,3 +153,52 @@ def test_insights_command_passes_args(monkeypatch):
     result = runner.invoke(cli.app, ["insights", "--limit", "3", "--workers", "2"])
     assert result.exit_code == 0, result.output
     assert captured["limit"] == 3 and captured["workers"] == 2
+
+
+def test_insights_fix_quotes_early_returns(monkeypatch):
+    called = {}
+    monkeypatch.setattr(
+        "ticker_news.enrichment.insights.fix_quotes",
+        lambda *, quote_threshold: called.setdefault("fix", quote_threshold),
+    )
+    monkeypatch.setattr(
+        "ticker_news.enrichment.insights.extract_all",
+        lambda **kw: called.setdefault("extract", True),
+    )
+    monkeypatch.setattr(
+        "ticker_news.enrichment.insights.embed_missing",
+        lambda **kw: called.setdefault("embed", True),
+    )
+    result = runner.invoke(cli.app, ["insights", "--fix-quotes", "--quote-threshold", "0.8"])
+    assert result.exit_code == 0, result.output
+    assert called == {"fix": 0.8}
+
+
+def test_insights_embed_only_skips_extraction(monkeypatch):
+    called = {}
+    monkeypatch.setattr(
+        "ticker_news.enrichment.insights.extract_all",
+        lambda **kw: called.setdefault("extract", True),
+    )
+    monkeypatch.setattr(
+        "ticker_news.enrichment.insights.embed_missing",
+        lambda **kw: called.setdefault("embed", True),
+    )
+    result = runner.invoke(cli.app, ["insights", "--embed-only"])
+    assert result.exit_code == 0, result.output
+    assert called == {"embed": True}
+
+
+def test_insights_no_embed_skips_embedding(monkeypatch):
+    called = {}
+    monkeypatch.setattr(
+        "ticker_news.enrichment.insights.extract_all",
+        lambda **kw: called.setdefault("extract", True),
+    )
+    monkeypatch.setattr(
+        "ticker_news.enrichment.insights.embed_missing",
+        lambda **kw: called.setdefault("embed", True),
+    )
+    result = runner.invoke(cli.app, ["insights", "--no-embed"])
+    assert result.exit_code == 0, result.output
+    assert called == {"extract": True}
