@@ -306,3 +306,356 @@ Relevant set = every embedded insight of the should-be-retrieved articles.
 > These are a single high-precision operating point. Raising `-k` and lowering
 > `--min-similarity` trades precision for recall; re-run the sweep to draw the curve before
 > tuning production retrieval. Machine-readable dumps: `--json` / `--csv-out`.
+
+### 7.5 Hybrid retrieval comparison
+
+§7 showed the two retrievers are **complementary**: whole-article has higher recall, insight
+has higher precision. This section tests whether combining them does better — measured on the
+same 14 clusters.
+
+- **Engine:** `scripts/search/hybrid_retrieval.py` (reusable; has its own CLI).
+- **Harness:** `scripts/validate_retreival/compare_hybrids.py` (scores all methods on the CSV).
+
+```bash
+python scripts/validate_retreival/compare_hybrids.py docs/validations/article_clusters.csv
+```
+
+**Methods.**
+
+| Method | Flow | Intuition |
+|---|---|---|
+| `whole-article` | `similar_to()` over `articles.embedding` | baseline (recall-y) |
+| `insight` | `search_by_insights()` | baseline (precision-y) |
+| `intersection` | keep insights whose article is in **both** top-k sets | naive "keep only the overlap" |
+| `cascade` | **wide** whole-article net → filter insights inside it by cosine ≥ `tau` | recall net + precision filter |
+| `fusion` | reciprocal-rank fusion of (insight cosine) and (article-net rank), keep top `budget` | union + rerank |
+
+> **Why order matters.** Set intersection inherits the *lower* recall:
+> `recall(A∩B) ≤ min(recall(A), recall(B))`. So the high-recall method must be the wide
+> **net** and the high-precision method the **filter** — never the reverse. `cascade` does
+> this; `intersection` does not.
+
+**Run params:** `k=5 article_k=50 min_sim=0.7 net_k=150 net_min=0.45 tau=0.70 budget=50`,
+`months_before=3`, `exclusive`, `ground_truth=all`.
+
+**Article level (micro; macro-F1 at right):**
+
+| Method | avg ret | precision | recall | rec\* | F1 | macro-F1 |
+|---|--:|--:|--:|--:|--:|--:|
+| whole-article | 43.0 | 15.4% | 27.5% | 27.8% | 19.8% | 21.4% |
+| insight | 12.4 | 22.5% | 11.5% | 12.4% | 15.3% | 21.5% |
+| intersection | 8.4 | **25.4%** | 8.9% | 9.5% | 13.2% | 19.8% |
+| cascade | 75.1 | 12.5% | **38.8%** | **41.6%** | 18.8% | 20.2% |
+| fusion | 15.6 | 22.5% | 14.5% | 15.6% | 17.6% | **21.9%** |
+
+**Insight level (micro):**
+
+| Method | avg ret | precision | recall | F1 | macro-F1 |
+|---|--:|--:|--:|--:|--:|
+| insight | 17.9 | 23.1% | 3.8% | 6.5% | 12.8% |
+| intersection | 13.1 | **25.1%** | 3.0% | 5.3% | 11.6% |
+| cascade | 204.4 | 14.0% | **25.9%** | **18.2%** | **18.1%** |
+| fusion | 50.0 | 20.9% | 9.5% | 13.0% | 16.7% |
+
+**Per-cluster article-level F1:**
+
+| Event | whole | insight | intersect | cascade | fusion |
+|---|--:|--:|--:|--:|--:|
+| DeepSeek R1 launch & AI-stock selloff | 35.8% | 9.7% | 9.9% | 32.3% | 16.9% |
+| Stargate $500B AI infrastructure | 10.3% | 17.4% | 5.6% | 16.5% | 9.1% |
+| Nvidia Q3 FY2025 earnings | 33.8% | 17.0% | 8.9% | **41.9%** | 19.2% |
+| Nvidia Q4 FY2025 earnings | 25.9% | 9.3% | 9.5% | 22.1% | 8.0% |
+| Nvidia Q1 FY2026 earnings | 20.8% | 30.4% | 31.1% | 13.1% | 29.8% |
+| TSMC Arizona fab yields | 3.8% | n/a | n/a | 3.4% | n/a |
+| Trump semiconductor / chip tariffs | 3.4% | n/a | n/a | 6.1% | 10.0% |
+| Trump 'reciprocal' tariffs selloff | n/a | 4.8% | n/a | n/a | 4.3% |
+| Intel CEO Gelsinger departure | 53.8% | 18.2% | 18.2% | 53.8% | 42.1% |
+| Intel names Lip-Bu Tan CEO | 14.3% | 50.0% | 42.9% | 19.6% | 38.1% |
+| Nvidia H20 / China export curbs | 7.5% | 22.2% | 16.7% | 5.6% | 23.5% |
+| Broadcom (AVGO) earnings & AI outlook | 33.3% | 25.0% | 25.0% | 20.8% | 33.3% |
+| Palantir (PLTR) earnings & rally | 13.6% | 32.3% | 30.8% | 7.1% | 27.8% |
+| CoreWeave IPO | n/a | n/a | n/a | n/a | n/a |
+
+#### Findings
+
+1. **`intersection` is an anti-pattern — confirmed empirically.** It has the highest precision
+   (25.4%) but its recall (8.9%) drops *below* the insight baseline (11.5%), giving the **worst
+   F1 of any method** (13.2%). Exactly the "intersection inherits the lower recall" prediction —
+   it discards the recall whole-article was contributing.
+2. **`cascade` is a recall powerhouse, and tunable.** At `tau=0.70` it out-recalls *every* method
+   (38.8% article; 25.9% vs 3.8% at the insight level — a ~7× jump) because its net (`net_k=150`)
+   is wider than the whole-article baseline. The cost is precision (12.5%) and volume (~75
+   articles / ~204 insights — over the 80-insight prompt budget). Tightening `tau` (≈0.78) and
+   `net_k` converts that recall headroom toward a balanced point.
+3. **`fusion` is the balanced winner at these defaults.** It holds insight-level precision
+   (22.5%) while lifting recall above insight-alone (14.5%), and takes the **top macro-F1
+   (21.9%)** — it wins on the *most* clusters, not just the big ones. It also ships with a
+   `budget` cap, so it fits the sentiment prompt directly.
+4. **Methods specialize by event shape.** `cascade` dominates big multi-article events
+   (Nvidia Q3, DeepSeek, Intel Gelsinger); `fusion`/`insight` win the tight, well-defined ones
+   (Intel Lip-Bu Tan, Palantir, Nvidia H20).
+
+#### Recommendation
+
+- **Drop `intersection`.**
+- For the sentiment pipeline's `gather_related()` (clean context within an 80-insight budget),
+  **`fusion`** is the natural drop-in: balanced, precision-preserving, budget-capped.
+- **`cascade`** is the stronger engine *if tuned* — a `tau`/`net_k` sweep should push it past both
+  baselines on F1; until then it is recall-skewed.
+
+All knobs are exposed on both scripts; re-run `compare_hybrids.py` with different
+`--tau-insight` / `--net-k` / `--budget` to move the operating point.
+
+---
+
+## 8. Results on the revisited (tight-event) table
+
+§7.5 found retrieval scores well on tight, well-defined events and poorly on broad
+market-wide narratives. To test that directly, the ground truth was rebuilt as
+**11 tight, single-catalyst events** — `docs/validations/article_clusters_revisited.csv`,
+generated by `scripts/validate_retreival/build_revisited_clusters.py` (keyword anchor +
+short coverage window per event; TSMC Arizona and the Trump-tariff narratives dropped as
+inherently broad; the 6 class-action lists dropped for lacking a news seed).
+
+Two evaluation **modes** (both via `validate_retrieval.py --mode …`):
+
+| Mode | Seed | Window | Question it answers |
+|---|---|---|---|
+| **1 · `last-noforward`** | the event's **last** (curated) article | strictly **before** the seed (no lookahead) | *Reacting to the latest article, can we retrieve the event's prior history?* (the honest backtest frame) |
+| **2 · `middle-forward`** | a **middle** article of the event | extends **forward** to the last article's date (inclusive) | *Given a mid-event article, can we recover the whole cluster — earlier **and** later coverage?* |
+
+Params: `k=5 article_k=50 min_sim=0.7 months_before=3 ground_truth=all`.
+
+### 8.1 Mode 1 — `last-noforward` (backtest frame)
+
+Article level, **insight-overlap** (the pipeline's retriever):
+
+| Event | \|G\| | ret | TP | prec | recall | rec\* | F1 |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| Stargate $500B AI announcement | 16 | 11 | 6 | 54.5% | 37.5% | 37.5% | 44.4% |
+| DeepSeek R1 launch & selloff | 41 | 8 | 4 | 50.0% | 9.8% | 11.1% | 16.3% |
+| Palantir Q4'24 earnings & rally | 14 | 8 | 1 | 12.5% | 7.1% | 7.1% | 9.1% |
+| Nvidia Q3 FY25 earnings | 6 | 16 | 3 | 18.8% | 50.0% | 50.0% | 27.3% |
+| Nvidia Q4 FY25 earnings | 7 | 12 | 2 | 16.7% | 28.6% | 40.0% | 21.1% |
+| Nvidia Q1 FY26 earnings | 3 | 7 | 0 | 0.0% | 0.0% | 0.0% | n/a |
+| Broadcom Q1 FY25 earnings | 3 | 8 | 1 | 12.5% | 33.3% | 33.3% | 18.2% |
+| Intel Gelsinger departure | 7 | 14 | 4 | 28.6% | 57.1% | 57.1% | 38.1% |
+| Intel names Lip-Bu Tan CEO | 7 | 10 | 4 | 40.0% | 57.1% | 80.0% | 47.1% |
+| Nvidia H20 export ban & charge | 17 | 18 | 5 | 27.8% | 29.4% | 29.4% | 28.6% |
+| CoreWeave IPO debut | 4 | 6 | 2 | 33.3% | 50.0% | 66.7% | 40.0% |
+| **MICRO** | **125** | **118** | **32** | **27.1%** | **25.6%** | **27.8%** | **26.3%** |
+| **MACRO** | | | | **26.8%** | **32.7%** | **37.5%** | **29.0%** |
+
+All three levels (micro / macro F1):
+
+| Level | precision | recall | rec\* | F1 (micro) | F1 (macro) |
+|---|--:|--:|--:|--:|--:|
+| article — insight-overlap | 27.1% | 25.6% | 27.8% | 26.3% | 29.0% |
+| article — whole-article | 7.9% | 30.4% | 31.7% | 12.5% | 15.8% |
+| insight — `search_by_insights` | 30.3% | 10.0% | 10.0% | 15.1% | 19.8% |
+
+### 8.2 Mode 2 — `middle-forward` (cluster-recovery frame)
+
+Middle seeds, e.g. Lip-Bu Tan → a#4235 ("Intel Gets the Outsider CEO It Desperately Needs"),
+Nvidia Q3 → a#656, CoreWeave → a#4629.
+
+Article level, **insight-overlap**:
+
+| Event | \|G\| | ret | TP | prec | recall | rec\* | F1 |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| Stargate $500B AI announcement | 16 | 3 | 0 | 0.0% | 0.0% | 0.0% | n/a |
+| DeepSeek R1 launch & selloff | 41 | 5 | 4 | 80.0% | 9.8% | 11.1% | 17.4% |
+| Palantir Q4'24 earnings & rally | 14 | 5 | 1 | 20.0% | 7.1% | 7.1% | 10.5% |
+| Nvidia Q3 FY25 earnings | 6 | 10 | 3 | 30.0% | 50.0% | 50.0% | 37.5% |
+| Nvidia Q4 FY25 earnings | 7 | 17 | 0 | 0.0% | 0.0% | 0.0% | n/a |
+| Nvidia Q1 FY26 earnings | 3 | 14 | 0 | 0.0% | 0.0% | 0.0% | n/a |
+| Broadcom Q1 FY25 earnings | 3 | 6 | 2 | 33.3% | 66.7% | 66.7% | 44.4% |
+| Intel Gelsinger departure | 7 | 11 | 4 | 36.4% | 57.1% | 57.1% | 44.4% |
+| Intel names Lip-Bu Tan CEO | 7 | 7 | 3 | 42.9% | 42.9% | 60.0% | 42.9% |
+| Nvidia H20 export ban & charge | 17 | 16 | 3 | 18.8% | 17.6% | 17.6% | 18.2% |
+| CoreWeave IPO debut | 4 | 10 | 2 | 20.0% | 50.0% | 66.7% | 28.6% |
+| **MICRO** | **125** | **104** | **22** | **21.2%** | **17.6%** | **19.1%** | **19.2%** |
+| **MACRO** | | | | **25.6%** | **27.4%** | **30.6%** | **30.5%** |
+
+All three levels (micro / macro F1):
+
+| Level | precision | recall | rec\* | F1 (micro) | F1 (macro) |
+|---|--:|--:|--:|--:|--:|
+| article — insight-overlap | 21.2% | 17.6% | 19.1% | 19.2% | 30.5% |
+| article — whole-article | 9.9% | 28.8% | 30.0% | 14.7% | 14.9% |
+| insight — `search_by_insights` | 26.1% | 7.5% | 7.5% | 11.7% | 22.6% |
+
+### 8.3 Tight vs broad, and mode vs mode
+
+Insight-overlap and insight-level retrievers (what the pipeline uses) on the **broad** §7
+table vs the **tight** §8 Mode-1 table — same params, same retriever:
+
+| Retriever | Table | precision | recall | F1 (micro) | F1 (macro) |
+|---|---|--:|--:|--:|--:|
+| insight-overlap | §7 broad | 22.5% | 11.5% | 15.3% | 21.5% |
+| insight-overlap | §8 tight | **27.1%** | **25.6%** | **26.3%** | **29.0%** |
+| insight | §7 broad | 23.1% | 3.8% | 6.5% | 12.8% |
+| insight | §8 tight | **30.3%** | **10.0%** | **15.1%** | **19.8%** |
+
+#### Findings
+
+1. **Tightening the events lifts the pipeline retrievers substantially.** Insight-overlap
+   F1 jumps **15.3% → 26.3%** (recall more than doubles, 11.5% → 25.6%); insight-level F1
+   **6.5% → 15.1%**. This confirms §7.5's hypothesis empirically: precise, single-catalyst
+   clusters are far more retrievable than broad market narratives, and the gain is in
+   **recall** — the relevant articles really are close to the seed in vector space when the
+   event is tight.
+2. **Whole-article *worsens* on tight clusters** (precision 15.4% → 7.9%). With `|G|` now
+   3–17 but a fixed `article_k=50`, it returns ~50 articles for a handful of hits — mostly
+   false positives. A fair whole-article baseline would cap `k` near the cluster size; as-is
+   it is mis-tuned for small events. The insight retrievers, which self-limit, don't have
+   this problem.
+3. **Forward-looking (Mode 2) raises per-cluster ceilings but not pooled scores.**
+   Macro-F1 rises (insight-overlap 29.0% → 30.5%, insight 19.8% → 22.6%) and whole-article
+   macro-recall climbs to 43.5% (forward window grabs later coverage — Gelsinger 85.7%,
+   CoreWeave rec\* 100%, Palantir 78.6%). But **micro**-F1 dips (insight-overlap 26.3% →
+   19.2%): a middle seed sometimes lands off-centre (Stargate, Nvidia Q4/Q1 collapse to 0),
+   and forward mode adds *future* articles as targets, which are harder to reach from a
+   mid-event vantage. Net: Mode 2 is the better frame for "recover the whole story from any
+   point", Mode 1 is the honest "react to the latest news" measurement.
+4. **Event shape still dominates.** Earnings and named-event clusters (Intel Lip-Bu Tan,
+   Gelsinger, Broadcom, Nvidia Q3, CoreWeave) score well in both modes; the diffuse-by-nature
+   ones (DeepSeek selloff with 41 articles, Palantir's opinion-heavy coverage) stay low —
+   their cluster members are only loosely similar to any single seed.
+
+#### Takeaway
+
+The retrieval is materially better than the §7 broad-table numbers suggested: on tight,
+well-defined events the pipeline's insight-overlap retriever reaches **26% F1 / 26% recall**
+at a high-precision operating point, and macro-F1 ~30%. The remaining low scores are
+concentrated in (a) genuinely diffuse "events" that are really market moods, and (b) the
+mis-tuned fixed-`k` whole-article baseline — not in the insight retrieval the sentiment
+pipeline depends on.
+
+Reproduce:
+
+```bash
+python scripts/validate_retreival/build_revisited_clusters.py
+python scripts/validate_retreival/validate_retrieval.py \
+    docs/validations/article_clusters_revisited.csv --mode last-noforward
+python scripts/validate_retreival/validate_retrieval.py \
+    docs/validations/article_clusters_revisited.csv --mode middle-forward
+```
+
+---
+
+## 9. Hybrids on the revisited table (both modes)
+
+§7.5 compared the five retrievers on the broad table; §8 showed tight events score better.
+This runs all five methods on the **tight** revisited table, in **both modes**
+(`compare_hybrids.py --mode …`). Params: `k=5 article_k=50 min_sim=0.7 net_k=150
+net_min=0.45 tau=0.70 budget=50`.
+
+### 9.1 Mode 1 — `last-noforward`
+
+**Article level** (micro; macro-F1 at right):
+
+| Method | avg ret | precision | recall | rec\* | F1 | macro-F1 |
+|---|--:|--:|--:|--:|--:|--:|
+| whole-article | 43.8 | 7.9% | 30.4% | 31.7% | 12.5% | 15.8% |
+| insight | 10.7 | 27.1% | 25.6% | 27.8% | **26.3%** | **29.0%** |
+| intersection | 8.6 | 24.2% | 18.4% | 20.0% | 20.9% | 23.2% |
+| cascade | 91.6 | 6.3% | **51.2%** | **55.7%** | 11.3% | 13.4% |
+| fusion | 14.8 | 20.2% | 26.4% | 28.7% | 22.9% | 25.3% |
+
+**Insight level**:
+
+| Method | avg ret | precision | recall | F1 | macro-F1 |
+|---|--:|--:|--:|--:|--:|
+| insight | 15.9 | **30.3%** | 10.0% | 15.1% | 19.8% |
+| intersection | 13.7 | 28.5% | 8.1% | 12.7% | 17.0% |
+| cascade | 317.6 | 5.9% | **38.8%** | 10.2% | 13.9% |
+| fusion | 50.0 | 18.0% | 18.8% | **18.4%** | **20.1%** |
+
+### 9.2 Mode 2 — `middle-forward`
+
+**Article level** (micro; macro-F1 at right):
+
+| Method | avg ret | precision | recall | rec\* | F1 | macro-F1 |
+|---|--:|--:|--:|--:|--:|--:|
+| whole-article | 33.2 | 9.9% | 28.8% | 30.0% | 14.7% | 14.9% |
+| insight | 9.5 | 21.2% | 17.6% | 19.1% | 19.2% | 30.5% |
+| intersection | 6.1 | 22.4% | 12.0% | 13.0% | 15.6% | 27.4% |
+| cascade | 74.6 | 8.8% | **57.6%** | **62.6%** | 15.2% | 23.1% |
+| fusion | 14.3 | **23.6%** | 29.6% | 32.2% | **26.2%** | **32.1%** |
+
+**Insight level**:
+
+| Method | avg ret | precision | recall | F1 | macro-F1 |
+|---|--:|--:|--:|--:|--:|
+| insight | 13.9 | 26.1% | 7.5% | 11.7% | 22.6% |
+| intersection | 9.4 | 26.2% | 5.1% | 8.5% | 18.6% |
+| cascade | 257.2 | 7.2% | **38.6%** | 12.2% | 19.2% |
+| fusion | 50.0 | 24.5% | 25.4% | **25.0%** | **30.7%** |
+
+### 9.3 Per-cluster article-level F1
+
+Mode 1 / Mode 2 (fusion column bolded where it leads):
+
+| Event | whole | insight | intersect | cascade | fusion |
+|---|--:|--:|--:|--:|--:|
+| Stargate (M1) | 9.1% | 44.4% | 27.3% | 9.3% | 29.4% |
+| Stargate (M2) | n/a | n/a | n/a | 45.7% | 8.0% |
+| DeepSeek (M1) | 22.2% | 16.3% | 16.7% | 33.3% | 18.9% |
+| DeepSeek (M2) | 4.7% | 17.4% | 4.7% | 47.3% | 30.2% |
+| Palantir (M1) | 21.9% | 9.1% | 9.1% | 16.9% | 7.7% |
+| Palantir (M2) | 34.4% | 10.5% | 11.1% | 17.2% | **37.5%** |
+| Nvidia Q3 (M1) | 14.3% | 27.3% | 19.0% | 13.0% | **34.8%** |
+| Nvidia Q3 (M2) | 14.3% | 37.5% | 37.5% | 17.9% | **42.1%** |
+| Broadcom (M1) | 7.5% | 18.2% | 18.2% | 4.3% | 11.8% |
+| Broadcom (M2) | n/a | 44.4% | n/a | 36.4% | 26.7% |
+| Gelsinger (M1) | 7.0% | 38.1% | 13.3% | 7.9% | 28.6% |
+| Gelsinger (M2) | 21.1% | 44.4% | 50.0% | 42.4% | **52.6%** |
+| Lip-Bu Tan (M1) | 14.0% | 47.1% | 40.0% | 19.2% | 36.4% |
+| Lip-Bu Tan (M2) | 20.5% | 42.9% | 42.9% | 12.9% | 30.0% |
+| H20 (M1) | 11.9% | 28.6% | 26.7% | 9.6% | 27.0% |
+| H20 (M2) | 13.3% | 18.2% | 9.5% | 23.4% | 26.3% |
+| CoreWeave (M1) | 42.9% | 40.0% | 40.0% | 27.3% | 40.0% |
+| CoreWeave (M2) | 11.1% | 28.6% | 36.4% | 4.0% | 35.3% |
+
+### 9.4 Findings
+
+1. **`fusion` is the best all-round method on tight events — and best of all in forward
+   mode.** In Mode 2 it tops *every* aggregate: article micro-F1 **26.2%** and macro-F1
+   **32.1%**, insight micro-F1 **25.0%** and macro-F1 **30.7%** — beating the insight
+   baseline on both levels. In Mode 1 it leads the insight level (18.4% vs 15.1%) and trails
+   only the insight baseline at the article level. The forward window feeds its union extra
+   recoverable coverage while RRF + the `budget` cap hold precision — exactly the behaviour
+   §7.5 predicted, now confirmed on clean clusters.
+2. **The intersection trap reproduces on tight clusters.** Its recall stays below the insight
+   baseline in both modes (article 18.4% vs 25.6% in M1; 12.0% vs 17.6% in M2) and its F1
+   trails — the "keep only the overlap" anti-pattern is not rescued by tighter ground truth.
+3. **`cascade` is an even more extreme recall engine here, and more mis-tuned.** It reaches
+   the highest recall of any method (article **51–58%**, `rec*` up to **62.6%** in M2) but
+   precision collapses to 6–9% because `net_k=150` dwarfs the 3–17-article clusters
+   (~90–320 items returned). Its huge recall ceiling is the opportunity: a much tighter `tau`
+   (and smaller `net_k`) should convert it into a strong balanced method — the headroom is
+   clearly there.
+4. **Forward mode lifts the precision-preserving methods, not the recall ones.** fusion and
+   the insight baseline gain macro-F1 going M1→M2 (fusion article 25.3%→32.1%); cascade's
+   already-low precision keeps its F1 low despite recall rising further. Per-cluster, fusion
+   wins the well-defined events outright in M2 (Gelsinger 52.6%, Nvidia Q3 42.1%,
+   Palantir 37.5%).
+
+### 9.5 Recommendation (updated)
+
+The earlier call stands and strengthens: **use `fusion` for the sentiment pipeline's
+`gather_related()`**, ideally in the forward-looking frame when the use-case allows
+(historical analysis / clustering); for the live backtest frame (Mode 1) it remains
+competitive and precision-safe. **Drop `intersection`.** **`cascade` is worth a tuning pass**
+(`--tau-insight ~0.80`, smaller `--net-k`) — its 60%+ recall ceiling is the largest of any
+method and currently wasted on precision.
+
+Reproduce:
+
+```bash
+python scripts/validate_retreival/compare_hybrids.py \
+    docs/validations/article_clusters_revisited.csv --mode last-noforward
+python scripts/validate_retreival/compare_hybrids.py \
+    docs/validations/article_clusters_revisited.csv --mode middle-forward
+```

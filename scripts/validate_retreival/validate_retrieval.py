@@ -239,28 +239,46 @@ def evaluate_cluster(conn, c: Cluster, args) -> Optional[ClusterResult]:
     if not c.later_ids:
         return None  # e.g. class-action clusters: no "later news" seed
 
-    facts = article_facts(conn, set(c.later_ids) | set(c.all_before) | set(c.news_before))
-
-    # seed = the latest-published of the later_news_article_ids that exists
-    later_known = [i for i in c.later_ids if i in facts and facts[i]["published_utc"]]
-    if not later_known:
-        return None
-    seed = max(later_known, key=lambda i: facts[i]["published_utc"])
-    seed_pub = facts[seed]["published_utc"]
-
-    since, until = _seed_window(seed_pub, args.months_before, args.exclusive)
-
-    # ground-truth article set (minus all the later/seed ids themselves)
     gt_col = c.news_before if args.ground_truth == "news" else c.all_before
-    relevant_articles = (set(gt_col) - set(c.later_ids))
-    relevant_articles.discard(seed)
+    event = (set(gt_col) | set(c.later_ids))  # every article of the event
+    facts = article_facts(conn, event | set(c.news_before))
 
-    # backfill facts for any GT ids not yet fetched
+    # insight-bearing, dated event articles, oldest -> newest
+    dated = sorted((i for i in event
+                    if facts.get(i) and facts[i]["published_utc"] and facts[i]["has_insights"]),
+                   key=lambda i: facts[i]["published_utc"])
+    if not dated:
+        return None
+    # "the last article" is the curated later_news_article_ids seed (title-central),
+    # falling back to the latest insight-bearing event article.
+    later_known = [i for i in c.later_ids
+                   if facts.get(i) and facts[i]["published_utc"] and facts[i]["has_insights"]]
+    last_id = max(later_known, key=lambda i: facts[i]["published_utc"]) if later_known else dated[-1]
+    last_pub = facts[last_id]["published_utc"]
+
+    if args.mode == "middle-forward":
+        # seed = a MIDDLE article; the window looks FORWARD to the last article's
+        # date, so retrieval may surface both earlier AND later event coverage.
+        mids = [i for i in dated if i != last_id]
+        seed = mids[len(mids) // 2] if mids else last_id
+        seed_pub = facts[seed]["published_utc"]
+        since, _ = _seed_window(seed_pub, args.months_before, exclusive=True)
+        until = last_pub.isoformat()
+        until_exclusive = False  # inclusive: up to and including the last article
+    else:  # "last-noforward" — react to the curated last article, no lookahead
+        seed = last_id
+        seed_pub = last_pub
+        since, until = _seed_window(seed_pub, args.months_before, exclusive=True)
+        until_exclusive = True
+
+    # ground truth = every other event article (both directions in forward mode)
+    relevant_articles = set(event)
+    relevant_articles.discard(seed)
     missing = [i for i in relevant_articles if i not in facts]
     if missing:
         facts.update(article_facts(conn, missing))
 
-    # retrievable GT (in DB, in window, with the needed vectors)
+    # retrievable GT: in the [since, until] window (per mode), with the vectors
     def _in_window(i: int) -> bool:
         f = facts.get(i)
         if not f or not f["published_utc"]:
@@ -268,7 +286,7 @@ def evaluate_cluster(conn, c: Cluster, args) -> Optional[ClusterResult]:
         p = f["published_utc"]
         if since and p.isoformat() < since:
             return False
-        return p < seed_pub  # strictly before the seed (no lookahead)
+        return p < seed_pub if until_exclusive else p <= last_pub
 
     retr_for_insights = {i for i in relevant_articles
                          if _in_window(i) and facts[i]["has_insights"]}
@@ -282,7 +300,7 @@ def evaluate_cluster(conn, c: Cluster, args) -> Optional[ClusterResult]:
     # ---- INSIGHT-level retrieval (also feeds insight-overlap article method) ----
     groups = search_by_insights(
         article_id=seed, k=args.k, since=since, until=until,
-        min_similarity=args.min_similarity, until_exclusive=args.exclusive, conn=conn,
+        min_similarity=args.min_similarity, until_exclusive=until_exclusive, conn=conn,
     )
     retrieved_insights: Set[int] = set()
     retrieved_articles_overlap: Set[int] = set()
@@ -295,14 +313,14 @@ def evaluate_cluster(conn, c: Cluster, args) -> Optional[ClusterResult]:
         ranked = related_articles(
             article_id=seed, k=args.top_articles, per_insight_k=args.k,
             since=since, until=until, min_similarity=args.min_similarity,
-            until_exclusive=args.exclusive, conn=conn,
+            until_exclusive=until_exclusive, conn=conn,
         )
         retrieved_articles_overlap = {ra.article_id for ra in ranked}
 
     # ---- WHOLE-ARTICLE retrieval ----
     whole_hits = similar_to(
         seed, k=args.article_k, since=since, until=until,
-        min_similarity=args.min_similarity, until_exclusive=args.exclusive, conn=conn,
+        min_similarity=args.min_similarity, until_exclusive=until_exclusive, conn=conn,
     )
     retrieved_articles_whole = {h.id for h in whole_hits}
 
@@ -361,10 +379,9 @@ def _pct(x: float) -> str:
 def print_report(results: List[ClusterResult], args) -> None:
     W = 112
     print("\n" + "=" * W)
-    print(f"  RETRIEVAL VALIDATION  |  {len(results)} cluster(s)  |  k={args.k} "
-          f"article_k={args.article_k}  min_sim={args.min_similarity}  "
-          f"months_before={args.months_before}  exclusive={args.exclusive}  "
-          f"ground_truth={args.ground_truth}")
+    print(f"  RETRIEVAL VALIDATION  |  mode={args.mode}  |  {len(results)} cluster(s)  |  "
+          f"k={args.k} article_k={args.article_k}  min_sim={args.min_similarity}  "
+          f"months_before={args.months_before}  ground_truth={args.ground_truth}")
     print("=" * W)
 
     for level, attr in [
@@ -459,6 +476,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                    help="strict pre-seed window on the exact timestamp (default on)")
     p.add_argument("--ground-truth", choices=["all", "news"], default="all",
                    help="which CSV column is the relevant set (default all)")
+    p.add_argument("--mode", choices=["last-noforward", "middle-forward"],
+                   default="last-noforward",
+                   help="last-noforward: seed=last article, no lookahead (backtest). "
+                        "middle-forward: seed=middle article, window extends forward to "
+                        "the last article's date (cluster recovery). Default last-noforward.")
     p.add_argument("--top-articles", type=int, default=None,
                    help="cap the insight-overlap article set to the top-N consolidated "
                         "(default: all source articles of the retrieved insights)")
