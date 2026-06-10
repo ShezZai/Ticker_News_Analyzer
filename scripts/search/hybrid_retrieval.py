@@ -73,15 +73,15 @@ DEF_TAU_INS = 0.70      # cascade: keep net insights with max-cos to a seed >= t
 DEF_RRF_C = 60          # fusion: reciprocal-rank-fusion constant
 DEF_BUDGET = 50         # fusion: how many insights to keep
 
-# `super` splits its two gates: a LOOSE article-net floor (0.55) fills the pool for
+# `two-phase-similarity` splits its two gates: a LOOSE article-net floor (0.55) fills the pool for
 # recall, while a TIGHTER insight gate (0.75) holds precision on what survives. This
 # precision-with-usable-recall balance beat the symmetric-0.7 point at the insight
 # level (see docs/validations/validate_retrieval.md §10.5).
-DEF_SUPER_NET_MIN_SIM = 0.55  # article-level cosine floor for super's net (loose: fill pool)
-DEF_SUPER_TAU_INS = 0.75      # insight-level cosine-to-seed floor for super (tight: precision)
-DEF_SUPER_BUDGET = 40         # super: how many reranked insights to keep
+DEF_TWO_PHASE_NET_MIN_SIM = 0.55  # article-level cosine floor for two-phase-similarity's net (loose: fill pool)
+DEF_TWO_PHASE_TAU_INS = 0.75      # insight-level cosine-to-seed floor for two-phase-similarity (tight: precision)
+DEF_TWO_PHASE_BUDGET = 40         # two-phase-similarity: how many reranked insights to keep
 
-METHODS = ("intersection", "cascade", "fusion", "super")
+METHODS = ("intersection", "cascade", "fusion", "two-phase-similarity")
 
 
 @dataclass
@@ -232,10 +232,10 @@ def retrieve_fusion(conn, seed_id, *, since, until, exclusive,
     )
 
 
-def retrieve_super(conn, seed_id, *, since, until, exclusive,
+def retrieve_two_phase_similarity(conn, seed_id, *, since, until, exclusive,
                    net_k, net_min_sim, tau_ins, rrf_c, budget,
                    k=DEF_K, min_sim=DEF_MIN_SIM) -> HybridResult:
-    """Two-stage 'super-hybrid':
+    """Two-stage 'two-phase-similarity':
 
       Stage 1 (cascade pool): a WIDE whole-article net -> keep the articles that
         have at least one insight with max-cosine-to-seed >= tau. This is the
@@ -255,11 +255,11 @@ def retrieve_super(conn, seed_id, *, since, until, exclusive,
     net_ids = list(art_rank)
     S, _seeds = _seed_matrix(conn, seed_id)
     if not net_ids or S.shape[0] == 0:
-        return HybridResult("super", seed_id, set(), set(), [], len(net_ids))
+        return HybridResult("two-phase-similarity", seed_id, set(), set(), [], len(net_ids))
 
     rows = _insights_for_articles(conn, net_ids)
     if not rows:
-        return HybridResult("super", seed_id, set(), set(), [], len(net_ids))
+        return HybridResult("two-phase-similarity", seed_id, set(), set(), [], len(net_ids))
     iids = [r[0] for r in rows]
     aids = [r[1] for r in rows]
     E = _norm_rows(np.vstack([np.asarray(r[2], dtype=np.float32) for r in rows]))
@@ -268,7 +268,7 @@ def retrieve_super(conn, seed_id, *, since, until, exclusive,
     # Stage 1 pool: articles with >= 1 insight clearing tau (cascade's article set)
     pool = {aids[i] for i in range(len(iids)) if icos[i] >= tau_ins}
     if not pool:
-        return HybridResult("super", seed_id, set(), set(), [], len(net_ids))
+        return HybridResult("two-phase-similarity", seed_id, set(), set(), [], len(net_ids))
 
     # Stage 2: fusion over the pool insights that THEMSELVES clear tau (the
     # relevant ones); a pool article's off-topic boxes (cosine < tau) are dropped.
@@ -285,7 +285,7 @@ def retrieve_super(conn, seed_id, *, since, until, exclusive,
     scored.sort(key=lambda t: t[2], reverse=True)
     kept = scored[:budget]
     return HybridResult(
-        method="super", seed_id=seed_id,
+        method="two-phase-similarity", seed_id=seed_id,
         insight_ids={t[0] for t in kept}, article_ids={t[1] for t in kept},
         scored=kept, net_size=len(net_ids),
         mutual={iid for iid, _a, _s in kept if iid in ann},
@@ -302,16 +302,16 @@ def retrieve(seed_id: int, method: str = "cascade", *,
     """Dispatch to a hybrid method. Resolves the no-lookahead window from the seed.
 
     ``net_min_sim``/``tau_ins``/``budget`` default per method when left as None:
-    ``super`` uses a LOOSE article net (0.55) with a TIGHT insight gate (0.75) and
+    ``two-phase-similarity`` uses a LOOSE article net (0.55) with a TIGHT insight gate (0.75) and
     a 40-insight budget; the others use the wide-net defaults (0.45 / 0.70) and a
     50 budget.
     """
     if net_min_sim is None:
-        net_min_sim = DEF_SUPER_NET_MIN_SIM if method == "super" else DEF_NET_MIN_SIM
+        net_min_sim = DEF_TWO_PHASE_NET_MIN_SIM if method == "two-phase-similarity" else DEF_NET_MIN_SIM
     if tau_ins is None:
-        tau_ins = DEF_SUPER_TAU_INS if method == "super" else DEF_TAU_INS
+        tau_ins = DEF_TWO_PHASE_TAU_INS if method == "two-phase-similarity" else DEF_TAU_INS
     if budget is None:
-        budget = DEF_SUPER_BUDGET if method == "super" else DEF_BUDGET
+        budget = DEF_TWO_PHASE_BUDGET if method == "two-phase-similarity" else DEF_BUDGET
     own = conn is None
     conn = conn or get_conn()
     try:
@@ -335,8 +335,8 @@ def retrieve(seed_id: int, method: str = "cascade", *,
                                    exclusive=exclusive, k=k, min_sim=min_sim,
                                    net_k=net_k, net_min_sim=net_min_sim,
                                    rrf_c=rrf_c, budget=budget)
-        if method == "super":
-            return retrieve_super(conn, seed_id, since=since, until=until,
+        if method == "two-phase-similarity":
+            return retrieve_two_phase_similarity(conn, seed_id, since=since, until=until,
                                   exclusive=exclusive, net_k=net_k,
                                   net_min_sim=net_min_sim, tau_ins=tau_ins,
                                   rrf_c=rrf_c, budget=budget, k=k, min_sim=min_sim)
@@ -360,14 +360,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--net-k", type=int, default=DEF_NET_K)
     p.add_argument("--net-min-similarity", type=float, default=None,
                    help=f"article net cosine floor (default {DEF_NET_MIN_SIM}; "
-                        f"{DEF_SUPER_NET_MIN_SIM} for --method super)")
+                        f"{DEF_TWO_PHASE_NET_MIN_SIM} for --method two-phase-similarity)")
     p.add_argument("--tau-insight", type=float, default=None,
                    help=f"insight cosine-to-seed floor (default {DEF_TAU_INS}; "
-                        f"{DEF_SUPER_TAU_INS} for --method super)")
+                        f"{DEF_TWO_PHASE_TAU_INS} for --method two-phase-similarity)")
     p.add_argument("--rrf-c", type=int, default=DEF_RRF_C)
     p.add_argument("--budget", type=int, default=None,
                    help=f"insights to keep (default {DEF_BUDGET}; "
-                        f"{DEF_SUPER_BUDGET} for --method super)")
+                        f"{DEF_TWO_PHASE_BUDGET} for --method two-phase-similarity)")
     args = p.parse_args(argv)
 
     res = retrieve(

@@ -22,8 +22,9 @@ Usage:
     python insight_sentiment.py 4235 --ticker INTC        # just one
     python insight_sentiment.py 4235 --months-before 3 --k 5
     python insight_sentiment.py 4235 --no-exclusive --show-context
-    python insight_sentiment.py 4235 --retrieval super              # hybrid retriever
-    python insight_sentiment.py 4235 --retrieval super --budget 30
+    python insight_sentiment.py 4235 --retrieval two-phase-similarity              # hybrid retriever
+    python insight_sentiment.py 4235 --retrieval two-phase-similarity --budget 30
+    python insight_sentiment.py 4235 --remove-unuseful              # screen context first
     python insight_sentiment.py 4235 --model gemini-2.5-flash-lite --json
 
 Requires GOOGLE_API_KEY (Gemini) in env / .env. The article + insight data come
@@ -50,7 +51,7 @@ from search_articles_by_insights import (  # noqa: E402
     InsightHit, SeedInsight, _seed_window, get_conn, insights_of, search_by_insights,
 )
 from hybrid_retrieval import (  # noqa: E402
-    DEF_NET_K, DEF_SUPER_BUDGET, DEF_SUPER_NET_MIN_SIM, DEF_SUPER_TAU_INS, retrieve,
+    DEF_NET_K, DEF_TWO_PHASE_BUDGET, DEF_TWO_PHASE_NET_MIN_SIM, DEF_TWO_PHASE_TAU_INS, retrieve,
 )
 
 load_dotenv()
@@ -65,7 +66,7 @@ DEFAULT_MONTHS_BEFORE = 3
 DEFAULT_K = 5
 DEFAULT_MIN_SIMILARITY = 0.7
 DEFAULT_RETRIEVAL = "insight"
-RETRIEVALS = ("insight", "super")
+RETRIEVALS = ("insight", "two-phase-similarity")
 ACTIONS = ["buy", "sell", "hold"]
 
 PROMPT_INSTRUCTIONS = """You are an equity analyst reacting to breaking news in real time.
@@ -180,19 +181,19 @@ def _load_insight_hits(conn, scored) -> List[InsightHit]:
     return hits[:MAX_RELATED]
 
 
-def gather_related_super(
+def gather_related_two_phase(
     conn, article_id: int, months_before: Optional[int], k: int,
     exclusive: bool, min_similarity: float, net_k: int, net_min_sim: float,
     tau_ins: float, budget: int,
 ) -> List[InsightHit]:
-    """Retrieve related prior insights via the two-stage 'super' hybrid retriever.
+    """Retrieve related prior insights via the two-stage 'two-phase-similarity' hybrid retriever.
 
-    Uses ``hybrid_retrieval.retrieve(method="super")`` -- a WIDE whole-article
+    Uses ``hybrid_retrieval.retrieve(method="two-phase-similarity")`` -- a WIDE whole-article
     net gated by an insight-cosine threshold, then RRF reranked -- and hydrates
     the kept insight ids into InsightHit rows, sorted earliest->latest.
     """
     res = retrieve(
-        article_id, method="super", months_before=months_before,
+        article_id, method="two-phase-similarity", months_before=months_before,
         exclusive=exclusive, k=k, min_sim=min_similarity, net_k=net_k,
         net_min_sim=net_min_sim, tau_ins=tau_ins, budget=budget, conn=conn,
     )
@@ -289,6 +290,100 @@ def ask_gemini(prompt: str, model: str, retries: int = 3) -> List[dict]:
     raise SystemExit(f"Gemini did not return a usable answer: {last}")
 
 
+SCREEN_INSTRUCTIONS = """You are curating background context for an equity analyst.
+
+Below is THE ARTICLE (breaking news) and a numbered list of RELATED PRIOR
+INSIGHTS retrieved from earlier coverage. Each insight shows the HEADLINE of the
+source article it was extracted from. Some of these prior insights are INCOHERENT
+(garbled text, stray fragments, boilerplate, or meaningless) and some are simply
+UNUSEFUL for judging how {tickers} should react to THE ARTICLE (off-topic, no
+informational content, or unrelated to these tickers/event).
+
+Use the SOURCE HEADLINE as a strong relevance signal: if the headline shows the
+insight was extracted from an article about a different company, sector or event
+than THE ARTICLE, or if the insight does not match what its own headline is about,
+treat it as unuseful. Keep an insight only when BOTH its source headline AND its
+text are coherent and on-topic for judging {tickers} against THE ARTICLE.
+
+Your task: return the indices of the insights WORTH KEEPING. Drop the incoherent
+or unuseful ones. When genuinely unsure, keep an insight only if it is clearly
+coherent and at least loosely relevant.
+
+Return ONLY a JSON array of the integer indices to KEEP, e.g. [0, 2, 5]. Return
+[] only if NONE are worth keeping."""
+
+
+def build_screen_prompt(targets: List[str], article: dict,
+                        related: List[InsightHit]) -> str:
+    pub = _fmt_et(article["published_utc"])
+    parts = [SCREEN_INSTRUCTIONS.format(tickers=", ".join(targets))]
+    parts.append(f"\n===== THE ARTICLE -- breaking at {pub} ET =====")
+    parts.append(f"TITLE: {article['title'] or '(no title)'}")
+    parts.append("\n===== RELATED PRIOR INSIGHTS (candidate background) =====")
+    for i, h in enumerate(related):
+        when = _fmt_et(h.published_utc)
+        tick = ",".join(h.tickers) if h.tickers else "-"
+        parts.append(f"[{i}] {when} | [{tick}] | TOPIC: {h.topic or '(no topic)'}")
+        parts.append(f"     SOURCE HEADLINE: {h.article_headline or '(no headline)'}")
+        if h.insight:
+            parts.append(f"     INSIGHT: {h.insight}")
+    return "\n".join(parts)
+
+
+def ask_gemini_keep_indices(prompt: str, model: str, n: int,
+                            retries: int = 3) -> Optional[List[int]]:
+    """Return the in-range indices the model wants to KEEP, or None on failure.
+
+    A valid empty list (keep nothing) is honored; None means the screening call
+    never produced a usable answer and the caller should keep the full context.
+    """
+    from google import genai
+    from google.genai import types
+
+    if not os.getenv("GOOGLE_API_KEY"):
+        raise SystemExit("GOOGLE_API_KEY is not set (put it in .env).")
+    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+    config = types.GenerateContentConfig(
+        temperature=0.0,
+        response_mime_type="application/json",
+        response_schema={"type": "ARRAY", "items": {"type": "INTEGER"}},
+        http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS),
+    )
+    last = "no response"
+    for attempt in range(retries):
+        try:
+            data = json.loads(resp.text) if (resp := client.models.generate_content(
+                model=model, contents=prompt, config=config)).text else None
+            if isinstance(data, list) and all(isinstance(x, int) for x in data):
+                return sorted({x for x in data if 0 <= x < n})
+            last = f"unexpected payload: {str(data)[:120]}"
+        except Exception as exc:  # noqa: BLE001
+            last = repr(exc)
+        if attempt < retries - 1:
+            time.sleep(2 ** attempt)
+    print(f"warning: screening call failed ({last}); keeping full context.",
+          file=sys.stderr)
+    return None
+
+
+def screen_related(related: List[InsightHit], article: dict, targets: List[str],
+                   model: str) -> "tuple[List[InsightHit], int]":
+    """Drop incoherent/unuseful related insights via a screening model call.
+
+    Returns (kept_insights, n_removed). On a failed screening call the full list
+    is returned unchanged (n_removed == 0).
+    """
+    if not related:
+        return related, 0
+    keep = ask_gemini_keep_indices(
+        build_screen_prompt(targets, article, related), model, len(related)
+    )
+    if keep is None:
+        return related, 0
+    kept = [related[i] for i in keep]
+    return kept, len(related) - len(kept)
+
+
 def _role(article: dict, ticker: str) -> str:
     return "primary" if ticker.upper() == (article["primary_ticker"] or "").upper() else "mentioned"
 
@@ -322,22 +417,26 @@ def main() -> None:
                         f"(default {DEFAULT_MIN_SIMILARITY})")
     p.add_argument("--retrieval", choices=RETRIEVALS, default=DEFAULT_RETRIEVAL,
                    help="related-insight retriever: 'insight' = per-seed-insight "
-                        "ANN over article_insights (the original); 'super' = the "
+                        "ANN over article_insights (the original); 'two-phase-similarity' = the "
                         "two-stage whole-article-net + insight-rerank hybrid "
                         f"(default {DEFAULT_RETRIEVAL})")
     p.add_argument("--net-k", type=int, default=DEF_NET_K,
-                   help=f"[--retrieval super] whole-article net size "
+                   help=f"[--retrieval two-phase-similarity] whole-article net size "
                         f"(default {DEF_NET_K})")
-    p.add_argument("--net-min-similarity", type=float, default=DEF_SUPER_NET_MIN_SIM,
-                   help=f"[--retrieval super] article-level cosine floor for the "
-                        f"net (default {DEF_SUPER_NET_MIN_SIM})")
-    p.add_argument("--tau-insight", type=float, default=DEF_SUPER_TAU_INS,
-                   help=f"[--retrieval super] insight-level cosine-to-seed floor: "
-                        f"keep insights >= this (default {DEF_SUPER_TAU_INS})")
-    p.add_argument("--budget", type=int, default=DEF_SUPER_BUDGET,
-                   help=f"[--retrieval super] how many reranked insights to keep "
-                        f"(default {DEF_SUPER_BUDGET})")
+    p.add_argument("--net-min-similarity", type=float, default=DEF_TWO_PHASE_NET_MIN_SIM,
+                   help=f"[--retrieval two-phase-similarity] article-level cosine floor for the "
+                        f"net (default {DEF_TWO_PHASE_NET_MIN_SIM})")
+    p.add_argument("--tau-insight", type=float, default=DEF_TWO_PHASE_TAU_INS,
+                   help=f"[--retrieval two-phase-similarity] insight-level cosine-to-seed floor: "
+                        f"keep insights >= this (default {DEF_TWO_PHASE_TAU_INS})")
+    p.add_argument("--budget", type=int, default=DEF_TWO_PHASE_BUDGET,
+                   help=f"[--retrieval two-phase-similarity] how many reranked insights to keep "
+                        f"(default {DEF_TWO_PHASE_BUDGET})")
     p.add_argument("--model", default=GEMINI_MODEL, help=f"Gemini model (default {GEMINI_MODEL})")
+    p.add_argument("--remove-unuseful", action="store_true",
+                   help="before the sentiment call, run a screening model call that "
+                        "drops incoherent or unuseful related insights, then judge "
+                        "with the reduced context")
     p.add_argument("--show-context", action="store_true",
                    help="print the full prompt context sent to the model")
     p.add_argument("--json", action="store_true", help="print only the JSON result")
@@ -378,8 +477,8 @@ def main() -> None:
                 args.top_2 = False
 
         seeds = insights_of(conn, args.article_id)
-        if args.retrieval == "super":
-            related = gather_related_super(
+        if args.retrieval == "two-phase-similarity":
+            related = gather_related_two_phase(
                 conn, args.article_id, args.months_before, args.k,
                 args.exclusive, args.min_similarity, args.net_k,
                 args.net_min_similarity, args.tau_insight, args.budget,
@@ -391,6 +490,12 @@ def main() -> None:
             )
     finally:
         conn.close()
+
+    # optional middle call: screen out incoherent/unuseful related insights, then
+    # run the sentiment call with the smaller context.
+    removed = 0
+    if args.remove_unuseful:
+        related, removed = screen_related(related, article, targets, args.model)
 
     def judge(tks: List[str]) -> List[dict]:
         return _annotate(
@@ -414,7 +519,8 @@ def main() -> None:
             "article_id": article["id"],
             "published_et": _fmt_et(article["published_utc"]),
             "title": article["title"],
-            "context": {"article_insights": len(seeds), "related_insights": len(related)},
+            "context": {"article_insights": len(seeds), "related_insights": len(related),
+                        "related_removed": removed},
             "tickers_judged": targets,
             "top2_tickers": [v["ticker"].upper() for v in picks],
             "joint": joint,
@@ -438,8 +544,9 @@ def main() -> None:
     by_ticker = {str(v.get("ticker", "")).upper(): v for v in verdicts}
     print(f"\nSeed: a#{article['id']} {_fmt_et(article['published_utc'])} ET")
     print(f"  {article['title'] or '(no title)'}")
+    screened = f", screened −{removed}" if args.remove_unuseful else ""
     print(f"  context: {len(seeds)} article insight(s) + {len(related)} related prior "
-          f"insight(s) [retrieval={args.retrieval}]")
+          f"insight(s) [retrieval={args.retrieval}{screened}]")
     print(f"  judging {len(targets)} ticker(s): {', '.join(targets)}")
     for tk in targets:
         v = by_ticker.get(tk)

@@ -662,11 +662,11 @@ python scripts/validate_retreival/compare_hybrids.py \
 
 ---
 
-## 10. The super-hybrid retrieval
+## 10. The two-phase-similarity retrieval
 
 ### 10.1 Method
 
-`super` (in `scripts/search/hybrid_retrieval.py`, `--method super`) chains the two
+`two-phase-similarity` (in `scripts/search/hybrid_retrieval.py`, `--method two-phase-similarity`) chains the two
 complementary strengths into one two-stage flow:
 
 ```
@@ -682,7 +682,7 @@ Stage 2 — fusion WITHIN the pool (precision):
     keep the top `budget` (40) insights
 ```
 
-`super` uses **asymmetric gates**: a *loose* article-net floor (0.55) to fill the candidate
+`two-phase-similarity` uses **asymmetric gates**: a *loose* article-net floor (0.55) to fill the candidate
 pool for recall, and a *tight* insight gate (0.75) to hold precision on the insights that
 survive — the tau gate also prunes off-topic boxes of an otherwise-relevant article.
 Precision comes from that 0.75 insight gate plus fusion's rerank and the `budget` cap; recall
@@ -691,16 +691,16 @@ build the pool, let the high-precision method rank inside it.* §10.4–§10.5 s
 beats a symmetric floor: the net floor was the binding constraint on coverage, while the
 insight gate is what protects precision.
 
-### 10.2 `super` vs the original retrievers (both tables, both modes)
+### 10.2 `two-phase-similarity` vs the original retrievers (both tables, both modes)
 
 Head-to-head against the two baselines the system shipped with — whole-article and insight
-— across **both** ground-truth tables and **both** modes, with `super` at its default
+— across **both** ground-truth tables and **both** modes, with `two-phase-similarity` at its default
 **0.55/0.75/40** gates (loose net 0.55, tight insight gate 0.75, budget 40; net_k=150).
 Micro-F1 (macro-F1 in parens); **bold** = best in row.
 
 **Article level:**
 
-| Table | Mode | whole-article | insight | super |
+| Table | Mode | whole-article | insight | two-phase-similarity |
 |---|---|--:|--:|--:|
 | original | last-noforward | **19.8** (21.4) | 15.3 (21.5) | 18.5 (**23.3**) |
 | original | middle-forward | 18.3 (20.5) | 18.6 (23.4) | **24.2 (28.9)** |
@@ -709,7 +709,7 @@ Micro-F1 (macro-F1 in parens); **bold** = best in row.
 
 **Insight level** (whole-article has no insight output):
 
-| Table | Mode | insight | super |
+| Table | Mode | insight | two-phase-similarity |
 |---|---|--:|--:|
 | original | last-noforward | 6.5 (12.8) | **11.4 (18.8)** |
 | original | middle-forward | 8.9 (13.9) | **15.3 (21.8)** |
@@ -718,27 +718,27 @@ Micro-F1 (macro-F1 in parens); **bold** = best in row.
 
 #### What this shows
 
-At the **asymmetric 0.55/0.75/40** default, `super` is a stronger all-rounder than at the
+At the **asymmetric 0.55/0.75/40** default, `two-phase-similarity` is a stronger all-rounder than at the
 earlier symmetric-0.7 point (§10.4–§10.5): the loose net restores coverage while the tight
 insight gate keeps the returns clean. Against the two shipped baselines:
 
-1. **Insight level — where `gather_related()` actually consumes — `super` wins 3 of 4.** It
+1. **Insight level — where `gather_related()` actually consumes — `two-phase-similarity` wins 3 of 4.** It
    beats the insight baseline in both original modes (11.4 vs 6.5; 15.3 vs 8.9) and in
    revisited-forward (21.1 vs 11.7), losing only revisited + last-noforward by 0.6 (14.5 vs
    15.1), the tight-backtest cell from §9.
-2. **Article level — `super` beats whole-article on macro-F1 in all 4 and on micro in 3 of
+2. **Article level — `two-phase-similarity` beats whole-article on macro-F1 in all 4 and on micro in 3 of
    4** (losing only original + last-noforward, 18.5 vs 19.8), and beats the insight baseline
    at the article level in 3 of 4. It is never the worst method in any cell.
 3. **The one real weak cell is revisited + last-noforward**, where the pure insight
    retriever's precision wins both levels (article 26.3, insight 15.1) — the structural
    backtest weakness documented in §9–§10.3.
-4. **`super` is strongest in `middle-forward`** (cluster recovery): it tops both levels on
+4. **`two-phase-similarity` is strongest in `middle-forward`** (cluster recovery): it tops both levels on
    both tables and posts the family's best macro-F1 (revisited article ≈31%, insight ≈27%).
 
 ### 10.3 Mode-1 tuning sweep (negative result)
 
-Can `super`'s one weak cell (revisited + last-noforward) be tuned away? A 48-config sweep
-(`scripts/validate_retreival/sweep_super.py`) over `net_k ∈ {50,100,150}`,
+Can `two-phase-similarity`'s one weak cell (revisited + last-noforward) be tuned away? A 48-config sweep
+(`scripts/validate_retreival/sweep_two_phase.py`) over `net_k ∈ {50,100,150}`,
 `tau ∈ {0.70,0.74,0.78,0.82}`, `budget ∈ {20,30,50,80}` says **no**:
 
 - Best article-F1: `net_k=50, tau=0.78, budget=20` → **19.2** (fusion 22.9, insight 26.3) — loses.
@@ -748,7 +748,7 @@ Can `super`'s one weak cell (revisited + last-noforward) be tuned away? A 48-con
 The two knobs pull opposite ways (article-F1 wants a *small* budget for precision; insight-F1
 wants a *large* one for recall), and neither optimum reaches fusion. The cause is structural:
 in the backtest frame the seed is the *latest* article, so the backward-only net is
-intrinsically noisy and no pool threshold cleans the *ranking* enough. `super` is, by
+intrinsically noisy and no pool threshold cleans the *ranking* enough. `two-phase-similarity` is, by
 construction, a method whose edge needs a window that brackets the event.
 
 The shipped **0.55/0.75/40** default lands in the same place: on revisited + last-noforward
@@ -756,10 +756,10 @@ it scores article-F1 **17.8** (still under insight's 26.3), confirming the negat
 a property of the frame, not of the floors — neither the symmetric-0.7 point nor the
 asymmetric default recovers the weak cell, and tuning is not expected to.
 
-### 10.4 Per-cluster: `super` at 0.8/0.8/30 vs 0.7/0.7/25 (insight level)
+### 10.4 Per-cluster: `two-phase-similarity` at 0.8/0.8/30 vs 0.7/0.7/25 (insight level)
 
 Same per-cluster insight-level frame as §7.3 (original table, `last-noforward`, `|G|` =
-every embedded insight of the should-be-retrieved articles), but for **`super`**, at two
+every embedded insight of the should-be-retrieved articles), but for **`two-phase-similarity`**, at two
 operating points. Each cell is **`0.8/0.8/30`** with **`(0.7/0.7/25)`** in parens —
 i.e. *tighter floors + 30 budget* vs the *default 0.7 floors + 25 budget*. `rec*` equals
 `recall` at this level and `acc` is a flat ≈99%, so both are omitted.
@@ -806,7 +806,7 @@ insight level: it buys ~3 pts of precision for ~2.4 pts of recall and a **net �
 wider `0.45/0.70/50` point scored *higher* insight-F1 suggests the productive lever is
 **looser** floors, not tighter ones — which §10.5 tests directly.
 
-### 10.5 Per-cluster: `super` at 0.55/0.75/40 vs 0.7/0.7/25 (insight level)
+### 10.5 Per-cluster: `two-phase-similarity` at 0.55/0.75/40 vs 0.7/0.7/25 (insight level)
 
 §10.4 hinted the net floor was the binding constraint, not the insight gate. This point
 splits them: **loosen the article net to 0.55** (fill the pool), **raise the insight gate to
@@ -862,18 +862,18 @@ trade-off. Ranking the four points by pooled insight-F1:
 The wide point still owns raw F1 (driven by recall), but `0.55/0.75/40` posts the **best
 precision-with-usable-recall balance** — the operating point a sentiment prompt actually
 wants, since precision (clean context) matters more there than exhaustive recall. **It is now
-the adopted `super` default** (`DEF_SUPER_NET_MIN_SIM=0.55, DEF_SUPER_TAU_INS=0.75,
-DEF_SUPER_BUDGET=40`); the wide `0.45/0.70/50` point remains the choice if raw insight
+the adopted `two-phase-similarity` default** (`DEF_TWO_PHASE_NET_MIN_SIM=0.55, DEF_TWO_PHASE_TAU_INS=0.75,
+DEF_TWO_PHASE_BUDGET=40`); the wide `0.45/0.70/50` point remains the choice if raw insight
 recall/F1 is the objective. §10.2 re-states the baseline comparison at this new default.
 
 ---
 
-## 11. Selected method: `super`
+## 11. Selected method: `two-phase-similarity`
 
-**We adopt `super` as the project's default retrieval method.** Rationale, grounded in §10:
+**We adopt `two-phase-similarity` as the project's default retrieval method.** Rationale, grounded in §10:
 
 1. **It wins where it matters most — the insight level.** The sentiment pipeline's
-   `gather_related()` consumes *insights*, and at that level `super` beats the insight
+   `gather_related()` consumes *insights*, and at that level `two-phase-similarity` beats the insight
    baseline in 3 of 4 conditions (11.4 vs 6.5, 15.3 vs 8.9, 21.1 vs 11.7), losing only the
    tight + strict-backtest cell by 0.6 (14.5 vs 15.1). No baseline leads the insight level
    this broadly.
@@ -882,7 +882,7 @@ recall/F1 is the objective. §10.2 re-states the baseline comparison at this new
    asymmetric 0.55/0.75 gates it pairs a recall-filling net with a precision-holding insight
    gate, the right bias for a context window where noise hurts.
 3. **It is strongest in the forward (cluster-recovery) frame.** With a window that brackets
-   the event, `super` tops the article level on both tables and the insight level on both,
+   the event, `two-phase-similarity` tops the article level on both tables and the insight level on both,
    posting the family's best macro-F1 (revisited article ≈31%, insight ≈27%).
 4. **It degrades to mid-pack, not to the floor.** It is never the *worst* method in any cell,
    and at the article level beats whole-article on macro-F1 in every condition; even in its
@@ -890,7 +890,7 @@ recall/F1 is the objective. §10.2 re-states the baseline comparison at this new
 
 **Honest caveat & how we handle it.** In the strict no-lookahead *backtest* frame, the
 recall baseline (whole-article, original table) and the pure insight retriever (tight
-revisited table) edge `super` at the article level, and the §10.3 sweep confirms tuning the
+revisited table) edge `two-phase-similarity` at the article level, and the §10.3 sweep confirms tuning the
 floors won't close that gap. The §10.4–§10.5 sweep of the floors landed the default on
 **0.55/0.75/40**: tightening to `0.8/0.8/30` *lowers* insight-F1 (8.6 → 5.0), while loosening
 the net and raising the insight gate lifted it (8.6 → 11.4) on all three of precision, recall
@@ -898,13 +898,13 @@ and F1. The even wider `0.45/0.70/50` point scores higher raw insight-F1 (14.0) 
 precision; we prefer the cleaner-context balance. `fusion` / the insight baseline remain
 documented fallbacks for strictly no-lookahead, article-critical paths.
 
-**Configuration.** Default `super` params: `net_k=150, net_min_sim=0.55, tau=0.75,
+**Configuration.** Default `two-phase-similarity` params: `net_k=150, net_min_sim=0.55, tau=0.75,
 rrf_c=60, budget=40` — a **loose article net (0.55) paired with a tight insight gate
 (0.75)** — with the no-lookahead window (`--exclusive`) for live use and the forward
 window for historical/clustering analysis.
 
 ```python
 from hybrid_retrieval import retrieve
-res = retrieve(seed_id, method="super", months_before=3, exclusive=True)
+res = retrieve(seed_id, method="two-phase-similarity", months_before=3, exclusive=True)
 #   res.insight_ids / res.article_ids  -> feed into gather_related()
 ```

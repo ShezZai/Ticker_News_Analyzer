@@ -6,7 +6,7 @@ This document describes the three core flows of the Ticker News Analyzer:
    tagged, classified, insight-chunked, embedded row in the DB.
 2. **[RAG retrieval](#2-rag-retrieval-flow)** — finding related coverage at whole-article
    granularity, at insight granularity, and via hybrid methods that combine the two
-   (incl. the two-stage `super` retriever).
+   (incl. the two-stage `two-phase-similarity` retriever).
 3. **[Sentiment querying](#3-sentiment-querying-flow)** — judging the immediate
    market reaction to an article, with no-lookahead context retrieval.
 
@@ -215,7 +215,7 @@ combine them, all anchored on the seed and its no-lookahead `(since, until)` win
 | `intersection` | Keep insights whose article is in **both** the insight top-`k` and the whole-article top-`k`. | Max precision; recall ≤ insight-alone (the naive overlap). |
 | `cascade` | **WIDE** whole-article net (large `net_k`, low `net_min_sim`) → score every insight inside the net against the seed's insights, keep those ≥ `tau_ins`. | Recall ceiling = whole-article (high); precision restored by the insight filter. |
 | `fusion` | Reciprocal-rank fusion (RRF) of two insight rankings: insight-ANN cosine **and** the rank of the insight's article in the whole-article net. Keep the top `budget`. | Highest recall ceiling (a union); precision controlled by the cutoff. |
-| **`super`** | **Two stages.** ① *cascade pool*: a wide article net gated to articles having ≥ 1 insight with max-cosine-to-seed ≥ `tau_ins` (cascade's high-recall article set). ② *fusion over the relevant pool insights*: of the pool articles' insights, keep only those that **themselves** clear `tau_ins`, RRF-rank them by cosine-to-seed rank ⊕ article net rank, and keep the top `budget`. | Recall ceiling = the cascade pool (high); precision = the per-insight `tau_ins` gate + fusion's rerank + `budget`. The best all-rounder. |
+| **`two-phase-similarity`** | **Two stages.** ① *cascade pool*: a wide article net gated to articles having ≥ 1 insight with max-cosine-to-seed ≥ `tau_ins` (cascade's high-recall article set). ② *fusion over the relevant pool insights*: of the pool articles' insights, keep only those that **themselves** clear `tau_ins`, RRF-rank them by cosine-to-seed rank ⊕ article net rank, and keep the top `budget`. | Recall ceiling = the cascade pool (high); precision = the per-insight `tau_ins` gate + fusion's rerank + `budget`. The best all-rounder. |
 
 ```mermaid
 flowchart TD
@@ -227,13 +227,13 @@ flowchart TD
 ```
 
 `retrieve(...)` returns a `HybridResult` (`insight_ids`, `article_ids`, and per-insight
-`scored` tuples); the `score` for `super`/`fusion` is the RRF score, for
+`scored` tuples); the `score` for `two-phase-similarity`/`fusion` is the RRF score, for
 `cascade`/`intersection` it's the insight-to-seed cosine. Knobs: `net_k` (default 150),
 `rrf_c` (60), `budget`, plus the two cosine floors `net_min_sim` (article-level) and
-`tau_ins` (insight-level). These are **method-aware**: `super` defaults both floors to a
+`tau_ins` (insight-level). These are **method-aware**: `two-phase-similarity` defaults both floors to a
 tight **0.8** (it filters articles *and* insights at >0.8 for precision) with a
 **25**-insight `budget`, while `cascade`/`fusion` keep the wide-net `0.45` / `0.70` and a
-`50` budget. The tuning sweep lives in `scripts/validate_retreival/sweep_super.py`.
+`50` budget. The tuning sweep lives in `scripts/validate_retreival/sweep_two_phase.py`.
 
 ---
 
@@ -250,7 +250,7 @@ flowchart TD
     A --> SI[insights_of → seed insight boxes]
     A --> GR{--retrieval}
     GR -->|insight default| GRI[gather_related:<br/>search_by_insights over the<br/>months-before EXCLUSIVE window<br/>dedup best score, cap 80]
-    GR -->|super| GRS[gather_related_super:<br/>hybrid_retrieval.retrieve method=super<br/>→ hydrate kept insight ids to InsightHit]
+    GR -->|two-phase-similarity| GRS[gather_related_two_phase:<br/>hybrid_retrieval.retrieve method=two-phase-similarity<br/>→ hydrate kept insight ids to InsightHit]
     L --> BP[build_prompt]
     SI --> BP
     GRI --> BP
@@ -266,9 +266,9 @@ its own merits (one article can be bullish for one ticker and bearish for a riva
 
 **Related-insight retrieval** is selectable via `--retrieval`:
 - `insight` (default) — `gather_related` → `search_by_insights` (insight-level ANN, §2b).
-- `super` — `gather_related_super` → `hybrid_retrieval.retrieve(method="super")` (§2c),
+- `two-phase-similarity` — `gather_related_two_phase` → `hybrid_retrieval.retrieve(method="two-phase-similarity")` (§2c),
   then the kept insight ids are hydrated back into `InsightHit` rows for the prompt. The
-  super knobs (`--net-k`, `--net-min-similarity`, `--tau-insight`, `--budget`) are exposed
+  two-phase-similarity knobs (`--net-k`, `--net-min-similarity`, `--tau-insight`, `--budget`) are exposed
   on the CLI and apply only in this mode.
 
 **Ticker-set modes:**
