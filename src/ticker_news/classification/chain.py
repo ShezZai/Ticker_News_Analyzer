@@ -8,6 +8,7 @@ entirely, the lite verdict stands (same behavior as the legacy script).
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from typing import Optional, Tuple
 
@@ -15,6 +16,8 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from ticker_news.classification.schemas import Classification
 from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE, gemini_chat
+
+logger = logging.getLogger(__name__)
 
 GEMINI_TIMEOUT_S = 60.0
 MAX_ARTICLE_CHARS = 6_000  # classification needs the lede, not the whole article
@@ -110,6 +113,7 @@ def classify_article(
     confirm = confirm if confirm is not None else _default_confirm()
     try:
         return confirm.invoke(inputs), True
-    except Exception:
+    except Exception as exc:
         # confirmation exhausted its retries: keep the lite "real news" verdict
+        logger.warning("confirmation pass failed (%r); keeping lite verdict", exc)
         return first, True

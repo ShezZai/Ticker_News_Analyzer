@@ -1,5 +1,6 @@
 import pytest
 from langchain_core.runnables import RunnableLambda
+from pydantic import ValidationError
 
 from ticker_news.classification.chain import MAX_ARTICLE_CHARS, classify_article
 from ticker_news.classification.schemas import Classification
@@ -53,5 +54,5 @@ def test_inputs_are_truncated():
 
 
 def test_invalid_category_rejected_by_schema():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Classification(category="not a real category")

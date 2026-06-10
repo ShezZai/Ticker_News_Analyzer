@@ -1,19 +1,6 @@
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel
-
-CATEGORIES = [
-    "conference-PR",
-    "marketing fluff",
-    "real news",
-    "recap/review",
-    "market speculation",
-    "legal solicitation",
-    "regulatory filing",
-    "book PR",
-    "politics/macro",
-    "other",
-]
 
 Category = Literal[
     "conference-PR",
@@ -27,6 +14,8 @@ Category = Literal[
     "politics/macro",
     "other",
 ]
+
+CATEGORIES: list[str] = list(get_args(Category))
 
 
 class Classification(BaseModel):
