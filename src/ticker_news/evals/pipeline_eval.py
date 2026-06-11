@@ -156,6 +156,7 @@ def _cached_move(ticker: str, published_iso: str) -> tuple[float | None, str | N
 
 
 def directional_agreement_evaluator(*, input, output, **kwargs) -> Evaluation:
+    """Langfuse item evaluator (input/output names fixed by its contract)."""
     out = output or {}
     action, ticker = out.get("action"), out.get("ticker")
     gain_pct, price_err = None, "no primary ticker"
@@ -168,6 +169,7 @@ def directional_agreement_evaluator(*, input, output, **kwargs) -> Evaluation:
 
 
 def price_move_evaluator(*, input, output, **kwargs) -> Evaluation:
+    """Langfuse item evaluator: raw entry->close move, recorded even when unscored."""
     ticker = (output or {}).get("ticker")
     if not ticker:
         return Evaluation(name="price_move_pct", value=None, comment="no primary ticker")

@@ -157,9 +157,12 @@ ITEM_INPUT = {
 
 
 class TestItemEvaluators:
+    @pytest.fixture(autouse=True)
+    def _clear_move_cache(self):
+        pipeline_eval._cached_move.cache_clear()
+
     def test_buy_with_rising_price_scores_one(self, monkeypatch):
         monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (2.5, None))
-        pipeline_eval._cached_move.cache_clear()
         ev = directional_agreement_evaluator(
             input=ITEM_INPUT,
             output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
@@ -169,7 +172,6 @@ class TestItemEvaluators:
 
     def test_no_ticker_excluded(self, monkeypatch):
         monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (2.5, None))
-        pipeline_eval._cached_move.cache_clear()
         ev = directional_agreement_evaluator(
             input=ITEM_INPUT,
             output={"action": None, "ticker": None, "skip_reason": "no primary ticker"},
@@ -179,7 +181,6 @@ class TestItemEvaluators:
 
     def test_price_move_recorded_even_for_hold(self, monkeypatch):
         monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (-1.3, None))
-        pipeline_eval._cached_move.cache_clear()
         ev = price_move_evaluator(
             input=ITEM_INPUT,
             output={"action": "hold", "ticker": "MRVL", "skip_reason": None},
@@ -191,7 +192,6 @@ class TestItemEvaluators:
         monkeypatch.setattr(
             pipeline_eval, "realized_move", lambda t, p: (None, "no tradeable entry/exit bar")
         )
-        pipeline_eval._cached_move.cache_clear()
         ev = price_move_evaluator(
             input=ITEM_INPUT,
             output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
