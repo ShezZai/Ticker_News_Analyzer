@@ -1,14 +1,22 @@
 """Offline unit tests for the classification eval. No DB, no network."""
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
 
+from ticker_news.classification.variants import (
+    BinaryClassification,
+    VariantRunner,
+    is_act_binary,
+)
+from ticker_news.evals import classify_eval
 from ticker_news.evals.classify_eval import (
     act_accuracy_evaluator,
     act_metrics_run_evaluator,
     build_items,
     load_ground_truth,
+    make_task,
     predicted_label_evaluator,
 )
 
@@ -84,6 +92,9 @@ class FakeConn:
     def execute(self, sql, params=None):
         self.executed.append((sql, params))
         return FakeCursor(self._rows)
+
+    def close(self):
+        pass
 
 
 GT_ROWS = [
@@ -219,3 +230,43 @@ class TestRunEvaluator:
     def test_empty_results_skip_everything(self):
         evals = _by_name(act_metrics_run_evaluator(item_results=[]))
         assert set(evals) == {"act_metrics_skip"}
+
+
+class StubChain:
+    def __init__(self, *verdicts):
+        self._verdicts = list(verdicts)
+        self.calls = []
+
+    async def ainvoke(self, inputs, config=None):
+        self.calls.append(inputs)
+        return self._verdicts.pop(0)
+
+
+class TestMakeTask:
+    def test_task_reads_db_and_returns_verdict_dict(self, monkeypatch):
+        conn = FakeConn(rows=[("Title", "Body text")])
+        monkeypatch.setattr(classify_eval, "connect_eval", lambda dsn: conn)
+        runner = VariantRunner(
+            lite=StubChain(BinaryClassification(label="real news", confidence=0.7,
+                                                reason="earnings")),
+            confirm=None, is_act=is_act_binary, label_of=lambda v: v.label,
+        )
+        task = make_task(runner, dsn=None)
+        out = asyncio.run(task(item={"input": {"article_id": 595, "title": "T"}}))
+        assert out == {
+            "predicted": "real news", "act": "YES", "confidence": 0.7,
+            "reason": "earnings", "confirmed": False,
+        }
+        # the SELECT was parametrized on the article id
+        assert any(p == (595,) for _, p in conn.executed)
+
+    def test_task_raises_for_missing_article(self, monkeypatch):
+        conn = FakeConn(rows=[])
+        monkeypatch.setattr(classify_eval, "connect_eval", lambda dsn: conn)
+        runner = VariantRunner(
+            lite=StubChain(), confirm=None,
+            is_act=is_act_binary, label_of=lambda v: v.label,
+        )
+        task = make_task(runner, dsn=None)
+        with pytest.raises(ValueError, match="595"):
+            asyncio.run(task(item={"input": {"article_id": 595, "title": "T"}}))
