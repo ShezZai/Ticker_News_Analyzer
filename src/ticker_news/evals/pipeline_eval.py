@@ -168,7 +168,12 @@ def _cached_move(ticker: str, published_iso: str) -> tuple[float | None, str | N
 
 
 def directional_agreement_evaluator(*, input, output, **kwargs) -> Evaluation:
-    """Langfuse item evaluator (input/output names fixed by its contract)."""
+    """Langfuse item evaluator (input/output names fixed by its contract).
+
+    Langfuse rejects value=None scores, so excluded items (hold, no verdict,
+    no price data) are recorded as a categorical sibling score instead —
+    visible and filterable rather than silently absent.
+    """
     out = output or {}
     action, ticker = out.get("action"), out.get("ticker")
     gain_pct, price_err = None, "no primary ticker"
@@ -177,6 +182,8 @@ def directional_agreement_evaluator(*, input, output, **kwargs) -> Evaluation:
     value, comment = score_directional(
         action, gain_pct, skip_reason=out.get("skip_reason") or price_err
     )
+    if value is None:
+        return Evaluation(name="directional_agreement_skip", value=comment)
     return Evaluation(name="directional_agreement", value=value, comment=comment)
 
 
@@ -184,10 +191,10 @@ def price_move_evaluator(*, input, output, **kwargs) -> Evaluation:
     """Langfuse item evaluator: raw entry->close move, recorded even when unscored."""
     ticker = (output or {}).get("ticker")
     if not ticker:
-        return Evaluation(name="price_move_pct", value=None, comment="no primary ticker")
+        return Evaluation(name="price_move_pct_skip", value="no primary ticker")
     gain_pct, price_err = _cached_move(ticker, input["published_utc"])
     if gain_pct is None:
-        return Evaluation(name="price_move_pct", value=None, comment=price_err)
+        return Evaluation(name="price_move_pct_skip", value=price_err or "unknown")
     return Evaluation(
         name="price_move_pct", value=gain_pct,
         comment=f"entry->close move {gain_pct:+.2f}%",
@@ -203,7 +210,7 @@ def avg_directional_agreement(*, item_results, **kwargs) -> Evaluation:
     ]
     if not values:
         return Evaluation(
-            name="avg_directional_agreement", value=None, comment="no scorable items"
+            name="avg_directional_agreement_skip", value="no scorable items"
         )
     avg = sum(values) / len(values)
     return Evaluation(

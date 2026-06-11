@@ -170,14 +170,24 @@ class TestItemEvaluators:
         assert ev.name == "directional_agreement"
         assert ev.value == 1.0
 
-    def test_no_ticker_excluded(self, monkeypatch):
+    def test_no_ticker_becomes_categorical_skip_score(self, monkeypatch):
         monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (2.5, None))
         ev = directional_agreement_evaluator(
             input=ITEM_INPUT,
             output={"action": None, "ticker": None, "skip_reason": "no primary ticker"},
         )
-        assert ev.value is None
-        assert "no primary ticker" in ev.comment
+        # Langfuse rejects value=None; exclusions become a categorical sibling score
+        assert ev.name == "directional_agreement_skip"
+        assert "no primary ticker" in ev.value
+
+    def test_hold_becomes_categorical_skip_score(self, monkeypatch):
+        monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (2.5, None))
+        ev = directional_agreement_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "hold", "ticker": "MRVL", "skip_reason": None},
+        )
+        assert ev.name == "directional_agreement_skip"
+        assert "hold" in ev.value
 
     def test_price_move_recorded_even_for_hold(self, monkeypatch):
         monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (-1.3, None))
@@ -188,7 +198,7 @@ class TestItemEvaluators:
         assert ev.name == "price_move_pct"
         assert ev.value == -1.3
 
-    def test_price_move_none_when_no_data(self, monkeypatch):
+    def test_price_move_skip_score_when_no_data(self, monkeypatch):
         monkeypatch.setattr(
             pipeline_eval, "realized_move", lambda t, p: (None, "no tradeable entry/exit bar")
         )
@@ -196,8 +206,8 @@ class TestItemEvaluators:
             input=ITEM_INPUT,
             output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
         )
-        assert ev.value is None
-        assert "no tradeable" in ev.comment
+        assert ev.name == "price_move_pct_skip"
+        assert "no tradeable" in ev.value
 
 
 def _result(*evals):
@@ -219,4 +229,5 @@ class TestRunEvaluator:
 
     def test_no_scorable_items(self):
         ev = avg_directional_agreement(item_results=[])
-        assert ev.value is None
+        assert ev.name == "avg_directional_agreement_skip"
+        assert ev.value == "no scorable items"
