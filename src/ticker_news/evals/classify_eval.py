@@ -118,3 +118,50 @@ def predicted_label_evaluator(*, output, **kwargs) -> Evaluation:
     so misclassifications are filterable in the UI."""
     predicted = (output or {}).get("predicted")
     return Evaluation(name="predicted_label", value=predicted or "<none>")
+
+
+def _expected_act(item) -> str | None:
+    expected = item.get("expected_output") if isinstance(item, dict) else item.expected_output
+    return (expected or {}).get("act")
+
+
+def act_metrics_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
+    """Run-level confusion metrics for the YES class.
+
+    The GT is imbalanced (42 YES / 98 NO) — precision/recall/F1 keep an
+    always-NO classifier from looking good. A task that errored (output
+    None) counts as a miss on its side of the matrix rather than vanishing
+    from the denominator.
+    """
+    tp = fp = fn = tn = 0
+    for r in item_results:
+        expected = _expected_act(r.item)
+        predicted = (r.output or {}).get("act")
+        if expected == "YES":
+            tp, fn = (tp + 1, fn) if predicted == "YES" else (tp, fn + 1)
+        elif expected == "NO":
+            fp, tn = (fp + 1, tn) if predicted == "YES" else (fp, tn + 1)
+    total = tp + fp + fn + tn
+    if total == 0:
+        return [Evaluation(name="act_metrics_skip", value="no scorable items")]
+    counts = f"TP={tp} FP={fp} FN={fn} TN={tn}"
+    evals = [Evaluation(
+        name="act_accuracy_avg", value=(tp + tn) / total,
+        comment=f"{counts}; {total} items",
+    )]
+    precision = tp / (tp + fp) if (tp + fp) else None
+    recall = tp / (tp + fn) if (tp + fn) else None
+    if precision is None:
+        evals.append(Evaluation(name="act_precision_skip",
+                                value=f"no YES predictions ({counts})"))
+    else:
+        evals.append(Evaluation(name="act_precision", value=precision, comment=counts))
+    if recall is None:
+        evals.append(Evaluation(name="act_recall_skip",
+                                value=f"no YES items ({counts})"))
+    else:
+        evals.append(Evaluation(name="act_recall", value=recall, comment=counts))
+    if precision is not None and recall is not None and (precision + recall) > 0:
+        f1 = 2 * precision * recall / (precision + recall)
+        evals.append(Evaluation(name="act_f1", value=f1, comment=counts))
+    return evals

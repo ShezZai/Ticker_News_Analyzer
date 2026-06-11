@@ -1,9 +1,12 @@
 """Offline unit tests for the classification eval. No DB, no network."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from ticker_news.evals.classify_eval import (
     act_accuracy_evaluator,
+    act_metrics_run_evaluator,
     build_items,
     load_ground_truth,
     predicted_label_evaluator,
@@ -156,3 +159,56 @@ class TestItemEvaluators:
     def test_predicted_label_handles_missing_output(self):
         ev = predicted_label_evaluator(output=None)
         assert ev.value == "<none>"
+
+
+def _item_result(expected_act, predicted_act):
+    return SimpleNamespace(
+        item={"expected_output": {"act": expected_act}},
+        output={"predicted": "x", "act": predicted_act} if predicted_act else None,
+    )
+
+
+def _by_name(evaluations):
+    return {e.name: e for e in evaluations}
+
+
+class TestRunEvaluator:
+    def test_confusion_metrics(self):
+        # TP=2 FP=1 FN=1 TN=2 -> acc 4/6, precision 2/3, recall 2/3
+        results = [
+            _item_result("YES", "YES"), _item_result("YES", "YES"),  # TP
+            _item_result("NO", "YES"),                               # FP
+            _item_result("YES", "NO"),                               # FN
+            _item_result("NO", "NO"), _item_result("NO", "NO"),      # TN
+        ]
+        evals = _by_name(act_metrics_run_evaluator(item_results=results))
+        assert evals["act_accuracy_avg"].value == pytest.approx(4 / 6)
+        assert evals["act_precision"].value == pytest.approx(2 / 3)
+        assert evals["act_recall"].value == pytest.approx(2 / 3)
+        assert evals["act_f1"].value == pytest.approx(2 / 3)
+        assert "TP=2 FP=1 FN=1 TN=2" in evals["act_accuracy_avg"].comment
+
+    def test_no_yes_predictions_skips_precision(self):
+        results = [_item_result("YES", "NO"), _item_result("NO", "NO")]
+        evals = _by_name(act_metrics_run_evaluator(item_results=results))
+        assert "act_precision" not in evals
+        assert "no YES predictions" in evals["act_precision_skip"].value
+        assert evals["act_recall"].value == 0.0
+        assert "act_f1" not in evals
+
+    def test_no_yes_items_skips_recall(self):
+        results = [_item_result("NO", "YES"), _item_result("NO", "NO")]
+        evals = _by_name(act_metrics_run_evaluator(item_results=results))
+        assert "act_recall" not in evals
+        assert "no YES items" in evals["act_recall_skip"].value
+        assert evals["act_precision"].value == 0.0
+
+    def test_failed_items_are_counted_as_wrong(self):
+        # an errored task (output=None) on a YES item counts as FN
+        results = [_item_result("YES", None), _item_result("YES", "YES")]
+        evals = _by_name(act_metrics_run_evaluator(item_results=results))
+        assert evals["act_recall"].value == pytest.approx(0.5)
+
+    def test_empty_results_skip_everything(self):
+        evals = _by_name(act_metrics_run_evaluator(item_results=[]))
+        assert set(evals) == {"act_metrics_skip"}
