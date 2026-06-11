@@ -51,6 +51,7 @@ def test_registry_covers_all_llm_prompts(monkeypatch):
     reg = prompts.registry()
     assert set(reg) == {
         "classify-article", "extract-insights",
+        "classify-binary", "classify-finegrained",
         "analyst-fundamentals", "analyst-market_context",
         "analyst-historical_precedent", "synthesize-verdict",
     }

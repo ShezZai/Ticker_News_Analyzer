@@ -63,11 +63,17 @@ def versions_seen() -> dict[str, int]:
 def registry() -> dict[str, str]:
     """name -> in-repo fallback text, for `ticker-news prompts push`."""
     from ticker_news.classification.chain import PROMPT_TEMPLATE as classify_prompt
+    from ticker_news.classification.variants import (
+        BINARY_PROMPT_TEMPLATE,
+        FINEGRAINED_PROMPT_TEMPLATE,
+    )
     from ticker_news.enrichment.insights import PROMPT_TEMPLATE as insights_prompt
     from ticker_news.sentiment.analysts import ANALYST_PROMPTS, SYNTHESIS_PROMPT
 
     reg = {
         "classify-article": classify_prompt,
+        "classify-binary": BINARY_PROMPT_TEMPLATE,
+        "classify-finegrained": FINEGRAINED_PROMPT_TEMPLATE,
         "extract-insights": insights_prompt,
         "synthesize-verdict": SYNTHESIS_PROMPT,
     }
