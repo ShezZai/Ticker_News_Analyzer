@@ -56,15 +56,27 @@ def connect_eval(dsn: str | None = None) -> psycopg.Connection:
 
 
 def ensure_eval_schema(conn: psycopg.Connection) -> None:
-    """Additively heal an older shared schema; safe to run every time."""
+    """Additively heal an older shared schema; safe to run every time.
+
+    Checks before ALTERing: even a no-op ADD COLUMN IF NOT EXISTS takes an
+    ACCESS EXCLUSIVE lock on the shared articles table, which can queue behind
+    the production service's long read transactions.
+    """
     from ticker_news.sentiment import store as sentiment_store
 
-    conn.execute(
-        "ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS insights_extracted_at timestamptz"
-    )
-    conn.execute(
-        "ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS provider_sentiments jsonb"
-    )
+    existing = {
+        row[0]
+        for row in conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = 'articles'"
+        ).fetchall()
+    }
+    wanted = {"insights_extracted_at": "timestamptz", "provider_sentiments": "jsonb"}
+    for column, pg_type in wanted.items():
+        if column not in existing:
+            conn.execute(
+                f"ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS {column} {pg_type}"
+            )
     conn.commit()
     sentiment_store.ensure_schema(conn)
 
@@ -200,6 +212,26 @@ def avg_directional_agreement(*, item_results, **kwargs) -> Evaluation:
     )
 
 
+def _warn_failed_items(result, requested_ids: list[int]) -> None:
+    """Failed items vanish from the result (SDK logs only); make them loud.
+
+    A failed item is an article left reset-but-not-rebuilt in the shared DB -
+    re-run it through the eval, or let the batch CLIs re-process it.
+    """
+    done: set[int] = set()
+    for r in result.item_results:
+        item = r.item
+        data = item["input"] if isinstance(item, dict) else item.input
+        done.add(data["article_id"])
+    failed = sorted(set(requested_ids) - done)
+    if failed:
+        print(
+            f"WARNING: {len(failed)} item(s) errored and were left reset in the DB: "
+            f"{failed}. Re-run them (ticker-news eval pipeline --ids "
+            f"{','.join(map(str, failed))}) or heal via the batch CLIs."
+        )
+
+
 def make_task(dsn: str | None):
     """Experiment task: reset the article, run the real stage chain, return the verdict.
 
@@ -294,7 +326,10 @@ def run_eval(
     conn = connect_eval(dsn)
     try:
         ensure_eval_schema(conn)
-        items = build_items(conn, ids) if ids else []
+        try:
+            items = build_items(conn, ids) if ids else []
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
     finally:
         conn.close()
 
@@ -305,7 +340,10 @@ def run_eval(
         task=make_task(dsn),
         evaluators=[directional_agreement_evaluator, price_move_evaluator],
         run_evaluators=[avg_directional_agreement],
-        max_concurrency=2,  # each task fans out ~7 LLM calls already
+        # Sync tasks run serially in langfuse 4.7.1 (no to_thread); this only
+        # caps the async evaluators. Kept low deliberately - each item already
+        # fans out ~7 LLM calls inside the stages.
+        max_concurrency=2,
         metadata={"entrypoint": "eval"},
     )
     try:
@@ -324,9 +362,14 @@ def run_eval(
             dataset = client.get_dataset(dataset_name)
             if not dataset.items:
                 raise SystemExit(f"dataset '{dataset_name}' has no items")
-            return dataset.run_experiment(**common)
+            dataset_ids = [it.input["article_id"] for it in dataset.items]
+            result = dataset.run_experiment(**common)
+            _warn_failed_items(result, dataset_ids)
+            return result
         if not items:
             raise SystemExit("no article ids given (use --ids, or --dataset with items)")
-        return client.run_experiment(data=items, **common)
+        result = client.run_experiment(data=items, **common)
+        _warn_failed_items(result, [it["input"]["article_id"] for it in items])
+        return result
     finally:
         obs.flush()
