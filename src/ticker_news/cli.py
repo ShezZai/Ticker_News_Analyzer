@@ -304,6 +304,25 @@ def fetch_news(
     typer.echo(f"wrote {path}")
 
 
+research_app = typer.Typer(help="On-demand research & backtesting tools.")
+app.add_typer(research_app, name="research")
+
+
+@research_app.command("chart")
+def research_chart(
+    ticker: str = typer.Argument(..., help="Ticker symbol."),
+    timestamp: str = typer.Argument(..., help="Timestamp to mark (ISO, ET assumed if naive)."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output JPG path (default TICKER_DATE_HHMM.jpg)."),
+    interval: int = typer.Option(1, help="Candle size in minutes."),
+    tz: str = typer.Option("America/New_York", "--tz", help="Timezone for naive timestamps."),
+    api_key: str | None = typer.Option(None, "--api-key", help="Override MASSIVE_API_KEY."),
+) -> None:
+    """Render an intraday candlestick chart with the timestamp marked."""
+    from ticker_news.research.candles import make_chart
+
+    typer.echo(make_chart(ticker, timestamp, out=output, interval=interval, tz=tz, key=api_key))
+
+
 prompts_app = typer.Typer(help="Manage Langfuse prompt versions.")
 app.add_typer(prompts_app, name="prompts")
 
