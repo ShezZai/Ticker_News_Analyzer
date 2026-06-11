@@ -1,6 +1,10 @@
 """Offline unit tests for the E2E pipeline eval. No DB, no network."""
 
-from ticker_news.evals.pipeline_eval import score_directional
+from datetime import datetime, timezone
+
+import pytest
+
+from ticker_news.evals.pipeline_eval import build_items, reset_article, score_directional
 
 
 class TestScoreDirectional:
@@ -49,13 +53,6 @@ class TestScoreDirectional:
         value, comment = score_directional("strong-buy", 1.0)
         assert value is None
         assert "strong-buy" in comment
-
-
-from datetime import datetime, timezone
-
-import pytest
-
-from ticker_news.evals.pipeline_eval import build_items, reset_article
 
 
 class FakeCursor:
@@ -125,11 +122,18 @@ class TestResetArticle:
     def test_clears_derived_fields_and_dependent_rows(self):
         conn = FakeConn()
         reset_article(conn, 20512)
-        sql = " ".join(s for s, _ in conn.executed)
-        assert "DELETE FROM public.article_sentiment" in sql
-        assert "DELETE FROM public.article_insights" in sql
+        statements = [(s, p) for s, p in conn.executed if s != "COMMIT"]
+        # every data statement is parametrized on the article id
+        assert [p for _, p in statements] == [(20512,), (20512,), (20512,)]
+        sentiment_sql, insights_sql, update_sql = [s for s, _ in statements]
+        assert "DELETE FROM public.article_sentiment" in sentiment_sql
+        assert "WHERE article_id = %s" in sentiment_sql
+        assert "DELETE FROM public.article_insights" in insights_sql
+        assert "WHERE article_id = %s" in insights_sql
+        assert update_sql.startswith("UPDATE public.articles SET ")
+        assert "WHERE id = %s" in update_sql
         for col in ("embedding", "category", "category_reason", "primary_ticker",
                     "primary_segment", "more_tickers", "more_segments",
                     "insights_extracted_at"):
-            assert col in sql
+            assert f"{col} = NULL" in update_sql
         assert conn.executed[-1] == ("COMMIT", None)
