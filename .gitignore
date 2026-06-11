@@ -18,3 +18,4 @@ scraped_dump/
 
 # Tracked exceptions (kept despite the broad *.csv ignore above)
 !docs/validations/*.csv
+!docs/validations/*.txt
