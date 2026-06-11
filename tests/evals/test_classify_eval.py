@@ -209,6 +209,13 @@ class TestRunEvaluator:
         evals = _by_name(act_metrics_run_evaluator(item_results=results))
         assert evals["act_recall"].value == pytest.approx(0.5)
 
+    def test_failed_no_item_counts_as_false_positive(self):
+        # an errored task (output=None) on a NO item must hurt, not count as TN
+        results = [_item_result("NO", None), _item_result("NO", "NO")]
+        evals = _by_name(act_metrics_run_evaluator(item_results=results))
+        assert evals["act_accuracy_avg"].value == pytest.approx(0.5)
+        assert "TP=0 FP=1 FN=0 TN=1" in evals["act_accuracy_avg"].comment
+
     def test_empty_results_skip_everything(self):
         evals = _by_name(act_metrics_run_evaluator(item_results=[]))
         assert set(evals) == {"act_metrics_skip"}

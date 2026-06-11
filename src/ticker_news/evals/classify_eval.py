@@ -129,9 +129,9 @@ def act_metrics_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
     """Run-level confusion metrics for the YES class.
 
     The GT is imbalanced (42 YES / 98 NO) — precision/recall/F1 keep an
-    always-NO classifier from looking good. A task that errored (output
-    None) counts as a miss on its side of the matrix rather than vanishing
-    from the denominator.
+    always-NO classifier from looking good. A task that errored (output None)
+    always counts as wrong — FN on YES items, FP on NO items — rather than
+    vanishing from the denominator (or being rewarded as a TN).
     """
     tp = fp = fn = tn = 0
     for r in item_results:
@@ -140,7 +140,10 @@ def act_metrics_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
         if expected == "YES":
             tp, fn = (tp + 1, fn) if predicted == "YES" else (tp, fn + 1)
         elif expected == "NO":
-            fp, tn = (fp + 1, tn) if predicted == "YES" else (fp, tn + 1)
+            # An errored task (r.output is None) is always wrong — treat as FP,
+            # not TN. Only a genuine {"act": "NO"} output earns TN credit.
+            wrong = predicted == "YES" or r.output is None
+            fp, tn = (fp + 1, tn) if wrong else (fp, tn + 1)
     total = tp + fp + fn + tn
     if total == 0:
         return [Evaluation(name="act_metrics_skip", value="no scorable items")]
