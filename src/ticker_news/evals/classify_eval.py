@@ -284,13 +284,30 @@ def run_eval(
         except Exception:  # noqa: BLE001 - already exists is fine
             pass
         for it in items:
-            client.create_dataset_item(
-                dataset_name=dataset_name,
-                id=it["id"],
-                input=it["input"],
-                expected_output=it["expected_output"],
-                metadata=it["metadata"],
-            )
+            try:
+                client.create_dataset_item(
+                    dataset_name=dataset_name,
+                    id=it["id"],
+                    input=it["input"],
+                    expected_output=it["expected_output"],
+                    metadata=it["metadata"],
+                )
+            except Exception as exc:  # noqa: BLE001
+                # Langfuse item IDs are project-scoped; if this id is already
+                # owned by another dataset, fall back to an auto-generated id.
+                if "not found" in str(exc).lower() or "404" in str(exc):
+                    print(
+                        f"  WARNING: item id {it['id']!r} conflicts with another "
+                        f"dataset; seeding without explicit id"
+                    )
+                    client.create_dataset_item(
+                        dataset_name=dataset_name,
+                        input=it["input"],
+                        expected_output=it["expected_output"],
+                        metadata=it["metadata"],
+                    )
+                else:
+                    raise
 
     dataset = client.get_dataset(dataset_name)
     data = list(dataset.items)
