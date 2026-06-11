@@ -49,6 +49,7 @@ If the `news_pg` container already exists from a prior run, `docker start news_p
 | `ticker-news search` / `search-insights` | pgvector ANN search (`--like ID`, `--ticker`, `--segment`, `--since`, `--ef-search`) |
 | `ticker-news research chart\|scan-ranges\|attach-articles\|catalyst-returns\|backtest\|render-*` | Charts, big-mover scans, buy-the-news + verdict backtests |
 | `ticker-news jobs status` / `jobs retry [--url U]` | Queue counts; requeue failed jobs |
+| `ticker-news eval pipeline --ids N[,..]` | E2E eval: re-run articles through every stage, score verdict vs realized price move as a Langfuse experiment (`--dataset` for run-over-run comparison, `--dsn` for the shared DB) |
 | `ticker-news prompts push` | Upsert in-repo prompts to Langfuse with the `production` label |
 
 ## Configuration

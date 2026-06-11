@@ -552,3 +552,30 @@ def jobs_retry(
         typer.echo(f"requeued {n} job(s).")
     finally:
         conn.close()
+
+
+eval_app = typer.Typer(help="Pipeline quality evals (Langfuse experiments).")
+app.add_typer(eval_app, name="eval")
+
+
+@eval_app.command("pipeline")
+def eval_pipeline(
+    ids: str | None = typer.Option(None, help="Comma-separated article ids to evaluate."),
+    dataset: str | None = typer.Option(None, "--dataset", help="Langfuse dataset name: upsert --ids as items, then run over the whole dataset."),
+    dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
+    run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: auto-generated)."),
+) -> None:
+    """Re-run articles E2E through the pipeline; score verdicts against actual price moves."""
+    from ticker_news.evals import pipeline_eval
+
+    id_list = [int(x) for x in ids.split(",") if x.strip()] if ids else []
+    if not id_list and not dataset:
+        raise typer.BadParameter("provide --ids, or --dataset with existing items")
+    try:
+        result = pipeline_eval.run_eval(
+            id_list, dataset_name=dataset, dsn=dsn, run_name=run_name
+        )
+    except SystemExit as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1)
+    typer.echo(result.format())
