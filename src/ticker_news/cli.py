@@ -323,6 +323,102 @@ def research_chart(
     typer.echo(make_chart(ticker, timestamp, out=output, interval=interval, tz=tz, key=api_key))
 
 
+@research_app.command("scan-ranges")
+def research_scan_ranges(
+    threshold: float = typer.Option(5.0, "--threshold", "-t", help="Min low-to-high range in % to flag a day."),
+    tickers: str | None = typer.Option(None, help="Comma-separated tickers (default: all from ticker_data)."),
+    start: str = typer.Option("2024-11-01", help="Start date YYYY-MM-DD."),
+    end: str | None = typer.Option(None, help="End date YYYY-MM-DD (default: today)."),
+    bar: str = typer.Option("hour", help="Intraday bar size: 'hour' (exact for daily extremes, cheap) or 'minute'."),
+    index_ticker: str = typer.Option("I:COMP", "--index-ticker", help="Reference index symbol (default NASDAQ Composite)."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output CSV (default ticker_range_scan_<start>_<end>.csv)."),
+    workers: int = typer.Option(8, min=1, help="Concurrent ticker fetches."),
+    nas_t: float = typer.Option(1.2, "--nas-t", help="Max NASDAQ low-to-high % on a flagged day; only keeps days where NASDAQ moved LESS than this (set 999 to disable)."),
+    api_key: str | None = typer.Option(None, "--api-key", help="Override MASSIVE_API_KEY."),
+) -> None:
+    """Scan tickers for big intraday-range days (calm-NASDAQ days only) into a CSV."""
+    from datetime import date
+
+    from ticker_news.research import ticker_scan as ts
+
+    if bar not in ("hour", "minute"):
+        raise typer.BadParameter("--bar must be 'hour' or 'minute'")
+    end_date = end or date.today().isoformat()
+    out = output or f"ticker_range_scan_{start}_{end_date}.csv"
+    try:
+        segment_map: dict[str, str] = {}
+        if tickers:
+            tlist = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+            try:  # best-effort segment lookup even for explicit ticker lists
+                _, segment_map = ts.load_universe()
+            except ts.ScanError:
+                pass
+        else:
+            tlist, segment_map = ts.load_universe()
+        rows = ts.scan(
+            tlist, start=start, end=end_date, threshold=threshold, bar=bar,
+            index_ticker=index_ticker, nas_threshold=nas_t, workers=workers,
+            key=api_key, segment_map=segment_map,
+        )
+        ts.write_scan_csv(rows, out)
+    except RuntimeError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1)
+    typer.echo(
+        f"Wrote {len(rows)} flagged day(s) across "
+        f"{len({r['ticker'] for r in rows})} ticker(s) to {out}"
+    )
+
+
+@research_app.command("attach-articles")
+def research_attach_articles(
+    input_csv: str = typer.Argument(..., help="ticker_range_scan CSV to read."),
+    output_csv: str = typer.Argument(..., help="Destination CSV (input + articles columns)."),
+) -> None:
+    """Attach each scan row's same-day and prev-after-hours articles from the DB."""
+    from ticker_news.research import ticker_scan as ts
+
+    try:
+        ts.attach(input_csv, output_csv)
+    except RuntimeError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1)
+
+
+@research_app.command("catalyst-returns")
+def research_catalyst_returns(
+    start: str = typer.Option("2025-02-01", help="Start date YYYY-MM-DD."),
+    end: str = typer.Option("2025-03-30", help="End date YYYY-MM-DD."),
+    categories: str = typer.Option(
+        "real news,legal solicitation,regulatory filing",
+        help="Comma-separated catalyst categories.",
+    ),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output CSV (default catalyst_returns_<start>_<end>.csv)."),
+    workers: int = typer.Option(8, min=1, help="Concurrent price fetches."),
+    include_after_hours: bool = typer.Option(False, "--include-after-hours", help="Also keep extended-hours entries (sold at the next day's close); excluded by default."),
+    all_tickers: bool = typer.Option(False, "--all-tickers", help="Emit a row for EVERY ticker each article names (primary + more_tickers); adds a ticker_role column."),
+    api_key: str | None = typer.Option(None, "--api-key", help="Override MASSIVE_API_KEY."),
+) -> None:
+    """Buy-the-news returns per catalyst article: entry at publication, exit next regular close."""
+    from ticker_news.research import ticker_scan as ts
+
+    cats = [c.strip() for c in categories.split(",") if c.strip()]
+    out = output or f"catalyst_returns_{start}_{end}.csv"
+    try:
+        rows = ts.catalyst_run(
+            start=start, end=end, categories=cats, workers=workers,
+            include_after_hours=include_after_hours, all_tickers=all_tickers,
+            key=api_key,
+        )
+        ts.write_catalyst_csv(rows, out)
+    except RuntimeError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"Wrote {len(rows)} row(s) to {out}")
+    for line in ts.catalyst_summary(rows):
+        typer.echo(line)
+
+
 prompts_app = typer.Typer(help="Manage Langfuse prompt versions.")
 app.add_typer(prompts_app, name="prompts")
 
