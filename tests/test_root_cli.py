@@ -277,6 +277,80 @@ def test_prompts_push_command(monkeypatch):
     assert "6" in result.output
 
 
+def test_research_chart_wraps_runtime_errors(monkeypatch):
+    def boom(*a, **kw):
+        raise RuntimeError("MASSIVE_API_KEY is not set")
+
+    monkeypatch.setattr("ticker_news.research.candles.make_chart", boom)
+    result = runner.invoke(cli.app, ["research", "chart", "NVDA", "2025-01-07 10:30"])
+    assert result.exit_code == 1
+    assert "MASSIVE_API_KEY" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_research_render_bombs_command(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "ticker_news.research.render.render_bombs",
+        lambda input_csv, *, out_dir: captured.update(csv=input_csv, out=out_dir) or 2,
+    )
+    result = runner.invoke(
+        cli.app, ["research", "render-bombs", "scan_articled.csv", "--out-dir", "p"]
+    )
+    assert result.exit_code == 0, result.output
+    assert captured == {"csv": "scan_articled.csv", "out": "p"}
+
+
+def test_research_render_catalysts_defaults(monkeypatch):
+    captured = {}
+
+    def fake(input_csv, *, threshold, out_dir):
+        captured.update(csv=input_csv, threshold=threshold, out=out_dir)
+        return 0
+
+    monkeypatch.setattr("ticker_news.research.render.render_catalysts", fake)
+    result = runner.invoke(cli.app, ["research", "render-catalysts"])
+    assert result.exit_code == 0, result.output
+    assert captured == {
+        "csv": "catalyst_returns_2025-02-01_2025-03-30.csv",
+        "threshold": 3.0,
+        "out": "pics_bombs/catalysts",
+    }
+
+
+def test_research_render_all_command(monkeypatch):
+    captured = {}
+
+    def fake(csv_path, pics_dir, *, out_dir):
+        captured.update(csv=csv_path, pics=pics_dir, out=out_dir)
+        return 0
+
+    monkeypatch.setattr("ticker_news.research.render.render_all_tickers", fake)
+    result = runner.invoke(
+        cli.app,
+        ["research", "render-all", "--csv", "c.csv", "--pics-dir", "pics", "--out-dir", "o"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured == {"csv": "c.csv", "pics": "pics", "out": "o"}
+
+
+def test_research_render_all_defaults(monkeypatch):
+    captured = {}
+
+    def fake(csv_path, pics_dir, *, out_dir):
+        captured.update(csv=csv_path, pics=pics_dir, out=out_dir)
+        return 0
+
+    monkeypatch.setattr("ticker_news.research.render.render_all_tickers", fake)
+    result = runner.invoke(cli.app, ["research", "render-all"])
+    assert result.exit_code == 0, result.output
+    assert captured == {
+        "csv": "catalyst_returns_2025-02-01_2025-03-30.csv",
+        "pics": "pics_bombs/catalysts/other_related",
+        "out": None,
+    }
+
+
 class _FakeConn:
     def close(self):
         pass

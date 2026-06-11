@@ -320,7 +320,11 @@ def research_chart(
     """Render an intraday candlestick chart with the timestamp marked."""
     from ticker_news.research.candles import make_chart
 
-    typer.echo(make_chart(ticker, timestamp, out=output, interval=interval, tz=tz, key=api_key))
+    try:
+        typer.echo(make_chart(ticker, timestamp, out=output, interval=interval, tz=tz, key=api_key))
+    except RuntimeError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1)
 
 
 @research_app.command("scan-ranges")
@@ -417,6 +421,62 @@ def research_catalyst_returns(
     typer.echo(f"Wrote {len(rows)} row(s) to {out}")
     for line in ts.catalyst_summary(rows):
         typer.echo(line)
+
+
+@research_app.command("render-bombs")
+def research_render_bombs(
+    input_csv: str = typer.Argument(..., help="*_articled.csv from attach-articles."),
+    out_dir: str = typer.Option("pics_bombs", "--out-dir", help="Output folder."),
+) -> None:
+    """Render a marked intraday chart for every article attached in an articled CSV."""
+    from ticker_news.research import render as render_mod
+
+    try:
+        render_mod.render_bombs(input_csv, out_dir=out_dir)
+    except RuntimeError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1)
+
+
+@research_app.command("render-catalysts")
+def research_render_catalysts(
+    input_csv: str = typer.Argument(
+        "catalyst_returns_2025-02-01_2025-03-30.csv",
+        help="catalyst_returns CSV to read.",
+    ),
+    threshold: float = typer.Option(3.0, "--threshold", "-t", help="Min |gain_pct| to render, up or down."),
+    out_dir: str = typer.Option("pics_bombs/catalysts", "--out-dir", help="Output folder."),
+) -> None:
+    """Render entry-point charts for the big movers in a catalyst_returns CSV."""
+    from ticker_news.research import render as render_mod
+
+    try:
+        render_mod.render_catalysts(input_csv, threshold=threshold, out_dir=out_dir)
+    except RuntimeError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1)
+
+
+@research_app.command("render-all")
+def research_render_all(
+    csv_path: str = typer.Option(
+        "catalyst_returns_2025-02-01_2025-03-30.csv", "--csv",
+        help="catalyst_returns CSV the pics came from.",
+    ),
+    pics_dir: str = typer.Option(
+        "pics_bombs/catalysts/other_related", "--pics-dir",
+        help="Folder of <ticker>_<article_id>_<date>.jpg charts.",
+    ),
+    out_dir: str | None = typer.Option(None, "--out-dir", help="Output folder (default: --pics-dir)."),
+) -> None:
+    """Render the missing charts for every OTHER ticker each pictured article names."""
+    from ticker_news.research import render as render_mod
+
+    try:
+        render_mod.render_all_tickers(csv_path, pics_dir, out_dir=out_dir)
+    except RuntimeError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1)
 
 
 prompts_app = typer.Typer(help="Manage Langfuse prompt versions.")
