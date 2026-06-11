@@ -1,0 +1,79 @@
+# ============================================================================
+# Binary NEWS classifier  ->  fills `News/not GT`  ("real news" | "none news")
+# Paste into a classify_articles.py-style script. Output labels match the GT
+# column exactly so model runs (Flash-lite only / Flash only / two-pass) can be
+# scored directly against `News/not GT`.
+# ============================================================================
+
+LABELS = ["real news", "none news"]
+
+PROMPT_TEMPLATE = """You are an equity-research editor deciding whether an article is genuine market NEWS or not.
+
+Label "real news" ONLY if the article is FIRST-HAND reporting of a CONCRETE, NEWLY-OCCURRING, market-relevant EVENT -- something that just happened that a trader could act on. Qualifying events include:
+- earnings / results / guidance changes; a dividend declared or changed;
+- M&A, a strategic equity investment / stake, or a funding round;
+- a product / service launch, a partnership / contract / agreement, a leadership or
+  board change, an expansion or new entity, a listing;
+- a supply-chain disruption, a major customer win or loss, a regulatory action, or
+  another operational development that materially changes the business;
+- a lawsuit / class action actually FILED, an investigation opened, a ruling / settlement;
+- a GOVERNMENT equity / investment action (taking a stake, a national investment program);
+- a bankruptcy, restructuring, or insolvency event; a major contract win or loss; or a
+  significant technological breakthrough.
+The article must BE the primary report of the event.
+
+Label "none news" for everything else, including:
+- opinion / recap -- "why X moved", "should you buy X?", predictions, listicles, market-wraps;
+- PR / marketing / advertorials / product copy / market-research-report promos / book PR;
+- conference / trade-show / awards announcements;
+- law-firm SOLICITATIONS -- "investor alert", "deadline alert", "opportunity to lead",
+  "contact the firm", lead-plaintiff reminders;
+- general politics / macro / policy commentary -- tariffs, Fed / rates, elections,
+  inflation or jobs data, broad market direction;
+- routine filings reported as notices -- share buybacks, insider / managers' transactions,
+  annual reports / proxy notices;
+- rehashed summaries of already-known events, pure speculation / commentary with no new
+  facts, generic market chatter, or content whose primary purpose is engagement not info;
+- lifestyle / entertainment / human-interest / obituaries / charity / university events /
+  boilerplate / anything else.
+
+Two quick tests for "real news":
+(1) Did a CONCRETE event just happen (not a prediction, not a recap of an old move)?
+(2) Is THIS article the PRIMARY source breaking it (not a law firm's pitch, not an
+    opinion column, not a marketing release)?
+Both YES -> "real news". Otherwise -> "none news".
+Borderline guidance: a law-firm "lawsuit filed" report and a government taking a company
+stake ARE real news; a law-firm deadline/solicitation and a tariff/Fed commentary are NOT.
+
+Judge by MATERIALITY, not sentiment or tone. Positive, negative, and neutral developments
+can ALL be "real news" if the event could plausibly affect a company's revenue,
+profitability, growth prospects, competitive position, market share, regulatory /
+operational risk, strategic direction, or investor perception. Conversely, a highly
+emotional or dramatic article that carries NO concrete new information is "none news".
+Ignore sentiment, and ignore WHICH ticker or company is involved -- judge only whether the
+article carries genuinely NEW, investment-relevant factual information. New facts outweigh
+opinion; materiality outweighs popularity or drama. When genuinely uncertain, prefer
+"none news".
+
+Return ONLY a JSON object:
+{{"label": "<real news | none news>", "confidence": 0.0-1.0, "reason": "<one short clause>"}}
+
+ARTICLE TITLE: {title}
+
+ARTICLE BODY:
+\"\"\"
+{body}
+\"\"\""""
+
+# google-genai generation config (same shape as the production classifier)
+RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "label": {"type": "STRING", "enum": LABELS},
+        "confidence": {"type": "NUMBER"},
+        "reason": {"type": "STRING"},
+    },
+    "required": ["label"],
+}
+# types.GenerateContentConfig(temperature=0.0,
+#     response_mime_type="application/json", response_schema=RESPONSE_SCHEMA)

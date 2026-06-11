@@ -1,0 +1,116 @@
+# ============================================================================
+# Fine-grained classifier  ->  fills `suggested_new_category`
+# Paste into a classify_articles.py-style script. Same call shape as the
+# existing classifier: response_schema enum + temperature 0. Recommended run:
+# two-pass (gemini-2.5-flash-lite on all, gemini-2.5-flash to confirm any label
+# in NEWS_SUBTYPES), mirroring the production two-pass.
+# ============================================================================
+
+CATEGORIES = [
+    # --- a real, newly-occurring event is being reported (NEWS) ---
+    "earnings-reporting",
+    "dividend-reporting",
+    "merger/investment/funding",
+    "legal-event",
+    "MACRO-investment",
+    "news-event",
+    "news-report",
+    # --- not a new event (NOT-NEWS) ---
+    "recap/review",
+    "market speculation",
+    "MACRO-political",
+    "legal-call",
+    "conference-PR",
+    "marketing fluff",
+    "book PR",
+    "Other-filing-reporting",
+    "other",
+]
+
+# Labels in the top block count as "real news" for the binary task; the rest are
+# "none news". (Kept here so the two tasks stay consistent.)
+NEWS_SUBTYPES = {
+    "earnings-reporting", "dividend-reporting", "merger/investment/funding",
+    "legal-event", "MACRO-investment", "news-event", "news-report",
+}
+
+PROMPT_TEMPLATE = """You are an equity-research editor sorting financial news articles into a fine-grained taxonomy.
+
+First decide: is the article FIRST-HAND reporting of a CONCRETE, NEWLY-OCCURRING, market-relevant EVENT (a thing that just happened -- results, a deal, a filing, a launch, a government action)? Or is it promotion / opinion / solicitation / a recap of an already-happened move?
+
+Then assign EXACTLY ONE label.
+
+=== A real new event is being reported (NEWS) ===
+- "earnings-reporting": first-hand reporting of a company's earnings / financial
+  results, revenue, a guidance change, or an earnings-call transcript.
+  (e.g. "X reports Q4 results", "X beats on EPS", "<co> earnings call transcript".)
+- "dividend-reporting": a company DECLARING or CHANGING a cash dividend, or a fund
+  announcing distributions. (e.g. "declares quarterly dividend", "raises dividend 10%".)
+  NOT share buybacks -> "Other-filing-reporting".
+- "merger/investment/funding": an M&A acquisition/merger, a strategic equity
+  investment or stake, or a funding round. (e.g. "X acquires Y", "secures investment
+  from Z".) A purely commercial supply/partnership deal with NO equity -> "news-event".
+- "legal-event": an actual legal action that OCCURRED -- a lawsuit / class action
+  FILED, an investigation opened, a ruling or settlement. The hook is the filing itself.
+- "MACRO-investment": a GOVERNMENT acting on equity / investment -- the government
+  taking or weighing a stake in a company, or a government-driven investment
+  program/initiative. (e.g. "White House eyes Intel stake", "Trump announces $500B AI
+  investment".)
+- "news-event": any OTHER first-hand corporate event announced by the parties --
+  product/service launch, partnership / contract / agreement, leadership or board
+  appointment, expansion / new entity, listing, capacity / pricing change. The article
+  IS the announcement (typically a company press release).
+- "news-report": SECONDARY journalism about a development -- sourced from "a report" /
+  Bloomberg / Fortune, rumors, layoffs / restructuring plans, multi-item deal roundups,
+  or reporting on a third-party study. Reportage ABOUT events, not a primary release.
+
+=== Not a new event (NOT-NEWS) ===
+- "recap/review": opinion / educational / retrospective -- "why X rose/fell today",
+  "should you buy X?", "3 stocks to buy now", "what [event] means for investors",
+  performance explainers, market-wraps, listicles. Explaining an already-happened move.
+- "market speculation": forward-looking conjecture -- predictions, "will X hit $Y",
+  price-target / scenario guesswork.
+- "MACRO-political": general political / policy / geopolitical / macro news NOT tied to
+  a government equity action -- tariffs, Fed / rate decisions, elections, legislation,
+  war / sanctions, inflation / jobs data, broad market commentary.
+- "legal-call": a law-firm SOLICITATION -- "investor / deadline / shareholder alert",
+  "opportunity to lead", "secure counsel before deadline", "contact the firm",
+  lead-plaintiff reminders. A call to action, not a new filing.
+- "conference-PR": a company sponsoring / speaking / exhibiting / being recognized at a
+  conference, trade show, summit, or AWARDS event; event promotion / registration.
+- "marketing fluff": promotional / advertorial / vendor self-promotion, product
+  marketing copy, market-research-report promos, newsletter / subscription promos,
+  "about the company" filler -- no decision-useful substance.
+- "book PR": a press release announcing / promoting a book (novel, poetry, children's,
+  memoir, self-help) or an author / book award.
+- "Other-filing-reporting": a routine corporate / exchange filing reported as a NOTICE
+  -- share buybacks / repurchases, managers' / insider transactions, annual reports /
+  Form 20-F, proxy / meeting notices. (A dividend goes to "dividend-reporting".)
+- "other": genuinely none of the above -- obituaries, charity, university
+  commencements, human-interest, retraction notices, boilerplate.
+
+If an article fits more than one NEWS subtype, prefer in this order:
+earnings-reporting > dividend-reporting > merger/investment/funding > MACRO-investment >
+legal-event > (news-event if it is a primary press release, else news-report).
+
+Pick the single best fit. Return ONLY a JSON object:
+{{"category": "<one category>", "reason": "<one short clause justifying the label>"}}
+
+ARTICLE TITLE: {title}
+
+ARTICLE BODY:
+\"\"\"
+{body}
+\"\"\""""
+
+# google-genai generation config (same shape as the production classifier)
+RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "category": {"type": "STRING", "enum": CATEGORIES},
+        "reason": {"type": "STRING"},
+    },
+    "required": ["category"],
+}
+# types.GenerateContentConfig(temperature=0.0,
+#     response_mime_type="application/json", response_schema=RESPONSE_SCHEMA)
