@@ -8,9 +8,14 @@ Not wired into the pipeline; promoting a winner stays a human decision.
 
 from __future__ import annotations
 
-from typing import Literal, Optional, get_args
+import logging
+from dataclasses import dataclass
+from typing import Any, Callable, Literal, Optional, Tuple, get_args
 
+from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 BinaryLabel = Literal["real news", "none news"]
 BINARY_LABELS: list[str] = list(get_args(BinaryLabel))
@@ -131,6 +136,107 @@ ARTICLE BODY:
 \"\"\"
 {body}
 \"\"\""""
+
+
+GEMINI_TIMEOUT_S = 60.0
+RETRIES = 4
+
+MODES = ("lite", "flash", "two-pass")
+VARIANTS = ("binary", "finegrained")
+
+
+def _build(model_name: str, prompt_name: str, fallback: str, schema: type):
+    """prompt | structured-output Gemini, with the same Langfuse-template
+    guard as the production classifier. NOT cached — the eval rebuilds per
+    run so Langfuse prompt edits apply without a process restart."""
+    from ticker_news.shared.llm import gemini_chat
+    from ticker_news.shared.prompts import get_prompt
+
+    llm = gemini_chat(model_name, timeout_s=GEMINI_TIMEOUT_S)
+    structured = llm.with_structured_output(schema).with_retry(
+        stop_after_attempt=RETRIES, wait_exponential_jitter=True
+    )
+    template = get_prompt(prompt_name, fallback)
+    try:
+        prompt = ChatPromptTemplate.from_template(template)
+        if set(prompt.input_variables) != {"title", "body"}:
+            raise ValueError(f"unexpected variables: {prompt.input_variables}")
+    except Exception as exc:
+        logger.warning("%s prompt invalid (%r); using in-repo fallback", prompt_name, exc)
+        prompt = ChatPromptTemplate.from_template(fallback)
+    return prompt | structured
+
+
+def build_binary_classifier(model_name: str):
+    return _build(model_name, "classify-binary",
+                  BINARY_PROMPT_TEMPLATE, BinaryClassification)
+
+
+def build_finegrained_classifier(model_name: str):
+    return _build(model_name, "classify-finegrained",
+                  FINEGRAINED_PROMPT_TEMPLATE, FinegrainedClassification)
+
+
+@dataclass
+class VariantRunner:
+    """One variant/mode pairing. Two-pass mirrors production semantics:
+    `lite` labels everything, `confirm` re-runs only verdicts `is_act` calls
+    ACT; a failed confirmation keeps the lite verdict. Single-pass modes set
+    exactly one chain."""
+
+    lite: Optional[Any]
+    confirm: Optional[Any]
+    is_act: Callable[[str], bool]
+    label_of: Callable[[Any], str]
+
+    async def classify(self, title: Optional[str], body: str,
+                       config=None) -> Tuple[Any, bool]:
+        from ticker_news.classification.chain import MAX_ARTICLE_CHARS
+
+        inputs = {
+            "title": (title or "").strip()[:300],
+            "body": (body or "")[:MAX_ARTICLE_CHARS],
+        }
+        first_chain = self.lite if self.lite is not None else self.confirm
+        first = await first_chain.ainvoke(inputs, config=config)
+        two_pass = self.lite is not None and self.confirm is not None
+        if not two_pass or not self.is_act(self.label_of(first)):
+            return first, False
+        try:
+            return await self.confirm.ainvoke(inputs, config=config), True
+        except Exception as exc:
+            logger.warning("confirmation pass failed (%r); keeping lite verdict", exc)
+            return first, True
+
+
+def make_runner(variant: str, mode: str) -> VariantRunner:
+    """Build the chains for a variant/mode pair (fresh — no lru_cache)."""
+    from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE
+
+    if variant not in VARIANTS:
+        raise ValueError(f"unknown variant {variant!r} (expected one of {VARIANTS})")
+    if mode not in MODES:
+        raise ValueError(f"unknown mode {mode!r} (expected one of {MODES})")
+    if variant == "binary":
+        build, is_act, label_of = (
+            build_binary_classifier, is_act_binary, lambda v: v.label)
+    else:
+        build, is_act, label_of = (
+            build_finegrained_classifier, is_act_finegrained, lambda v: v.category)
+    lite = build(GEMINI_FLASH_LITE) if mode in ("lite", "two-pass") else None
+    confirm = build(GEMINI_FLASH) if mode in ("flash", "two-pass") else None
+    return VariantRunner(lite=lite, confirm=confirm, is_act=is_act, label_of=label_of)
+
+
+def models_for_mode(mode: str) -> dict[str, str]:
+    """Model names per mode, for experiment-run metadata."""
+    from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE
+
+    if mode == "lite":
+        return {"lite": GEMINI_FLASH_LITE}
+    if mode == "flash":
+        return {"flash": GEMINI_FLASH}
+    return {"lite": GEMINI_FLASH_LITE, "confirm": GEMINI_FLASH}
 
 
 FINEGRAINED_PROMPT_TEMPLATE = """You are an equity-research editor sorting financial news articles into a fine-grained taxonomy.
