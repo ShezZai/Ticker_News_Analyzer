@@ -1,10 +1,19 @@
 """Offline unit tests for the E2E pipeline eval. No DB, no network."""
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
-from ticker_news.evals.pipeline_eval import build_items, reset_article, score_directional
+from ticker_news.evals import pipeline_eval
+from ticker_news.evals.pipeline_eval import (
+    avg_directional_agreement,
+    build_items,
+    directional_agreement_evaluator,
+    price_move_evaluator,
+    reset_article,
+    score_directional,
+)
 
 
 class TestScoreDirectional:
@@ -137,3 +146,77 @@ class TestResetArticle:
                     "insights_extracted_at"):
             assert f"{col} = NULL" in update_sql
         assert conn.executed[-1] == ("COMMIT", None)
+
+
+ITEM_INPUT = {
+    "article_id": 20512,
+    "url": "https://example.com/20512",
+    "published_utc": "2026-05-28T11:10:00+00:00",
+    "title": "Title",
+}
+
+
+class TestItemEvaluators:
+    def test_buy_with_rising_price_scores_one(self, monkeypatch):
+        monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (2.5, None))
+        pipeline_eval._cached_move.cache_clear()
+        ev = directional_agreement_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
+        )
+        assert ev.name == "directional_agreement"
+        assert ev.value == 1.0
+
+    def test_no_ticker_excluded(self, monkeypatch):
+        monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (2.5, None))
+        pipeline_eval._cached_move.cache_clear()
+        ev = directional_agreement_evaluator(
+            input=ITEM_INPUT,
+            output={"action": None, "ticker": None, "skip_reason": "no primary ticker"},
+        )
+        assert ev.value is None
+        assert "no primary ticker" in ev.comment
+
+    def test_price_move_recorded_even_for_hold(self, monkeypatch):
+        monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (-1.3, None))
+        pipeline_eval._cached_move.cache_clear()
+        ev = price_move_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "hold", "ticker": "MRVL", "skip_reason": None},
+        )
+        assert ev.name == "price_move_pct"
+        assert ev.value == -1.3
+
+    def test_price_move_none_when_no_data(self, monkeypatch):
+        monkeypatch.setattr(
+            pipeline_eval, "realized_move", lambda t, p: (None, "no tradeable entry/exit bar")
+        )
+        pipeline_eval._cached_move.cache_clear()
+        ev = price_move_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
+        )
+        assert ev.value is None
+        assert "no tradeable" in ev.comment
+
+
+def _result(*evals):
+    return SimpleNamespace(evaluations=list(evals))
+
+
+class TestRunEvaluator:
+    def test_averages_only_scored_items(self):
+        results = [
+            _result(SimpleNamespace(name="directional_agreement", value=1.0)),
+            _result(SimpleNamespace(name="directional_agreement", value=0.0)),
+            _result(SimpleNamespace(name="directional_agreement", value=None)),
+            _result(SimpleNamespace(name="price_move_pct", value=5.0)),
+        ]
+        ev = avg_directional_agreement(item_results=results)
+        assert ev.name == "avg_directional_agreement"
+        assert ev.value == 0.5
+        assert "2/4" in ev.comment
+
+    def test_no_scorable_items(self):
+        ev = avg_directional_agreement(item_results=[])
+        assert ev.value is None

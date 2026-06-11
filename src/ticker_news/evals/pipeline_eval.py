@@ -11,9 +11,11 @@ Design: docs/superpowers/specs/2026-06-11-e2e-pipeline-eval-design.md
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 
 import psycopg
+from langfuse import Evaluation
 
 
 def score_directional(
@@ -120,3 +122,77 @@ def reset_article(conn: psycopg.Connection, article_id: int) -> None:
         (article_id,),
     )
     conn.commit()
+
+
+def realized_move(ticker: str, published_utc: datetime) -> tuple[float | None, str | None]:
+    """Entry->close move per the backtest rule. Returns (gain_pct, error).
+
+    Entry = first tradeable minute bar at/after publication; exit = that day's
+    regular close, or the next session's close for extended-hours entries
+    (include_after_hours=True so evening articles still get scored).
+    """
+    from ticker_news.research import ticker_scan as ts
+
+    pub_et = published_utc.astimezone(ts.MARKET_TZ)
+    frm = (pub_et.date() - timedelta(days=1)).isoformat()
+    to = (pub_et.date() + timedelta(days=7)).isoformat()
+    try:
+        prices = ts.fetch_prices(ticker, frm, to)
+    except RuntimeError as exc:  # covers ScanError; missing MASSIVE_API_KEY etc.
+        return None, str(exc)
+    sim = ts.simulate(
+        {"id": 0, "ticker": ticker, "published_et": pub_et}, prices,
+        include_after_hours=True,
+    )
+    if sim is None:
+        return None, "no tradeable entry/exit bar"
+    return sim["gain_pct"], None
+
+
+@lru_cache(maxsize=256)
+def _cached_move(ticker: str, published_iso: str) -> tuple[float | None, str | None]:
+    """Both item evaluators need the move; fetch Massive bars only once."""
+    return realized_move(ticker, datetime.fromisoformat(published_iso))
+
+
+def directional_agreement_evaluator(*, input, output, **kwargs) -> Evaluation:
+    out = output or {}
+    action, ticker = out.get("action"), out.get("ticker")
+    gain_pct, price_err = None, "no primary ticker"
+    if ticker:
+        gain_pct, price_err = _cached_move(ticker, input["published_utc"])
+    value, comment = score_directional(
+        action, gain_pct, skip_reason=out.get("skip_reason") or price_err
+    )
+    return Evaluation(name="directional_agreement", value=value, comment=comment)
+
+
+def price_move_evaluator(*, input, output, **kwargs) -> Evaluation:
+    ticker = (output or {}).get("ticker")
+    if not ticker:
+        return Evaluation(name="price_move_pct", value=None, comment="no primary ticker")
+    gain_pct, price_err = _cached_move(ticker, input["published_utc"])
+    if gain_pct is None:
+        return Evaluation(name="price_move_pct", value=None, comment=price_err)
+    return Evaluation(
+        name="price_move_pct", value=gain_pct,
+        comment=f"entry->close move {gain_pct:+.2f}%",
+    )
+
+
+def avg_directional_agreement(*, item_results, **kwargs) -> Evaluation:
+    values = [
+        e.value
+        for r in item_results
+        for e in r.evaluations
+        if e.name == "directional_agreement" and e.value is not None
+    ]
+    if not values:
+        return Evaluation(
+            name="avg_directional_agreement", value=None, comment="no scorable items"
+        )
+    avg = sum(values) / len(values)
+    return Evaluation(
+        name="avg_directional_agreement", value=avg,
+        comment=f"scored {len(values)}/{len(item_results)} items, avg {avg:.2f}",
+    )
