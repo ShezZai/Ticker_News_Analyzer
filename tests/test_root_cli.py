@@ -288,6 +288,40 @@ def test_research_chart_wraps_runtime_errors(monkeypatch):
     assert "Traceback" not in result.output
 
 
+def test_research_backtest_passes_args(monkeypatch):
+    captured = {}
+
+    def fake_run(*, start, end, include_hold, out, workers, key):
+        captured.update(start=start, end=end, include_hold=include_hold,
+                        out=out, workers=workers, key=key)
+        return {"total": 0}
+
+    monkeypatch.setattr("ticker_news.research.backtest.run_backtest", fake_run)
+    result = runner.invoke(
+        cli.app,
+        ["research", "backtest", "--start", "2025-02-01", "--end", "2025-03-30",
+         "--include-hold", "--workers", "4", "--out", "v.csv"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured == {
+        "start": "2025-02-01", "end": "2025-03-30", "include_hold": True,
+        "out": "v.csv", "workers": 4, "key": None,
+    }
+
+
+def test_research_backtest_wraps_runtime_errors(monkeypatch):
+    def boom(**kw):
+        raise RuntimeError("MASSIVE_API_KEY is not set")
+
+    monkeypatch.setattr("ticker_news.research.backtest.run_backtest", boom)
+    result = runner.invoke(
+        cli.app, ["research", "backtest", "--start", "2025-02-01", "--end", "2025-03-30"]
+    )
+    assert result.exit_code == 1
+    assert "MASSIVE_API_KEY" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_research_render_bombs_command(monkeypatch):
     captured = {}
     monkeypatch.setattr(

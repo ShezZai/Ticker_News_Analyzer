@@ -423,6 +423,28 @@ def research_catalyst_returns(
         typer.echo(line)
 
 
+@research_app.command("backtest")
+def research_backtest(
+    start: str = typer.Option(..., help="Start date YYYY-MM-DD (article ET publication date)."),
+    end: str = typer.Option(..., help="End date YYYY-MM-DD, inclusive."),
+    include_hold: bool = typer.Option(False, "--include-hold", help="Also simulate hold verdicts (tracked unsigned; never scored)."),
+    out: str | None = typer.Option(None, "--out", "-o", help="Output CSV (default backtest_verdicts_<start>_<end>.csv)."),
+    workers: int = typer.Option(8, min=1, help="Concurrent price fetches."),
+    api_key: str | None = typer.Option(None, "--api-key", help="Override MASSIVE_API_KEY."),
+) -> None:
+    """Backtest analyst-panel verdicts: entry at publication, exit next regular close."""
+    from ticker_news.research import backtest as bt
+
+    try:
+        bt.run_backtest(
+            start=start, end=end, include_hold=include_hold, out=out,
+            workers=workers, key=api_key,
+        )
+    except RuntimeError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1)
+
+
 @research_app.command("render-bombs")
 def research_render_bombs(
     input_csv: str = typer.Argument(..., help="*_articled.csv from attach-articles."),
