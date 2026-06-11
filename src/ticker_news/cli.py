@@ -558,6 +558,13 @@ eval_app = typer.Typer(help="Pipeline quality evals (Langfuse experiments).")
 app.add_typer(eval_app, name="eval")
 
 
+def _echo_summary(summary: str) -> None:
+    try:
+        typer.echo(summary)
+    except UnicodeEncodeError:  # Windows cp1252 console vs emoji in format()
+        typer.echo(summary.encode("ascii", "backslashreplace").decode("ascii"))
+
+
 @eval_app.command("pipeline")
 def eval_pipeline(
     ids: str | None = typer.Option(None, "--ids", help="Comma-separated article ids to force through the full eval pipeline."),
@@ -581,8 +588,40 @@ def eval_pipeline(
     except SystemExit as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1)
-    summary = result.format()
+    _echo_summary(result.format())
+
+
+@eval_app.command("classify")
+def eval_classify(
+    variant: str = typer.Option("both", "--variant", help="both | binary | finegrained."),
+    mode: str = typer.Option("two-pass", "--mode", help="two-pass | lite | flash."),
+    gt_csv: str | None = typer.Option(None, "--gt-csv", help="Seed/refresh the Langfuse dataset from this ground-truth csv (article id, header, Act_GT)."),
+    dataset: str = typer.Option("classify-ground-truth", "--dataset", help="Langfuse dataset name."),
+    ids: str | None = typer.Option(None, "--ids", help="Comma-separated article ids: run only this dataset subset (fast prompt iteration)."),
+    dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
+    run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: <variant>-<mode>-<timestamp>)."),
+) -> None:
+    """Compare classification prompt variants against the ground-truth labels."""
+    from ticker_news.classification.variants import MODES, VARIANTS
+    from ticker_news.evals import classify_eval
+
+    if variant not in ("both", *VARIANTS):
+        raise typer.BadParameter(f"--variant must be one of: both, {', '.join(VARIANTS)}")
+    if mode not in MODES:
+        raise typer.BadParameter(f"--mode must be one of: {', '.join(MODES)}")
     try:
-        typer.echo(summary)
-    except UnicodeEncodeError:  # Windows cp1252 console vs emoji in format()
-        typer.echo(summary.encode("ascii", "backslashreplace").decode("ascii"))
+        id_list = [int(x) for x in ids.split(",") if x.strip()] if ids else None
+    except ValueError as exc:
+        raise typer.BadParameter(f"--ids must be comma-separated integers: {exc}")
+    variants = VARIANTS if variant == "both" else (variant,)
+    try:
+        results = classify_eval.run_eval(
+            variants, mode=mode, dataset_name=dataset, gt_csv=gt_csv,
+            dsn=dsn, run_name=run_name, ids=id_list,
+        )
+    except SystemExit as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1)
+    for variant_name, result in results:
+        typer.echo(f"=== {variant_name} ===")
+        _echo_summary(result.format())

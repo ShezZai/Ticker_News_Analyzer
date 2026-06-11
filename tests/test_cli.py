@@ -388,3 +388,60 @@ def test_research_render_all_defaults(monkeypatch):
 class _FakeConn:
     def close(self):
         pass
+
+
+def test_eval_classify_passes_args(monkeypatch):
+    captured = {}
+
+    def fake_run_eval(variants, **kwargs):
+        captured["variants"] = variants
+        captured.update(kwargs)
+        return []
+
+    from ticker_news.evals import classify_eval
+    monkeypatch.setattr(classify_eval, "run_eval", fake_run_eval)
+    result = runner.invoke(cli.app, [
+        "eval", "classify", "--variant", "binary", "--mode", "lite",
+        "--gt-csv", "gt.csv", "--ids", "595,14682", "--dsn", "postgresql://x",
+        "--run-name", "tuning-1",
+    ])
+    assert result.exit_code == 0, result.output
+    assert captured["variants"] == ("binary",)
+    assert captured["mode"] == "lite"
+    assert captured["gt_csv"] == "gt.csv"
+    assert captured["ids"] == [595, 14682]
+    assert captured["dsn"] == "postgresql://x"
+    assert captured["run_name"] == "tuning-1"
+
+
+def test_eval_classify_defaults_to_both_two_pass(monkeypatch):
+    captured = {}
+
+    def fake_run_eval(variants, **kwargs):
+        captured["variants"] = variants
+        captured.update(kwargs)
+        return []
+
+    from ticker_news.evals import classify_eval
+    monkeypatch.setattr(classify_eval, "run_eval", fake_run_eval)
+    result = runner.invoke(cli.app, ["eval", "classify"])
+    assert result.exit_code == 0, result.output
+    assert captured["variants"] == ("binary", "finegrained")
+    assert captured["mode"] == "two-pass"
+    assert captured["dataset_name"] == "classify-ground-truth"
+    assert captured["ids"] is None
+
+
+def test_eval_classify_rejects_bad_variant():
+    result = runner.invoke(cli.app, ["eval", "classify", "--variant", "ternary"])
+    assert result.exit_code != 0
+
+
+def test_eval_classify_rejects_bad_mode():
+    result = runner.invoke(cli.app, ["eval", "classify", "--mode", "warp"])
+    assert result.exit_code != 0
+
+
+def test_eval_classify_rejects_bad_ids():
+    result = runner.invoke(cli.app, ["eval", "classify", "--ids", "1,x"])
+    assert result.exit_code != 0
