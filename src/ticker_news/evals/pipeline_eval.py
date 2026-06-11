@@ -198,3 +198,135 @@ def avg_directional_agreement(*, item_results, **kwargs) -> Evaluation:
         name="avg_directional_agreement", value=avg,
         comment=f"scored {len(values)}/{len(item_results)} items, avg {avg:.2f}",
     )
+
+
+def make_task(dsn: str | None):
+    """Experiment task: reset the article, run the real stage chain, return the verdict.
+
+    A fresh connection per invocation — sync psycopg connections must not be
+    shared across the runner's concurrent task calls (same rule as the worker).
+    """
+
+    def run_pipeline_task(*, item, **kwargs) -> dict:
+        from ticker_news.service import stages
+        from ticker_news.shared import observability as obs
+
+        data = item["input"] if isinstance(item, dict) else item.input
+        article_id, url = data["article_id"], data["url"]
+        conn = connect_eval(dsn)
+        try:
+            reset_article(conn, article_id)
+            tag_ctx = stages.TagContext.load(conn)
+            with obs.stage_span("embed"):
+                stages.embed_stage(conn, url)
+            with obs.stage_span("classify"):
+                category = stages.classify_stage(conn, url)
+            with obs.stage_span("tag"):
+                stages.tag_stage(conn, url, tag_ctx)
+            with obs.stage_span("insights"):
+                stages.insights_stage(conn, url, tag_ctx)
+            with obs.stage_span("sentiment"):
+                verdict = stages.sentiment_stage(conn, url)
+            if verdict is None:
+                row = conn.execute(
+                    "SELECT category, primary_ticker FROM public.articles WHERE id = %s",
+                    (article_id,),
+                ).fetchone()
+                category, ticker = row if row else (None, None)
+                reason = (
+                    f"category={category}" if category != "real news"
+                    else "no primary ticker" if not ticker
+                    else "sentiment skipped"
+                )
+                return {"action": None, "confidence": None, "category": category,
+                        "ticker": ticker, "skip_reason": reason}
+            return {"action": verdict["action"], "confidence": verdict["confidence"],
+                    "category": category, "ticker": verdict["ticker"],
+                    "skip_reason": None}
+        finally:
+            conn.close()
+
+    return run_pipeline_task
+
+
+EXPERIMENT_NAME = "pipeline-e2e"
+_DESCRIPTION = (
+    "Full post-scrape pipeline re-run per article; verdict scored against the "
+    "realized entry->close price move (Massive)."
+)
+
+
+def run_eval(
+    ids: list[int],
+    *,
+    dataset_name: str | None = None,
+    dsn: str | None = None,
+    run_name: str | None = None,
+):
+    """Run the E2E pipeline experiment; returns the langfuse ExperimentResult.
+
+    Local-data mode runs exactly `ids`. Dataset mode upserts `ids` as items
+    (deterministic id => idempotent) and runs over the WHOLE dataset, so the
+    dataset acts as the growing eval suite.
+    """
+    from ticker_news.shared import observability as obs
+    from ticker_news.shared.config import get_settings
+
+    client = obs.client()
+    if client is None:
+        raise SystemExit(
+            "LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY are required - "
+            "eval results live in Langfuse."
+        )
+    s = get_settings()
+    missing = [
+        name
+        for name, val in (
+            ("MASSIVE_API_KEY", s.massive_api_key),
+            ("GOOGLE_API_KEY", s.google_api_key),
+            ("OPENAI_API_KEY", s.openai_api_key),
+        )
+        if not val
+    ]
+    if missing:
+        raise SystemExit(f"missing required keys: {', '.join(missing)}")
+
+    conn = connect_eval(dsn)
+    try:
+        ensure_eval_schema(conn)
+        items = build_items(conn, ids) if ids else []
+    finally:
+        conn.close()
+
+    common = dict(
+        name=EXPERIMENT_NAME,
+        run_name=run_name,
+        description=_DESCRIPTION,
+        task=make_task(dsn),
+        evaluators=[directional_agreement_evaluator, price_move_evaluator],
+        run_evaluators=[avg_directional_agreement],
+        max_concurrency=2,  # each task fans out ~7 LLM calls already
+        metadata={"entrypoint": "eval"},
+    )
+    try:
+        if dataset_name:
+            try:
+                client.create_dataset(name=dataset_name, description=_DESCRIPTION)
+            except Exception:  # noqa: BLE001 - already exists is fine
+                pass
+            for it in items:
+                client.create_dataset_item(
+                    dataset_name=dataset_name,
+                    id=f"article-{it['input']['article_id']}",
+                    input=it["input"],
+                    metadata=it["metadata"],
+                )
+            dataset = client.get_dataset(dataset_name)
+            if not dataset.items:
+                raise SystemExit(f"dataset '{dataset_name}' has no items")
+            return dataset.run_experiment(**common)
+        if not items:
+            raise SystemExit("no article ids given (use --ids, or --dataset with items)")
+        return client.run_experiment(data=items, **common)
+    finally:
+        obs.flush()
