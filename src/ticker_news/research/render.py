@@ -1,7 +1,7 @@
 """Chart-rendering batch tools over scan / catalyst CSVs.
 
-Consolidates the legacy ``scripts/ticker_scan/{render_bombs,
-render_catalyst_bombs,render_all_tickers}.py`` into one module. All chart
+Consolidates the legacy ticker-scan ``{render_bombs,
+render_catalyst_bombs,render_all_tickers}.py`` scripts into one module. All chart
 drawing delegates to :func:`ticker_news.research.candles.make_chart`, whose
 pandas / mplfinance dependencies (the ``charts`` extra) are imported lazily —
 importing this module and planning jobs needs none of them. DB access (the

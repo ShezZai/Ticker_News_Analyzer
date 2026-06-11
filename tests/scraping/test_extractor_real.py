@@ -13,7 +13,7 @@ PUBLISHERS = ["fool.com", "globenewswire.com", "benzinga.com",
 def test_extracts_real_article(domain):
     path = FIX / f"{domain}.html"
     if not path.exists():
-        pytest.skip(f"no fixture for {domain} (run scripts/capture_fixtures.py)")
+        pytest.skip(f"no fixture for {domain}")
     html = path.read_text(encoding="utf-8")
     raw = RawPage(url=f"https://{domain}/a", final_url=f"https://{domain}/a",
                   status=200, html=html, method="http")

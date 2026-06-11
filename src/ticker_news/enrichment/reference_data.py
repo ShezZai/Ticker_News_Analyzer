@@ -1,7 +1,7 @@
 """Reference-data loaders: ticker universe and Yahoo Finance company overviews.
 
-Merges ``scripts/enrichment/load_ticker_data.py`` (universe) and
-``scripts/enrichment/load_ticker_overview.py`` (Yahoo descriptions) into a
+Merges the legacy ``load_ticker_data.py`` (universe) and
+``load_ticker_overview.py`` (Yahoo descriptions) scripts into a
 single module with renamed entry points:
 
     ensure_universe_schema / load_universe   — from load_ticker_data.py

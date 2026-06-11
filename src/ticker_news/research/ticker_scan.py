@@ -1,7 +1,7 @@
 """Ticker-scan research suite: big-range days, article attach, catalyst returns.
 
-Consolidates the legacy ``scripts/ticker_scan/{scan_ranges,attach_articles,
-catalyst_returns}.py`` into one module. All Massive HTTP goes through
+Consolidates the legacy ticker-scan ``{scan_ranges,attach_articles,
+catalyst_returns}.py`` scripts into one module. All Massive HTTP goes through
 :mod:`ticker_news.research.market_data`; DB access goes through
 :func:`ticker_news.shared.db.connect`.
 

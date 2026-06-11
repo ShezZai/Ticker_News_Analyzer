@@ -1,7 +1,7 @@
 """Historical news + provider sentiment fetch from the Massive.com REST API.
 
-Port of the legacy scripts/data_getting_parsing/ticker_news.py range-fetch
-half. Produces a CSV with one row per (ticker, article) pair:
+Port of the legacy ticker_news.py range-fetch half (pre-package script,
+kept in git history). Produces a CSV with one row per (ticker, article) pair:
 
     ticker,article_url,published_utc,sentiment,sentiment_reasoning,publisher_name
 

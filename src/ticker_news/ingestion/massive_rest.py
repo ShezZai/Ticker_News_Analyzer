@@ -4,7 +4,7 @@ Polls the news endpoint per universe ticker on an interval, keeping a
 per-ticker published_utc cursor and deduping URLs across tickers (one
 FeedItem per article with all its tickers merged). The HTTP plumbing
 (_request retry/backoff, cursor pagination) is ported from the legacy
-scripts/data_getting_parsing/ticker_news.py.
+ticker_news.py script (pre-package, kept in git history).
 """
 
 from __future__ import annotations

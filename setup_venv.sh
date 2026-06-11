@@ -23,9 +23,12 @@ source "$VENV_DIR/bin/activate"
 echo "Upgrading pip..."
 pip install --upgrade pip
 
-echo "Installing requirements..."
-pip install -r requirements.txt
+echo "Installing package (editable, with dev and charts extras)..."
+pip install -e ".[dev,charts]"
 
 echo ""
 echo "Done. To activate the venv run:"
 echo "  source $VENV_DIR/bin/activate"
+echo ""
+echo "Remember to install the scraper's browser fallback:"
+echo "  playwright install chromium"
