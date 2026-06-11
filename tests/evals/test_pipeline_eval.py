@@ -26,6 +26,10 @@ class TestScoreDirectional:
         value, _ = score_directional("sell", 1.7)
         assert value == 0.0
 
+    def test_sell_and_flat_price_disagrees(self):
+        value, _ = score_directional("sell", 0.0)
+        assert value == 0.0
+
     def test_hold_is_excluded(self):
         value, comment = score_directional("hold", 2.0)
         assert value is None
