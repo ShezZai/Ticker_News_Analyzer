@@ -4,80 +4,91 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A pipeline for collecting AI-compute-sector stock news, scraping full article text, embedding it, and running semantic search / event analysis against price action. Everything centers on a single Postgres (pgvector) table: **`public.articles`**. Each stage reads from and/or writes to that table — understanding the table is the fastest way to understand the system.
+A pipeline for AI-compute-sector stock news: collect metadata → scrape full text → embed (pgvector) → classify (Gemini) → tag tickers/segments → extract insights → judge sentiment (LangGraph analyst panel). One installable package, `src/ticker_news/`, organized by domain (screaming architecture): `ingestion/`, `scraping/`, `embedding/`, `classification/`, `enrichment/`, `sentiment/`, `service/`, `research/`, `shared/`. Single CLI entry point: `ticker-news` (Typer app in `src/ticker_news/cli.py`).
 
-## Architecture: the pipeline stages
+Core Postgres tables (one `news` database): `articles` (scraped text + `embedding vector(1536)`), `pipeline_jobs` (the work queue), `article_insights` (embedded insight boxes), `article_sentiment` (verdicts, PK article_id+ticker), `ticker_data` / `ticker_overview` (universe reference data).
 
-Data flows left to right; every stage past step 2 talks to the same `articles` table and is independently re-runnable / resumable.
+## Architecture
 
-1. **Collect news metadata** — `scripts/data_getting_parsing/ticker_news.py` (`fetch_news_csv`) pulls news + per-ticker sentiment from the **Massive.com** REST API into a CSV (`ticker,article_url,published_utc,sentiment,sentiment_reasoning,publisher_name`). `run_universe.py` drives it over the ~118-ticker AI-compute universe defined in `ai_compute_us_market_universe_consolidated_segments_min5.csv`.
-2. **Scrape article bodies** — `scraper/` package (entry: `run_scrape.py`) reads that CSV and upserts full articles into `articles`. See "The scraper" below.
-3. **Embed** — `scripts/embedding/embed_articles.py` adds an `embedding vector(1536)` column (OpenAI `text-embedding-3-small`; vectors come back unit-normalized so cosine == inner product), then builds an HNSW cosine index. Incremental: only rows with `embedding IS NULL` unless `--reembed`.
-4. **Classify** — `scripts/classify/classify_articles.py` assigns each article a content `category` via a two-pass Gemini pipeline (gemini-2.5-flash-lite first; "real news" verdicts re-confirmed with gemini-2.5-flash). `reclassify_real_news.py` is a one-off re-run over existing "real news" rows.
-5. **Enrich/tag** — `scripts/enrichment/tag_segments.py` derives `primary_ticker`, `primary_segment`, `more_tickers[]`, `more_segments[]` from each row's `tickers[]`. `load_ticker_data.py` loads the ticker→segment/company lookup into `public.ticker_data`; `load_ticker_overview.py` adds Yahoo Finance company descriptions to `public.ticker_overview`. `extract_insights.py` chunks each article into "insight boxes" with Gemini and embeds them into `public.article_insights`.
-6. **Search/analyze** — `scripts/search/search_articles.py` embeds a query with the *same* model and does ANN search over `articles.embedding`, with filters for tickers, segment, domain, and date. `search_articles_by_insights.py` does the same at *insight* granularity over `public.article_insights`. `scripts/checks_backtesting/ticker_candles.py` renders intraday OHLC charts (Massive API) to relate articles to price moves.
-7. **Sentiment & backtesting** — `scripts/search/insight_sentiment.py` (buy/sell/hold for a ticker at an article's publication moment, Gemini-judged), `followup_sentiment.py` (second-pass refinement of a `--top-2` run), `backtest_top2.py` (backtests top-2 sentiment on real-news articles against prices). The `scripts/ticker_scan/` suite scans for big intraday-range days (`scan_ranges.py`), attaches that day's articles (`attach_articles.py`), computes buy-the-news returns per catalyst article (`catalyst_returns.py`), and renders charts (`render_all_tickers.py`, `render_bombs.py`, `render_catalyst_bombs.py`).
+Two ways to run the same stage chain (`scrape → embed → classify → tag → insights → sentiment`, defined in `service/jobs.py:STAGES`):
 
-## Critical gotchas
+- **Continuous service** — `ticker-news serve` polls the Massive REST API (`ingestion/massive_rest.py`) and processes articles end to end; `ticker-news backfill --csv ...` does the same in drain mode (exits when feed exhausted + queue empty). Both go through `service/worker.serve()`: a feed task enqueues into `pipeline_jobs`, an async worker pool drives each article through the remaining stages (`service/stages.py` adapters), advancing `stage` after each step so a crash resumes mid-article.
+- **Per-stage batch CLIs** — `ticker-news embed|classify|tag|insights|sentiment` etc. for corpus-wide, resumable work (each picks up only pending rows unless `--reprocess`/`--reembed`).
 
-- **Two different DB connection conventions for the same database.** The scraper reads `SCRAPER_DB_DSN` (default `postgresql://scraper:scraper@localhost:5432/news` — TCP, matches `docker-compose.yml`). Every analysis script under `scripts/` reads `NEWS_DB_DSN` / `DATABASE_URL` (default `dbname=news` — local-socket peer auth). Both must resolve to the **same `news` database**. When running the scraper against the docker DB but analysis scripts against a local socket, set the env vars explicitly or they will silently hit different databases.
-- **Both search tools import `embed_articles.py`** (`search_articles.py` and `search_articles_by_insights.py` do `from embed_articles import embed_query, get_conn, ...`) but live in *different* `scripts/` subfolders. Running either requires the embedding folder on `PYTHONPATH` (e.g. `PYTHONPATH=scripts/embedding python scripts/search/search_articles.py ...`). Query and stored vectors are produced by the same code path on purpose — don't fork the model config.
-- **pgvector must be enabled once as a superuser**: `CREATE EXTENSION vector;` in the `news` DB. The scraper's `schema.sql` does this and creates `articles`; `embed_articles.py` only *checks* for the extension and fails loudly if missing.
-- **The universe CSV is not committed** (`*.csv` is gitignored). `run_universe.py` and `load_ticker_data.py` expect `ai_compute_us_market_universe_consolidated_segments_min5.csv` to be present locally.
-- **Secrets via `.env`** (loaded with `python-dotenv`): `MASSIVE_API_KEY` for all Massive.com calls (news, candles, ticker_scan prices); `OPENAI_API_KEY` for embeddings (`embed_articles.py`, `extract_insights.py`); `GOOGLE_API_KEY` for all Gemini calls (classify, insights, sentiment); DB DSN env vars as above.
+**Queue design** (`service/jobs.py`): one row per article URL; workers claim with `FOR UPDATE SKIP LOCKED`; failures retry with exponential backoff (30s base, 1h cap, 5 attempts) then park as `failed` (requeue via `ticker-news jobs retry`); `PermanentStageError` parks immediately. `NOTIFY pipeline_jobs` wakes the service instantly on enqueue; polling is the fallback. `jobs.recover_orphans()` resets `running` rows at startup (single-service assumption).
 
-## The scraper (`scraper/`)
+**Sentiment** (`sentiment/graph.py`): LangGraph orchestrator — three fixed-role analysts (`fundamentals`, `market_context`, `historical_precedent`) fan out in parallel via the Send API (gemini-2.5-flash-lite), then a synthesis judge (gemini-2.5-flash, structured output) produces a buy/sell/hold `Verdict`. No supervisor; roles are static. Stored in `article_sentiment`.
 
-Async, CSV-driven, resumable. `pipeline.run()` fans CSV rows out to a worker pool (`SCRAPER_CONCURRENCY`) behind a `DomainLimiter` (per-domain concurrency + min delay). Per URL it is **HTTP-first**: `Fetcher.http_get` (httpx); only if the response `http_looks_bad` (bad status, too short, or a Cloudflare/JS-challenge marker) does it fall back to a lazily-launched, shared Playwright Chromium (`browser_get`). Text extraction is in `scraper/extract/` (trafilatura + per-domain overrides in `extract/overrides/`). `store.Store` uses an **autocommit connection — one row per transaction**, so a run is safe to kill and resume; already-`ok` URLs are skipped unless `--retry-errors`. `robots.txt` is honored unless `--ignore-robots`. Settings come from `SCRAPER_*` env vars (see `scraper/config.py`).
+**Feed port** (`ingestion/feed.py`): `NewsFeedSource` protocol (`stream() -> AsyncIterator[FeedItem]`). A future real-time provider (websocket etc.) is one new file implementing it; nothing downstream changes. Current impls: `MassiveRestSource` (live polling), `CsvBackfillSource` (drain).
 
-## Knowledge graph (`graphify-out/`)
-
-A pre-built knowledge graph of this repo lives in `graphify-out/` (520 nodes, 974 edges, 29 communities). For architecture questions, query it instead of grepping — answers cost ~2k tokens vs ~35k for raw reads:
-
-```powershell
-graphify query "<question>"          # BFS context from graphify-out/graph.json
-```
-
-Structural facts it surfaced:
-- **Core abstractions (most-connected nodes):** `RawPage`, `Settings`, `ArticleJob`, `DomainLimiter`, `Article`, `process_job()`, `Fetcher`, `RobotsCache` — the scraper's data-flow spine. Changes to these ripple widest.
-- **`embed_query()` is the bridge** between embedding and both search tools (the PYTHONPATH gotcha above).
-- **Market-time handling (`ZoneInfo`) is duplicated** across `ticker_candles.py`, `scan_ranges.py`, `catalyst_returns.py`, and the sentiment scripts — no shared market-calendar module; keep their premarket/after-hours conventions in sync manually.
-- Tests stub the pipeline via `FakeFetcher` / `FakeStore` / `FakeRobots` in `tests/test_pipeline.py`, all driven by the same `Settings` object as production.
+**Research** (`research/`): on-demand search/scan/backtest/chart tools under `ticker-news research` plus `search` / `search-insights` — read the DB, never write pipeline tables.
 
 ## Commands
 
-Setup (Windows / PowerShell):
+Setup:
 ```powershell
 python -m venv .venv; .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-playwright install chromium   # required by the scraper's browser fallback
+pip install -e ".[dev,charts]"
+playwright install chromium     # scraper's browser fallback
+docker compose up -d            # pgvector/pgvector:pg16, db=news, user/pass scraper, :5432
 ```
-On macOS/Linux, `./setup_venv.sh` does the venv + pip steps (still run `playwright install chromium` after).
+If the `news_pg` container already exists from a prior run, `docker start news_pg` instead. On macOS/Linux, `./setup_venv.sh` does venv + pip. Scraper schema (`scraping/store/schema.sql`) applies automatically on first run.
 
-Database:
-```powershell
-docker compose up -d           # pgvector/pgvector:pg16, db=news, user/pass scraper, :5432
-```
-The scraper applies `scraper/store/schema.sql` automatically on its first run.
+| Command | Does |
+|---|---|
+| `ticker-news serve` | Live pipeline: poll Massive feed, process end to end (`--workers`, `--tickers`, `--lookback-hours`) |
+| `ticker-news backfill --csv F` | Enqueue a news CSV, process to completion, exit (drain mode) |
+| `ticker-news fetch-news --start D` | Fetch news metadata + provider sentiment from Massive into a CSV |
+| `ticker-news scrape --csv F` | Scrape article bodies from a CSV into `articles` (`--retry-errors`, `--ignore-robots`) |
+| `ticker-news embed` | Embed rows missing an embedding; builds HNSW index (`--reembed`, `--no-index`) |
+| `ticker-news classify` | Two-pass Gemini categorization (`--reprocess`, `--ids`, `--workers`) |
+| `ticker-news tag` | Derive primary/secondary tickers + segments from `tickers[]` |
+| `ticker-news insights` | Extract + embed insight boxes (`--embed-only`, `--fix-quotes`) |
+| `ticker-news sentiment` | Batch analyst-panel verdicts for real-news articles missing one |
+| `ticker-news load-universe` / `load-overviews` | Populate `ticker_data` / `ticker_overview` |
+| `ticker-news search` / `search-insights` | pgvector ANN search (`--like ID`, `--ticker`, `--segment`, `--since`, `--ef-search`) |
+| `ticker-news research chart\|scan-ranges\|attach-articles\|catalyst-returns\|backtest\|render-*` | Charts, big-mover scans, buy-the-news + verdict backtests |
+| `ticker-news jobs status` / `jobs retry [--url U]` | Queue counts; requeue failed jobs |
+| `ticker-news prompts push` | Upsert in-repo prompts to Langfuse with the `production` label |
 
-Run the pipeline:
-```powershell
-python run_scrape.py --csv <news.csv>            # scrape (--limit, --retry-errors, --ignore-robots, --concurrency)
-python scripts/embedding/embed_articles.py       # embed (--limit, --reembed, --batch-size, --chunk-pool, --no-index)
-python scripts/classify/classify_articles.py     # categorize articles (two-pass Gemini)
-python scripts/enrichment/tag_segments.py        # tag tickers/segments
-python scripts/enrichment/extract_insights.py    # chunk articles into embedded insight boxes
-$env:PYTHONPATH="scripts/embedding"; python scripts/search/search_articles.py "nvidia data center demand" --k 5 --ticker NVDA
-$env:PYTHONPATH="scripts/embedding"; python scripts/search/search_articles_by_insights.py "guidance cut" --k 10
-```
+## Configuration
 
-Tests (pytest config in `pyproject.toml`, `asyncio_mode=auto`):
+All config flows through `shared/config.py` (`AppSettings`, pydantic-settings, reads `.env`):
+
+- `DATABASE_URL` — the single DSN for every stage (default `postgresql://scraper:scraper@localhost:5432/news`). `SCRAPER_DB_DSN` is accepted as a legacy fallback alias only.
+- `MASSIVE_API_KEY` — news feed, candles, all price data. `OPENAI_API_KEY` — embeddings. `GOOGLE_API_KEY` — all Gemini calls (classify, insights, sentiment).
+- `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` (default `https://cloud.langfuse.com`) — keys absent ⇒ tracing strictly disabled, every helper no-ops.
+- `SCRAPER_*` knobs (concurrency, per-domain limits, timeouts, UA) keep their legacy names — see `AppSettings`.
+
+## Observability & prompts
+
+- **One Langfuse trace per article** (`shared/observability.article_trace`), trace id deterministically seeded from the URL — re-runs and batch re-judges land in the same trace; `entrypoint` metadata (`service`/`batch`) distinguishes runs.
+- **Stable observation names are the eval contract** — do not rename: `process-article` (root), `scrape`, `embed`, `classify`, `tag`, `insights`, `sentiment`, `analyst:<role>`, `synthesize`. Root output carries `category` + `verdict`; metadata carries `prompt_versions` + `entrypoint`. Evals on these are designed for but not built yet (next milestone).
+- **Prompts** (`shared/prompts.py`): in-repo fallback templates are the source of truth; `ticker-news prompts push` publishes them to Langfuse under the `production` label. `get_prompt()` prefers the Langfuse copy, falls back silently. Chains are `lru_cache`d — restart the process to pick up Langfuse prompt edits.
+- **Accepted gap**: embedding costs are not traced (OpenAI embeddings bypass the LangChain callback handler).
+
+## Testing
+
 ```powershell
 pytest                                  # full suite
-pytest -m "not db and not integration"  # offline only — skips tests needing Postgres or live network
-pytest tests/test_urls.py               # one file
-pytest tests/test_pipeline.py::test_name -q   # one test
+pytest -m "not db and not integration"  # offline only
 ```
-The `db` marker = needs a running Postgres; `integration` = hits the live network.
+Markers (pyproject.toml): `db` = needs Postgres, `integration` = live network.
+
+- **`db` tests target `news_test` ONLY.** `tests/scraping/conftest.py` connects via `TICKER_NEWS_TEST_DSN` (default `postgresql://scraper:scraper@localhost:5432/news_test`), auto-creates the database, and **refuses to run unless the db name contains `news_test`** — the fixture TRUNCATEs `articles`. NEVER point it at the real `news` db; a past incident wiped the articles table.
+- `tests/conftest.py` neutralizes `.env` (`AppSettings.model_config["env_file"] = None`) and deletes shell `LANGFUSE_*` vars per test, so tests never read developer secrets or export traces.
+
+## Critical gotchas
+
+- **pgvector extension**: `CREATE EXTENSION vector;` must run once in the db (the scraper's `schema.sql` does it; `embedding/pipeline.py` only checks and fails loudly).
+- **HNSW two-query rule**: for similar-to-article search, fetch the seed embedding first, then run a separate `ORDER BY embedding <=> %s` query — a join-embedded form silently defeats the HNSW index (seq scan). See `research/search.py`.
+- **Embeddings are unit-normalized** (text-embedding-3-small, 1536 dims; cosine == inner product). Query and stored vectors must come from the same code path — `embedding/embedder.py`. Don't fork the model/truncation config.
+- **Sync psycopg connections are not shareable** across threads/concurrent `to_thread` calls — each service worker owns its own connection + scraper `Store` (`service/worker.py`). Follow that pattern for any new concurrency.
+- **Langfuse `CallbackHandler` instances are not thread-safe** — `obs.chain_config()` builds a fresh handler per invocation; do that inside thread-pool workers, never share one handler.
+- **The universe CSV is not committed** (`*.csv` gitignored). `load-universe` and `research scan-ranges` expect `ai_compute_us_market_universe_consolidated_segments_min5.csv` at repo root.
+- **`charts` extra required** for `research chart` / `render-*` (pandas/matplotlib/mplfinance are lazy-imported; missing ⇒ clear error telling you to `pip install -e ".[charts]"`).
+- **Scraper behavior**: HTTP-first (httpx), Playwright Chromium fallback only on bad responses; per-domain rate limiting; robots.txt honored unless `--ignore-robots`; autocommit store (one row per transaction) makes runs kill-safe and resumable.
+
+The knowledge graph in `graphify-out/` is stale (pre-refactor `scripts/` layout) — do not trust it until regenerated.
 
 Use Context7 for best practices with LangFuse and LangGraph
