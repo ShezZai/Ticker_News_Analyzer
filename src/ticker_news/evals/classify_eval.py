@@ -13,6 +13,9 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import psycopg
+from langfuse import Evaluation
+
 DATASET_DEFAULT = "classify-ground-truth"
 
 _REQUIRED_COLUMNS = {"article id", "Act_GT"}
@@ -57,3 +60,61 @@ def load_ground_truth(csv_path: str | Path) -> list[dict]:
     if not rows:
         raise ValueError(f"{csv_path}: ground-truth csv has no rows")
     return rows
+
+
+def build_items(conn: psycopg.Connection, gt_rows: list[dict]) -> list[dict]:
+    """GT rows -> Langfuse dataset items; loud failure on unusable articles.
+
+    Bodies are NOT stored in the dataset — the DB row is the single source
+    of truth (same convention as the pipeline eval); the task reads content
+    by article id at run time.
+    """
+    ids = [r["article_id"] for r in gt_rows]
+    db_rows = conn.execute(
+        "SELECT id, title, status, coalesce(content, '') <> '' "
+        "FROM public.articles WHERE id = ANY(%s)",
+        (ids,),
+    ).fetchall()
+    found = {row[0]: row for row in db_rows}
+    missing = sorted(set(ids) - set(found))
+    if missing:
+        raise ValueError(f"article ids not found: {missing}")
+    bad = sorted(
+        aid for aid, (_, _, status, has_content) in found.items()
+        if status != "ok" or not has_content
+    )
+    if bad:
+        raise ValueError(f"articles have no scraped content: {bad}")
+    return [
+        {
+            "id": f"article-{r['article_id']}",
+            "input": {
+                "article_id": r["article_id"],
+                "title": found[r["article_id"]][1] or "",
+            },
+            "expected_output": {"act": r["act"]},
+            "metadata": {"gt_header": r["header"]},
+        }
+        for r in gt_rows
+    ]
+
+
+def act_accuracy_evaluator(*, output, expected_output, **kwargs) -> Evaluation:
+    """Langfuse item evaluator: predicted ACT vs ground truth (1.0 / 0.0)."""
+    expected = (expected_output or {}).get("act")
+    if not output:
+        return Evaluation(name="act_accuracy", value=0.0,
+                          comment=f"no output, gt={expected}")
+    predicted, act = output.get("predicted"), output.get("act")
+    value = 1.0 if act == expected else 0.0
+    return Evaluation(
+        name="act_accuracy", value=value,
+        comment=f"predicted={predicted!r} -> act={act}, gt={expected}",
+    )
+
+
+def predicted_label_evaluator(*, output, **kwargs) -> Evaluation:
+    """Langfuse item evaluator: raw predicted label/category (categorical),
+    so misclassifications are filterable in the UI."""
+    predicted = (output or {}).get("predicted")
+    return Evaluation(name="predicted_label", value=predicted or "<none>")
