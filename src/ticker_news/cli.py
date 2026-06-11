@@ -581,4 +581,8 @@ def eval_pipeline(
     except SystemExit as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1)
-    typer.echo(result.format())
+    summary = result.format()
+    try:
+        typer.echo(summary)
+    except UnicodeEncodeError:  # Windows cp1252 console vs emoji in format()
+        typer.echo(summary.encode("ascii", "backslashreplace").decode("ascii"))
