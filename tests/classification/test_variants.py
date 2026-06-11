@@ -58,6 +58,9 @@ class TestActMapping:
             "news-event", "news-report",
         })
 
+    def test_unknown_binary_label_is_not_act(self):
+        assert is_act_binary("garbage") is False
+
     def test_every_finegrained_category_maps(self):
         acts = {c for c in FINEGRAINED_CATEGORIES if is_act_finegrained(c)}
         assert acts == NEWS_SUBTYPES

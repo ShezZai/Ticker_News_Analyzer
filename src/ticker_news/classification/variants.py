@@ -66,6 +66,7 @@ class FinegrainedClassification(BaseModel):
 
 
 def is_act_binary(label: str) -> bool:
+    # Unknown labels are treated as NOT-ACT (don't trade on what we can't parse).
     return label == "real news"
 
 
