@@ -17,7 +17,7 @@ Two things, both aimed at fast, repeatable, Langfuse-visible evaluation:
    be tuned iteratively against the labels.
 2. **`--skip-stages` on `ticker-news eval pipeline`** — repeat E2E runs on a
    stable article set (e.g. the 100 "peaceful days" articles) without
-   re-embedding or re-extracting insights every time.
+   re-embedding - the article was already scrapped and embbedded we want to quickly test the following steps in the flow (classification tagging insight extraction and verdict generation)
 
 ## Context
 
@@ -178,7 +178,7 @@ Repeatable fast E2E on the stable set then is:
 
 ```
 ticker-news eval pipeline --ids-file C:\...\100_articles_from_peacfull_days.csv `
-    --dataset pipeline-100-peaceful --skip-stages embed,insights --dsn <shared>
+    --dataset pipeline-100-peaceful --skip-stages embed --dsn <shared>
 ```
 
 (first run seeds the dataset; later runs can use `--dataset` alone).
