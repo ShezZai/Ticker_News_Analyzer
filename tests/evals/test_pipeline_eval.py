@@ -49,3 +49,87 @@ class TestScoreDirectional:
         value, comment = score_directional("strong-buy", 1.0)
         assert value is None
         assert "strong-buy" in comment
+
+
+from datetime import datetime, timezone
+
+import pytest
+
+from ticker_news.evals.pipeline_eval import build_items, reset_article
+
+
+class FakeCursor:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+
+class FakeConn:
+    """Records every execute; returns canned rows for SELECTs."""
+
+    def __init__(self, rows=None):
+        self.executed: list[tuple[str, tuple | None]] = []
+        self._rows = rows or []
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+        return FakeCursor(self._rows)
+
+    def commit(self):
+        self.executed.append(("COMMIT", None))
+
+
+PUBLISHED = datetime(2026, 5, 28, 11, 10, tzinfo=timezone.utc)
+
+
+def _row(aid=20512, ticker="MRVL", published=PUBLISHED, status="ok", has_content=True):
+    return (aid, f"https://example.com/{aid}", ticker, published, "Title", status, has_content)
+
+
+class TestBuildItems:
+    def test_builds_langfuse_local_items(self):
+        conn = FakeConn(rows=[_row()])
+        items = build_items(conn, [20512])
+        assert items == [{
+            "input": {
+                "article_id": 20512,
+                "url": "https://example.com/20512",
+                "published_utc": "2026-05-28T11:10:00+00:00",
+                "title": "Title",
+            },
+            "metadata": {"seed_ticker": "MRVL"},
+        }]
+
+    def test_missing_id_raises(self):
+        conn = FakeConn(rows=[_row()])
+        with pytest.raises(ValueError, match="not found.*99999"):
+            build_items(conn, [20512, 99999])
+
+    def test_article_without_content_raises(self):
+        conn = FakeConn(rows=[_row(status="empty", has_content=False)])
+        with pytest.raises(ValueError, match="no scraped content"):
+            build_items(conn, [20512])
+
+    def test_article_without_published_raises(self):
+        conn = FakeConn(rows=[_row(published=None)])
+        with pytest.raises(ValueError, match="published_utc"):
+            build_items(conn, [20512])
+
+
+class TestResetArticle:
+    def test_clears_derived_fields_and_dependent_rows(self):
+        conn = FakeConn()
+        reset_article(conn, 20512)
+        sql = " ".join(s for s, _ in conn.executed)
+        assert "DELETE FROM public.article_sentiment" in sql
+        assert "DELETE FROM public.article_insights" in sql
+        for col in ("embedding", "category", "category_reason", "primary_ticker",
+                    "primary_segment", "more_tickers", "more_segments",
+                    "insights_extracted_at"):
+            assert col in sql
+        assert conn.executed[-1] == ("COMMIT", None)
