@@ -560,7 +560,7 @@ app.add_typer(eval_app, name="eval")
 
 @eval_app.command("pipeline")
 def eval_pipeline(
-    ids: str | None = typer.Option(None, help="Comma-separated article ids to evaluate."),
+    ids: str | None = typer.Option(None, "--ids", help="Comma-separated article ids to force through the full eval pipeline."),
     dataset: str | None = typer.Option(None, "--dataset", help="Langfuse dataset name: upsert --ids as items, then run over the whole dataset."),
     dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
     run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: auto-generated)."),
@@ -568,7 +568,10 @@ def eval_pipeline(
     """Re-run articles E2E through the pipeline; score verdicts against actual price moves."""
     from ticker_news.evals import pipeline_eval
 
-    id_list = [int(x) for x in ids.split(",") if x.strip()] if ids else []
+    try:
+        id_list = [int(x) for x in ids.split(",") if x.strip()] if ids else []
+    except ValueError as exc:
+        raise typer.BadParameter(f"--ids must be comma-separated integers: {exc}")
     if not id_list and not dataset:
         raise typer.BadParameter("provide --ids, or --dataset with existing items")
     try:
