@@ -18,7 +18,7 @@ from pathlib import Path
 import psycopg
 from langfuse import Evaluation
 
-from ticker_news.evals.pipeline_eval import connect_eval
+from ticker_news.evals.pipeline_eval import connect_eval, upsert_dataset_items
 
 DATASET_DEFAULT = "classify-ground-truth"
 
@@ -91,7 +91,6 @@ def build_items(conn: psycopg.Connection, gt_rows: list[dict]) -> list[dict]:
         raise ValueError(f"articles have no scraped content: {bad}")
     return [
         {
-            "id": f"article-{r['article_id']}",
             "input": {
                 "article_id": r["article_id"],
                 "title": found[r["article_id"]][1] or "",
@@ -283,31 +282,7 @@ def run_eval(
             client.create_dataset(name=dataset_name, description=_DESCRIPTION)
         except Exception:  # noqa: BLE001 - already exists is fine
             pass
-        for it in items:
-            try:
-                client.create_dataset_item(
-                    dataset_name=dataset_name,
-                    id=it["id"],
-                    input=it["input"],
-                    expected_output=it["expected_output"],
-                    metadata=it["metadata"],
-                )
-            except Exception as exc:  # noqa: BLE001
-                # Langfuse item IDs are project-scoped; if this id is already
-                # owned by another dataset, fall back to an auto-generated id.
-                if "not found" in str(exc).lower() or "404" in str(exc):
-                    print(
-                        f"  WARNING: item id {it['id']!r} conflicts with another "
-                        f"dataset; seeding without explicit id"
-                    )
-                    client.create_dataset_item(
-                        dataset_name=dataset_name,
-                        input=it["input"],
-                        expected_output=it["expected_output"],
-                        metadata=it["metadata"],
-                    )
-                else:
-                    raise
+        upsert_dataset_items(client, dataset_name, items)
 
     dataset = client.get_dataset(dataset_name)
     data = list(dataset.items)

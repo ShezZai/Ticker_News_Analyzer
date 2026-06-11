@@ -16,6 +16,7 @@ from ticker_news.evals.pipeline_eval import (
     price_move_evaluator,
     reset_article,
     score_directional,
+    upsert_dataset_items,
 )
 
 
@@ -328,3 +329,45 @@ class TestParseIdsFile:
         f.write_text("671\nabc\n", encoding="utf-8")
         with pytest.raises(ValueError, match="line 2.*abc"):
             parse_ids_file(f)
+
+
+class FakeLangfuseClient:
+    """Records create_dataset_item calls; serves canned existing items."""
+
+    def __init__(self, existing_items=()):
+        self._existing = list(existing_items)
+        self.created: list[dict] = []
+
+    def get_dataset(self, name):
+        return SimpleNamespace(items=self._existing)
+
+    def create_dataset_item(self, **kwargs):
+        self.created.append(kwargs)
+
+
+class TestUpsertDatasetItems:
+    def test_new_items_get_dataset_scoped_ids(self):
+        client = FakeLangfuseClient()
+        upsert_dataset_items(client, "ds-a", [
+            {"input": {"article_id": 595}, "metadata": {"m": 1},
+             "expected_output": {"act": "NO"}},
+        ])
+        assert client.created == [{
+            "dataset_name": "ds-a", "id": "ds-a:article-595",
+            "input": {"article_id": 595}, "metadata": {"m": 1},
+            "expected_output": {"act": "NO"},
+        }]
+
+    def test_existing_items_updated_via_their_own_id(self):
+        legacy = SimpleNamespace(id="article-595", input={"article_id": 595})
+        client = FakeLangfuseClient(existing_items=[legacy])
+        upsert_dataset_items(client, "ds-a", [
+            {"input": {"article_id": 595, "title": "T"}},
+        ])
+        assert client.created[0]["id"] == "article-595"   # reuse, don't duplicate
+
+    def test_expected_output_omitted_when_absent(self):
+        client = FakeLangfuseClient()
+        upsert_dataset_items(client, "ds-a", [{"input": {"article_id": 1}}])
+        assert "expected_output" not in client.created[0]
+        assert client.created[0]["metadata"] is None

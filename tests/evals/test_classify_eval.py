@@ -112,13 +112,11 @@ class TestBuildItems:
         items = build_items(conn, GT_ROWS)
         assert items == [
             {
-                "id": "article-595",
                 "input": {"article_id": 595, "title": "Title 595"},
                 "expected_output": {"act": "NO"},
                 "metadata": {"gt_header": "H595"},
             },
             {
-                "id": "article-14682",
                 "input": {"article_id": 14682, "title": "Title 14682"},
                 "expected_output": {"act": "YES"},
                 "metadata": {"gt_header": "H14682"},

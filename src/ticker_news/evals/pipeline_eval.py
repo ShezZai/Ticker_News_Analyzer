@@ -81,6 +81,36 @@ def score_directional(
     return (1.0 if correct else 0.0), f"{action} with {gain_pct:+.2f}% by close -> {verdict}"
 
 
+def upsert_dataset_items(client, dataset_name: str, items: list[dict]) -> None:
+    """Idempotently seed dataset items keyed on input.article_id.
+
+    Langfuse item ids are PROJECT-scoped, so a bare deterministic id like
+    "article-595" collides when the same article appears in two datasets.
+    Items that already exist in this dataset (matched on article_id) are
+    updated via their existing id - whatever scheme it was created under;
+    new items get a dataset-scoped deterministic id, so re-seeding never
+    duplicates and never collides across datasets.
+    """
+    try:
+        existing = {
+            (it.input or {}).get("article_id"): it.id
+            for it in client.get_dataset(dataset_name).items
+        }
+    except Exception:  # noqa: BLE001 - dataset empty/just created
+        existing = {}
+    for it in items:
+        article_id = it["input"]["article_id"]
+        kwargs = dict(
+            dataset_name=dataset_name,
+            id=existing.get(article_id) or f"{dataset_name}:article-{article_id}",
+            input=it["input"],
+            metadata=it.get("metadata"),
+        )
+        if "expected_output" in it:
+            kwargs["expected_output"] = it["expected_output"]
+        client.create_dataset_item(**kwargs)
+
+
 def connect_eval(dsn: str | None = None) -> psycopg.Connection:
     """Fresh transactional connection to the eval target DB (DSN overridable).
 
@@ -420,29 +450,7 @@ def run_eval(
                 client.create_dataset(name=dataset_name, description=_DESCRIPTION)
             except Exception:  # noqa: BLE001 - already exists is fine
                 pass
-            for it in items:
-                try:
-                    client.create_dataset_item(
-                        dataset_name=dataset_name,
-                        id=f"article-{it['input']['article_id']}",
-                        input=it["input"],
-                        metadata=it["metadata"],
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    # Langfuse item IDs are project-scoped; if this id is already
-                    # owned by another dataset, fall back to an auto-generated id.
-                    if "not found" in str(exc).lower() or "404" in str(exc):
-                        print(
-                            f"  WARNING: item id 'article-{it['input']['article_id']}' "
-                            f"conflicts with another dataset; seeding without explicit id"
-                        )
-                        client.create_dataset_item(
-                            dataset_name=dataset_name,
-                            input=it["input"],
-                            metadata=it["metadata"],
-                        )
-                    else:
-                        raise
+            upsert_dataset_items(client, dataset_name, items)
             dataset = client.get_dataset(dataset_name)
             if not dataset.items:
                 raise SystemExit(f"dataset '{dataset_name}' has no items")
