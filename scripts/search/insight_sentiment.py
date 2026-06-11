@@ -27,6 +27,9 @@ Usage:
     python insight_sentiment.py 4235 --remove-unuseful              # screen context first
     python insight_sentiment.py 4235 --include-strong               # +strong_buy/strong_sell
     python insight_sentiment.py 4235 --include-bias                 # caveat: insights skew bullish
+    python insight_sentiment.py 4235 --choose-1                     # one call: model returns only its single best verdict
+    python insight_sentiment.py 4235 --clean-top-1                  # choose-1, then prune+augment context from the verdict & re-judge
+    python insight_sentiment.py 4235 --top-2                        # the 2 most-confident calls, re-judged
     python insight_sentiment.py 4235 --model gemini-2.5-flash-lite --json
 
 Requires GOOGLE_API_KEY (Gemini) in env / .env. The article + insight data come
@@ -51,6 +54,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from search_articles_by_insights import (  # noqa: E402
     InsightHit, SeedInsight, _seed_window, get_conn, insights_of, search_by_insights,
+    search_insights,
 )
 from hybrid_retrieval import (  # noqa: E402
     DEF_NET_K, DEF_TWO_PHASE_BUDGET, DEF_TWO_PHASE_NET_MIN_SIM, DEF_TWO_PHASE_TAU_INS, retrieve,
@@ -67,6 +71,10 @@ MAX_RELATED = 80  # safety cap on retrieved insights folded into the prompt
 DEFAULT_MONTHS_BEFORE = 3
 DEFAULT_K = 5
 DEFAULT_MIN_SIMILARITY = 0.7
+# --clean-top-1 refinement: how many insights to pull from the verdict's
+# justification, and the cosine floor for them.
+DEFAULT_REFINE_K = 20
+DEFAULT_REFINE_MIN_SIMILARITY = 0.75
 DEFAULT_RETRIEVAL = "insight"
 RETRIEVALS = ("insight", "two-phase-similarity")
 ACTIONS = ["buy", "sell", "hold"]
@@ -130,9 +138,26 @@ Rules:
 - For each ticker return one action: {action_menu}; a confidence in [0, 1]; and a
   2-4 sentence justification grounded in the article.
 {bias_note}
-Return ONLY a JSON array with one object per ticker, in the same order:
-[{{"ticker": "...", "action": "...", "confidence": 0.0, "justification": "..."}}]
+{return_instruction}
 """
+
+# Default: emit every ticker. Substituted into PROMPT_INSTRUCTIONS as a literal
+# value, so its JSON braces stay single (they are NOT re-run through .format()).
+RETURN_ALL = (
+    "Return ONLY a JSON array with one object per ticker, in the same order:\n"
+    '[{"ticker": "...", "action": "...", "confidence": 0.0, "justification": "..."}]'
+)
+
+# --choose-1: weigh every ticker internally but surface only the single best call.
+RETURN_CHOOSE_ONE = (
+    "Weigh ALL the tickers above against each other, but DO NOT return them all.\n"
+    "Pick the ONE ticker with the strongest, highest-confidence actionable verdict\n"
+    "for the immediate reaction to THIS article and return ONLY that one. Prefer a\n"
+    'non-"hold" call; fall back to "hold" only if no ticker has any actionable edge.\n'
+    "\n"
+    "Return ONLY a JSON array containing EXACTLY ONE object:\n"
+    '[{"ticker": "...", "action": "...", "confidence": 0.0, "justification": "..."}]'
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -241,12 +266,14 @@ def _fmt_et(dt) -> str:
 
 def build_prompt(targets: List[str], article: dict, seeds: List[SeedInsight],
                  related: List[InsightHit], actions: List[str] = ACTIONS,
-                 bias: bool = False) -> str:
+                 bias: bool = False, choose_one: bool = False) -> str:
     pub = _fmt_et(article["published_utc"])
     menu = ACTION_MENU_STRONG if actions == ACTIONS_STRONG else ACTION_MENU
     parts = [PROMPT_INSTRUCTIONS.format(tickers=", ".join(targets), pub=pub,
                                         action_menu=menu,
-                                        bias_note=BIAS_NOTE if bias else "")]
+                                        bias_note=BIAS_NOTE if bias else "",
+                                        return_instruction=(RETURN_CHOOSE_ONE if choose_one
+                                                            else RETURN_ALL))]
 
     parts.append(f"\n===== THE ARTICLE -- breaking NOW at {pub} ET (react to this) =====")
     parts.append(f"TICKERS TO JUDGE: {', '.join(targets)}")
@@ -421,6 +448,102 @@ def screen_related(related: List[InsightHit], article: dict, targets: List[str],
     return kept, len(related) - len(kept)
 
 
+# --------------------------------------------------------------------------- #
+# --clean-top-1 refinement: prune context to the chosen verdict, then augment it
+# with insights pulled from the verdict's own justification, and re-judge.
+# --------------------------------------------------------------------------- #
+CLEAN_CHOICE_INSTRUCTIONS = """You are tightening the background context behind a SINGLE trading verdict.
+
+An analyst was shown THE ARTICLE plus the numbered RELATED PRIOR INSIGHTS below,
+and committed to exactly ONE verdict:
+  TICKER:    {ticker}
+  ACTION:    {action} (confidence {conf})
+  REASONING: {justification}
+
+Your task: keep only the related insights that are RELEVANT to THIS verdict --
+they bear on {ticker} and on the reasoning above (they support, qualify, or
+challenge it, or are directly pertinent background for how {ticker} reacts to THE
+ARTICLE). DROP every insight that is unrelated to {ticker} or to this verdict:
+about other companies/events with no bearing on it, incoherent, or off-topic.
+
+When unsure, DROP it -- keep the context tight around {ticker} and this verdict.
+
+Return ONLY a JSON array of the integer indices to KEEP, e.g. [0, 2, 5]. Return
+[] if NONE are relevant."""
+
+
+def build_clean_choice_prompt(chosen: str, verdict: dict, article: dict,
+                              related: List[InsightHit]) -> str:
+    """Screening prompt: which related insights are relevant to the chosen verdict."""
+    parts = [CLEAN_CHOICE_INSTRUCTIONS.format(
+        ticker=chosen, action=verdict.get("action", "?"),
+        conf=float(verdict.get("confidence", 0.0)),
+        justification=verdict.get("justification", "(none)"))]
+    pub = _fmt_et(article["published_utc"])
+    parts.append(f"\n===== THE ARTICLE -- breaking at {pub} ET =====")
+    parts.append(f"TITLE: {article['title'] or '(no title)'}")
+    parts.append("\n===== RELATED PRIOR INSIGHTS (candidate background) =====")
+    for i, h in enumerate(related):
+        when = _fmt_et(h.published_utc)
+        tick = ",".join(h.tickers) if h.tickers else "-"
+        parts.append(f"[{i}] {when} | [{tick}] | TOPIC: {h.topic or '(no topic)'}")
+        parts.append(f"     SOURCE HEADLINE: {h.article_headline or '(no headline)'}")
+        if h.insight:
+            parts.append(f"     INSIGHT: {h.insight}")
+    return "\n".join(parts)
+
+
+def clean_related_for_choice(related: List[InsightHit], chosen: str, verdict: dict,
+                             article: dict, model: str) -> "tuple[List[InsightHit], int]":
+    """Drop related insights unrelated to the chosen ticker/verdict via a model call.
+
+    Returns (kept, n_removed). On a failed screening call the list is unchanged.
+    """
+    if not related:
+        return related, 0
+    keep = ask_gemini_keep_indices(
+        build_clean_choice_prompt(chosen, verdict, article, related), model, len(related)
+    )
+    if keep is None:
+        return related, 0
+    kept = [related[i] for i in keep]
+    return kept, len(related) - len(kept)
+
+
+def retrieve_by_justification(
+    conn, justification: str, seed_pub, months_before: Optional[int], exclusive: bool,
+    seed_article_id: int, exclude_ids: "set[int]",
+    k: int = DEFAULT_REFINE_K, min_sim: float = DEFAULT_REFINE_MIN_SIMILARITY,
+) -> List[InsightHit]:
+    """Top-k insights most similar to the verdict's justification (no lookahead).
+
+    Embeds the free-text justification and runs an ANN search over article_insights
+    within the same months-before / exclusive window the rest of the pipeline uses,
+    so it cannot pull anything published at/after the seed. The seed article's own
+    insights and any already-present insight ids are dropped.
+    """
+    if not (justification or "").strip():
+        return []
+    since, until = _seed_window(seed_pub, months_before, exclusive)
+    hits = search_insights(
+        justification, k=k, since=since, until=until,
+        min_similarity=min_sim, until_exclusive=exclusive, conn=conn,
+    )
+    return [h for h in hits
+            if h.article_id != seed_article_id and h.insight_id not in exclude_ids]
+
+
+def merge_related(base: List[InsightHit], extra: List[InsightHit]) -> List[InsightHit]:
+    """Union two InsightHit lists, dedupe by id (best score), sort earliest->latest."""
+    best: dict[int, InsightHit] = {}
+    for h in list(base) + list(extra):
+        cur = best.get(h.insight_id)
+        if cur is None or h.similarity > cur.similarity:
+            best[h.insight_id] = h
+    merged = sorted(best.values(), key=lambda h: (h.published_utc is None, h.published_utc))
+    return merged[:MAX_RELATED]
+
+
 def _role(article: dict, ticker: str) -> str:
     return "primary" if ticker.upper() == (article["primary_ticker"] or "").upper() else "mentioned"
 
@@ -488,7 +611,28 @@ def main() -> None:
                    help="judge ALL the article's tickers, then re-run the 2 highest-"
                         "confidence non-hold tickers each on its own; print one "
                         "consolidated JSON from the 3 calls")
+    p.add_argument("--choose-1", "--choose_1", dest="choose_1", action="store_true",
+                   help="send ALL the article's tickers in ONE prompt and have the "
+                        "model weigh them against each other and return only the "
+                        "single most-confident verdict upfront (one call, no re-judge)")
+    p.add_argument("--clean-top-1", "--clean_top_1", dest="clean_top_1", action="store_true",
+                   help="implies --choose-1, then REFINES it: (1) drop related "
+                        "insights unrelated to the chosen ticker/verdict, (2) pull "
+                        f"top-{DEFAULT_REFINE_K} insights (sim>={DEFAULT_REFINE_MIN_SIMILARITY}) "
+                        "similar to the verdict's justification, and (3) re-run the "
+                        "choose-1 query on the cleaned+augmented context")
+    p.add_argument("--refine-k", type=int, default=DEFAULT_REFINE_K,
+                   help=f"[--clean-top-1] insights to pull from the justification "
+                        f"(default {DEFAULT_REFINE_K})")
+    p.add_argument("--refine-min-similarity", type=float,
+                   default=DEFAULT_REFINE_MIN_SIMILARITY,
+                   help=f"[--clean-top-1] cosine floor for justification matches "
+                        f"(default {DEFAULT_REFINE_MIN_SIMILARITY})")
     args = p.parse_args()
+    if args.clean_top_1:
+        args.choose_1 = True  # --clean-top-1 is a refinement layer on top of choose-1
+    if args.choose_1 and args.top_2:
+        raise SystemExit("pass only one of --choose-1 / --clean-top-1 / --top-2.")
 
     conn = get_conn()
     try:
@@ -505,8 +649,11 @@ def main() -> None:
             t.upper() for t in ([article["primary_ticker"]] + article["more_tickers"])
             if t and not (t.upper() in seen or seen.add(t.upper()))
         ]
-        # --top-2 always judges everything first; otherwise honor an explicit --ticker
-        if args.ticker and not args.top_2:
+        # --top-2 (joint call + re-judge the 2 best) and --choose-1 (one call, model
+        # returns only the single best) both judge ALL tickers, so they override an
+        # explicit --ticker; both want a real choice between >= 2 tickers.
+        multi = args.top_2 or args.choose_1
+        if args.ticker and not multi:
             targets = [args.ticker.strip().upper()]
         else:
             targets = all_targets
@@ -519,6 +666,13 @@ def main() -> None:
                     file=sys.stderr,
                 )
                 args.top_2 = False
+            if args.choose_1 and not args.clean_top_1 and len(targets) < 2:
+                print(
+                    f"warning: --choose-1 needs ≥ 2 tickers to choose from; article has "
+                    f"{len(targets)} -- judging it normally instead.",
+                    file=sys.stderr,
+                )
+                args.choose_1 = False
 
         seeds = insights_of(conn, args.article_id)
         if args.retrieval == "two-phase-similarity":
@@ -543,17 +697,67 @@ def main() -> None:
 
     actions = ACTIONS_STRONG if args.include_strong else ACTIONS
 
-    def judge(tks: List[str]) -> List[dict]:
+    def judge(tks: List[str], choose_one: bool = False,
+              rel: Optional[List[InsightHit]] = None) -> List[dict]:
         return _annotate(
-            ask_gemini(build_prompt(tks, article, seeds, related, actions,
-                                    args.include_bias),
+            ask_gemini(build_prompt(tks, article, seeds,
+                                    related if rel is None else rel, actions,
+                                    args.include_bias, choose_one),
                        args.model, actions=actions),
             article,
         )
 
     if args.show_context:
-        print(build_prompt(targets, article, seeds, related, actions, args.include_bias))
+        print(build_prompt(targets, article, seeds, related, actions,
+                           args.include_bias, args.choose_1))
         print("\n" + "=" * 70 + "\n")
+
+    # --choose-1: a SINGLE call where the prompt asks the model to weigh every
+    # ticker and return only the one most-confident verdict upfront.
+    if args.choose_1:
+        verdicts = judge(targets, choose_one=True)
+        v0 = verdicts[0] if verdicts else None
+        out = {
+            "article_id": article["id"],
+            "published_et": _fmt_et(article["published_utc"]),
+            "title": article["title"],
+            "context": {"article_insights": len(seeds), "related_insights": len(related),
+                        "related_removed": removed},
+            "tickers_judged": targets,
+            "chosen": v0,
+        }
+        # --clean-top-1: refine that verdict. Prune the context to insights relevant
+        # to the chosen ticker/verdict, pull more insights from the verdict's own
+        # justification (no lookahead), then re-judge on the cleaned+augmented set.
+        if args.clean_top_1 and v0:
+            chosen_tk = str(v0.get("ticker", "")).upper()
+            cleaned, n_clean = clean_related_for_choice(
+                related, chosen_tk, v0, article, args.model)
+            present = {h.insight_id for h in cleaned} | {s.insight_id for s in seeds}
+            rconn = get_conn()
+            try:
+                extra = retrieve_by_justification(
+                    rconn, v0.get("justification", ""), article["published_utc"],
+                    args.months_before, args.exclusive, article["id"], present,
+                    k=args.refine_k, min_sim=args.refine_min_similarity)
+            finally:
+                rconn.close()
+            new_related = merge_related(cleaned, extra)
+            if args.show_context:
+                print("===== REFINED (clean-top-1) PROMPT =====")
+                print(build_prompt(targets, article, seeds, new_related, actions,
+                                   args.include_bias, True))
+                print("\n" + "=" * 70 + "\n")
+            verdicts2 = judge(targets, choose_one=True, rel=new_related)
+            out["mode"] = "clean-top-1"
+            out["refine"] = {
+                "cleaned_removed": n_clean,
+                "added_from_justification": len(extra),
+                "related_insights": len(new_related),
+            }
+            out["chosen_refined"] = verdicts2[0] if verdicts2 else None
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return
 
     # --top-2: one joint call, then re-run the 2 best non-hold tickers separately.
     if args.top_2:
