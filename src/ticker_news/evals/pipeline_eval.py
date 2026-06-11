@@ -13,9 +13,50 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from pathlib import Path
 
 import psycopg
 from langfuse import Evaluation
+
+# Stages whose outputs may be preserved across eval runs. Sentiment is never
+# skippable - the verdict is what the experiment scores.
+SKIPPABLE_STAGES = ("embed", "classify", "tag", "insights")
+
+# stage -> articles columns nulled when the stage is NOT kept.
+_STAGE_COLUMNS = {
+    "embed": ("embedding",),
+    "classify": ("category", "category_reason"),
+    "tag": ("primary_ticker", "primary_segment", "more_tickers", "more_segments"),
+    "insights": ("insights_extracted_at",),
+}
+
+
+def parse_skip_stages(raw: str | None) -> frozenset[str]:
+    """Validate a comma-separated --skip-stages value. ValueError on unknowns."""
+    if not raw:
+        return frozenset()
+    stages = {s.strip() for s in raw.split(",") if s.strip()}
+    unknown = stages - set(SKIPPABLE_STAGES)
+    if unknown:
+        raise ValueError(
+            f"unknown stage(s): {', '.join(sorted(unknown))} "
+            f"(skippable: {', '.join(SKIPPABLE_STAGES)})"
+        )
+    return frozenset(stages)
+
+
+def parse_ids_file(path: str | Path) -> list[int]:
+    """One article id per line (utf-8, BOM/trailing-comma tolerant)."""
+    ids: list[int] = []
+    text = Path(path).read_text(encoding="utf-8-sig")
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        token = line.strip().rstrip(",").strip()
+        if not token:
+            continue
+        if not token.isdigit():
+            raise ValueError(f"{path} line {lineno}: not an article id: {token!r}")
+        ids.append(int(token))
+    return ids
 
 
 def score_directional(
@@ -114,25 +155,33 @@ def build_items(conn: psycopg.Connection, ids: list[int]) -> list[dict]:
     return items
 
 
-def reset_article(conn: psycopg.Connection, article_id: int) -> None:
-    """Clear every derived field so the idempotent stage adapters re-run.
+def reset_article(
+    conn: psycopg.Connection, article_id: int, keep: frozenset[str] = frozenset()
+) -> None:
+    """Clear derived fields so the idempotent stage adapters re-run.
 
-    Scraped content is untouched. One transaction: an eval article is never
-    left half-reset.
+    Stages named in `keep` retain their outputs, so the corresponding
+    adapters no-op naturally (no LLM/API cost). Scraped content is never
+    touched; the sentiment verdict is always cleared (it is what the eval
+    scores). One transaction: an eval article is never left half-reset.
     """
     conn.execute(
         "DELETE FROM public.article_sentiment WHERE article_id = %s", (article_id,)
     )
-    conn.execute(
-        "DELETE FROM public.article_insights WHERE article_id = %s", (article_id,)
-    )
-    conn.execute(
-        "UPDATE public.articles SET embedding = NULL, category = NULL, "
-        "category_reason = NULL, primary_ticker = NULL, primary_segment = NULL, "
-        "more_tickers = NULL, more_segments = NULL, insights_extracted_at = NULL "
-        "WHERE id = %s",
-        (article_id,),
-    )
+    if "insights" not in keep:
+        conn.execute(
+            "DELETE FROM public.article_insights WHERE article_id = %s", (article_id,)
+        )
+    columns = [
+        col for stage in SKIPPABLE_STAGES if stage not in keep
+        for col in _STAGE_COLUMNS[stage]
+    ]
+    if columns:
+        assignments = ", ".join(f"{col} = NULL" for col in columns)
+        conn.execute(
+            f"UPDATE public.articles SET {assignments} WHERE id = %s",
+            (article_id,),
+        )
     conn.commit()
 
 

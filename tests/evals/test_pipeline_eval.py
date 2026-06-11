@@ -7,9 +7,12 @@ import pytest
 
 from ticker_news.evals import pipeline_eval
 from ticker_news.evals.pipeline_eval import (
+    SKIPPABLE_STAGES,
     avg_directional_agreement,
     build_items,
     directional_agreement_evaluator,
+    parse_ids_file,
+    parse_skip_stages,
     price_move_evaluator,
     reset_article,
     score_directional,
@@ -231,3 +234,72 @@ class TestRunEvaluator:
         ev = avg_directional_agreement(item_results=[])
         assert ev.name == "avg_directional_agreement_skip"
         assert ev.value == "no scorable items"
+
+
+class TestResetArticleKeep:
+    def _update_sql(self, conn):
+        updates = [s for s, _ in conn.executed if s.startswith("UPDATE")]
+        return updates[0] if updates else ""
+
+    def test_keep_embed_preserves_embedding(self):
+        conn = FakeConn()
+        reset_article(conn, 20512, keep=frozenset({"embed"}))
+        sql = self._update_sql(conn)
+        assert "embedding = NULL" not in sql
+        assert "category = NULL" in sql
+        assert any("article_insights" in s for s, _ in conn.executed)
+
+    def test_keep_insights_preserves_rows_and_stamp(self):
+        conn = FakeConn()
+        reset_article(conn, 20512, keep=frozenset({"insights"}))
+        assert not any("article_insights" in s for s, _ in conn.executed)
+        sql = self._update_sql(conn)
+        assert "insights_extracted_at = NULL" not in sql
+        assert "embedding = NULL" in sql
+
+    def test_keep_all_still_deletes_sentiment(self):
+        conn = FakeConn()
+        reset_article(conn, 20512, keep=frozenset(SKIPPABLE_STAGES))
+        sqls = [s for s, _ in conn.executed if s != "COMMIT"]
+        assert len(sqls) == 1
+        assert "article_sentiment" in sqls[0]
+
+    def test_default_resets_everything_as_before(self):
+        conn = FakeConn()
+        reset_article(conn, 20512)
+        sql = self._update_sql(conn)
+        for col in ("embedding", "category", "category_reason", "primary_ticker",
+                    "primary_segment", "more_tickers", "more_segments",
+                    "insights_extracted_at"):
+            assert f"{col} = NULL" in sql
+
+
+class TestParseSkipStages:
+    def test_parses_comma_list(self):
+        assert parse_skip_stages("embed, insights") == frozenset({"embed", "insights"})
+
+    def test_none_and_empty_mean_no_skips(self):
+        assert parse_skip_stages(None) == frozenset()
+        assert parse_skip_stages("") == frozenset()
+
+    def test_unknown_stage_raises(self):
+        with pytest.raises(ValueError, match="sentiment"):
+            parse_skip_stages("embed,sentiment")
+
+
+class TestParseIdsFile:
+    def test_parses_one_id_per_line(self, tmp_path):
+        f = tmp_path / "ids.csv"
+        f.write_text("671\n685\n\n694\n", encoding="utf-8")
+        assert parse_ids_file(f) == [671, 685, 694]
+
+    def test_tolerates_bom_and_trailing_commas(self, tmp_path):
+        f = tmp_path / "ids.csv"
+        f.write_text("671,\n685\n", encoding="utf-8-sig")
+        assert parse_ids_file(f) == [671, 685]
+
+    def test_non_integer_line_raises_with_line_number(self, tmp_path):
+        f = tmp_path / "ids.csv"
+        f.write_text("671\nabc\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="line 2.*abc"):
+            parse_ids_file(f)
