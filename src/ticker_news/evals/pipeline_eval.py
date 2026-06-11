@@ -288,7 +288,7 @@ def _warn_failed_items(result, requested_ids: list[int]) -> None:
         )
 
 
-def make_task(dsn: str | None):
+def make_task(dsn: str | None, skip_stages: frozenset[str] = frozenset()):
     """Experiment task: reset the article, run the real stage chain, return the verdict.
 
     A fresh connection per invocation — sync psycopg connections must not be
@@ -303,7 +303,7 @@ def make_task(dsn: str | None):
         article_id, url = data["article_id"], data["url"]
         conn = connect_eval(dsn)
         try:
-            reset_article(conn, article_id)
+            reset_article(conn, article_id, keep=skip_stages)
             tag_ctx = stages.TagContext.load(conn)
             with obs.stage_span("embed"):
                 stages.embed_stage(conn, url)
@@ -350,6 +350,7 @@ def run_eval(
     dataset_name: str | None = None,
     dsn: str | None = None,
     run_name: str | None = None,
+    skip_stages: frozenset[str] = frozenset(),
 ):
     """Run the E2E pipeline experiment; returns the langfuse ExperimentResult.
 
@@ -389,18 +390,21 @@ def run_eval(
     finally:
         conn.close()
 
+    metadata = {"entrypoint": "eval"}
+    if skip_stages:
+        metadata["skipped_stages"] = sorted(skip_stages)
     common = dict(
         name=EXPERIMENT_NAME,
         run_name=run_name,
         description=_DESCRIPTION,
-        task=make_task(dsn),
+        task=make_task(dsn, skip_stages),
         evaluators=[directional_agreement_evaluator, price_move_evaluator],
         run_evaluators=[avg_directional_agreement],
         # Sync tasks run serially in langfuse 4.7.1 (no to_thread); this only
         # caps the async evaluators. Kept low deliberately - each item already
         # fans out ~7 LLM calls inside the stages.
         max_concurrency=2,
-        metadata={"entrypoint": "eval"},
+        metadata=metadata,
     )
     try:
         if dataset_name:

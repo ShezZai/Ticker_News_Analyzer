@@ -445,3 +445,44 @@ def test_eval_classify_rejects_bad_mode():
 def test_eval_classify_rejects_bad_ids():
     result = runner.invoke(cli.app, ["eval", "classify", "--ids", "1,x"])
     assert result.exit_code != 0
+
+
+def test_eval_pipeline_passes_skip_stages_and_ids_file(monkeypatch, tmp_path):
+    ids_file = tmp_path / "ids.csv"
+    ids_file.write_text("671\n685\n", encoding="utf-8")
+    captured = {}
+
+    class FakeResult:
+        def format(self):
+            return "ok"
+
+    def fake_run_eval(ids, **kwargs):
+        captured["ids"] = ids
+        captured.update(kwargs)
+        return FakeResult()
+
+    from ticker_news.evals import pipeline_eval
+    monkeypatch.setattr(pipeline_eval, "run_eval", fake_run_eval)
+    result = runner.invoke(cli.app, [
+        "eval", "pipeline", "--ids", "20512", "--ids-file", str(ids_file),
+        "--skip-stages", "embed",
+    ])
+    assert result.exit_code == 0, result.output
+    assert captured["ids"] == [671, 685, 20512]   # union, sorted
+    assert captured["skip_stages"] == frozenset({"embed"})
+
+
+def test_eval_pipeline_rejects_unknown_skip_stage(monkeypatch):
+    result = runner.invoke(cli.app, [
+        "eval", "pipeline", "--ids", "1", "--skip-stages", "sentiment",
+    ])
+    assert result.exit_code != 0
+
+
+def test_eval_pipeline_rejects_bad_ids_file(monkeypatch, tmp_path):
+    ids_file = tmp_path / "ids.csv"
+    ids_file.write_text("671\nabc\n", encoding="utf-8")
+    result = runner.invoke(cli.app, [
+        "eval", "pipeline", "--ids-file", str(ids_file),
+    ])
+    assert result.exit_code != 0

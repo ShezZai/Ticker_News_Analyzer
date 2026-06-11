@@ -568,9 +568,11 @@ def _echo_summary(summary: str) -> None:
 @eval_app.command("pipeline")
 def eval_pipeline(
     ids: str | None = typer.Option(None, "--ids", help="Comma-separated article ids to force through the full eval pipeline."),
+    ids_file: str | None = typer.Option(None, "--ids-file", help="File with one article id per line (unioned with --ids)."),
     dataset: str | None = typer.Option(None, "--dataset", help="Langfuse dataset name: upsert --ids as items, then run over the whole dataset."),
     dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
     run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: auto-generated)."),
+    skip_stages: str | None = typer.Option(None, "--skip-stages", help="Comma-separated stages whose stored outputs are reused instead of re-run: embed, classify, tag, insights."),
 ) -> None:
     """Re-run articles E2E through the pipeline; score verdicts against actual price moves."""
     from ticker_news.evals import pipeline_eval
@@ -579,11 +581,21 @@ def eval_pipeline(
         id_list = [int(x) for x in ids.split(",") if x.strip()] if ids else []
     except ValueError as exc:
         raise typer.BadParameter(f"--ids must be comma-separated integers: {exc}")
+    if ids_file:
+        try:
+            id_list = sorted(set(id_list) | set(pipeline_eval.parse_ids_file(ids_file)))
+        except (OSError, ValueError) as exc:
+            raise typer.BadParameter(f"--ids-file: {exc}")
+    try:
+        skip = pipeline_eval.parse_skip_stages(skip_stages)
+    except ValueError as exc:
+        raise typer.BadParameter(f"--skip-stages: {exc}")
     if not id_list and not dataset:
-        raise typer.BadParameter("provide --ids, or --dataset with existing items")
+        raise typer.BadParameter("provide --ids/--ids-file, or --dataset with existing items")
     try:
         result = pipeline_eval.run_eval(
-            id_list, dataset_name=dataset, dsn=dsn, run_name=run_name
+            id_list, dataset_name=dataset, dsn=dsn, run_name=run_name,
+            skip_stages=skip,
         )
     except SystemExit as exc:
         typer.echo(str(exc), err=True)
