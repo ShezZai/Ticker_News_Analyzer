@@ -61,11 +61,12 @@ def chain_config(run_name: str | None = None) -> dict:
 
 
 @contextmanager
-def article_trace(url: str, *, ticker: str | None = None):
+def article_trace(url: str, *, ticker: str | None = None, entrypoint: str = "service"):
     """Root trace for one article moving through the pipeline.
 
-    Deterministic trace id seeded from the URL so re-runs correlate.
-    Yields the root span (or None when disabled).
+    Deterministic trace id seeded from the URL so re-runs correlate — a batch
+    re-judge lands in the article's existing trace; the entrypoint metadata
+    distinguishes the runs. Yields the root span (or None when disabled).
 
     Trace-level input is set at construction to materialize in Langfuse Cloud
     eval datasets.
@@ -83,7 +84,7 @@ def article_trace(url: str, *, ticker: str | None = None):
         trace_context={"trace_id": trace_id},
         input={"url": url},
     ) as root:
-        metadata = {"url": url[:200]}
+        metadata = {"url": url[:200], "entrypoint": entrypoint}
         if ticker:
             metadata["ticker"] = ticker
         with propagate_attributes(tags=["pipeline-v2"], metadata=metadata):

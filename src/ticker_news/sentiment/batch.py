@@ -22,11 +22,12 @@ def run_batch(*, limit: int | None = None, reprocess: bool = False) -> int:
             "WHERE s.article_id = a.id AND s.ticker = a.primary_ticker)"
         )
         lim = f"LIMIT {int(limit)}" if limit else ""
-        urls = [r[0] for r in conn.execute(
-            f"SELECT a.url FROM public.articles a "
+        rows = conn.execute(
+            f"SELECT a.url, a.primary_ticker FROM public.articles a "
             f"WHERE a.category = 'real news' AND a.primary_ticker IS NOT NULL "
             f"AND a.content IS NOT NULL AND a.content <> '' {not_done} ORDER BY a.published_utc {lim}"
-        ).fetchall()]
+        ).fetchall()
+        urls = [url for url, _ticker in rows]
         conn.commit()
         if reprocess:
             # Delete existing verdicts for the selected articles up front so
@@ -41,10 +42,12 @@ def run_batch(*, limit: int | None = None, reprocess: bool = False) -> int:
             )
             conn.commit()
         done = 0
-        bar = tqdm(urls, unit="article") if tqdm else urls
-        for url in bar:
+        bar = tqdm(rows, unit="article") if tqdm else rows
+        for url, ticker in bar:
             try:
-                sentiment_stage(conn, url)
+                with obs.article_trace(url, ticker=ticker, entrypoint="batch"):
+                    with obs.stage_span("sentiment"):
+                        sentiment_stage(conn, url)
                 done += 1
             except Exception as exc:
                 print(f"  {url}: {exc!r}")

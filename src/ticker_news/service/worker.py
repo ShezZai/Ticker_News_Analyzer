@@ -3,8 +3,8 @@
 Each worker owns its own psycopg connection (sync psycopg connections must not
 be shared across concurrently-running to_thread calls). One AsyncConnection
 LISTENs on the notify channel to wake claimers instantly; a poll interval is
-the fallback. process_article is the single seam where the per-article
-Langfuse trace attaches in a later phase.
+the fallback. process_article opens the per-article Langfuse trace; stages
+emit child spans.
 """
 
 from __future__ import annotations
@@ -48,6 +48,14 @@ async def _run_stage(runner: StageRunner, job: Job) -> object:
     return result
 
 
+def _trace_metadata() -> dict:
+    """Prompt versions actually used this process — A/B attribution on traces."""
+    from ticker_news.shared import prompts
+
+    versions = prompts.versions_seen()
+    return {"prompt_versions": versions} if versions else {}
+
+
 async def process_article(
     job: Job,
     runners: Mapping[str, StageRunner],
@@ -62,35 +70,44 @@ async def process_article(
     """
     stage = job.stage
     ticker = job.tickers[0] if job.tickers else None
+    summary: dict = {}
     with obs.article_trace(job.article_url, ticker=ticker) as root:
         try:
             while stage != DONE:
                 runner = runners[stage]
                 with obs.stage_span(stage):
                     result = await _run_stage(runner, job)
+                if stage == "classify" and isinstance(result, str):
+                    summary["category"] = result
+                if stage == "sentiment" and isinstance(result, dict):
+                    summary["verdict"] = result
                 if stage == "scrape" and result == "empty":
                     # Nothing extracted — no content for downstream stages.
                     await asyncio.to_thread(queue.advance, conn, job.article_url, DONE)
                     if root is not None:
-                        root.update(output={"final_stage": jobs.DONE, "ok": True})
+                        root.update(output={"final_stage": jobs.DONE, "ok": True, **summary},
+                                    metadata=_trace_metadata())
                     return True
                 stage = jobs.next_stage(stage)
                 await asyncio.to_thread(queue.advance, conn, job.article_url, stage)
             if root is not None:
-                root.update(output={"final_stage": jobs.DONE, "ok": True})
+                root.update(output={"final_stage": jobs.DONE, "ok": True, **summary},
+                            metadata=_trace_metadata())
             return True
         except PermanentStageError as exc:
             logger.warning("article %s permanently failed at stage %s: %r", job.article_url, stage, exc)
             if root is not None:
                 root.update(level="ERROR", status_message=repr(exc),
-                            output={"final_stage": stage, "ok": False})
+                            output={"final_stage": stage, "ok": False, **summary},
+                            metadata=_trace_metadata())
             await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc), permanent=True)
             return False
         except Exception as exc:
             logger.warning("article %s failed at stage %s: %r", job.article_url, stage, exc)
             if root is not None:
                 root.update(level="ERROR", status_message=repr(exc),
-                            output={"final_stage": stage, "ok": False})
+                            output={"final_stage": stage, "ok": False, **summary},
+                            metadata=_trace_metadata())
             await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc))
             return False
 

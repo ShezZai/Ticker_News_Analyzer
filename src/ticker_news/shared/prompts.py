@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 PROMPT_LABEL = "production"
 
+# name -> Langfuse prompt version fetched by this process (A/B attribution).
+_seen_versions: dict[str, int] = {}
+
 
 def safe_format(template: str, fallback: str, **kwargs) -> str:
     """Format a (possibly Langfuse-edited) template; fall back to the in-repo
@@ -44,10 +47,17 @@ def get_prompt(name: str, fallback: str) -> str:
     if c is None:
         return fallback
     try:
-        return c.get_prompt(name, label=PROMPT_LABEL).prompt
+        p = c.get_prompt(name, label=PROMPT_LABEL)
+        _seen_versions[name] = p.version
+        return p.prompt
     except Exception as exc:
         logger.warning("langfuse prompt %r unavailable (%r); using fallback", name, exc)
         return fallback
+
+
+def versions_seen() -> dict[str, int]:
+    """Langfuse prompt versions fetched by this process ({} when disabled)."""
+    return dict(_seen_versions)
 
 
 def registry() -> dict[str, str]:

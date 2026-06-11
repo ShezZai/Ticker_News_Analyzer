@@ -27,6 +27,12 @@ def test_article_trace_noops_when_disabled(monkeypatch):
         assert t is None
 
 
+def test_article_trace_accepts_entrypoint_when_disabled(monkeypatch):
+    _disable(monkeypatch)
+    with obs.article_trace("https://example.com/a", ticker="NVDA", entrypoint="batch") as t:
+        assert t is None
+
+
 def test_stage_span_noops_when_disabled(monkeypatch):
     _disable(monkeypatch)
     with obs.stage_span("classify") as s:

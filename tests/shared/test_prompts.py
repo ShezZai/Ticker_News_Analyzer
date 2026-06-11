@@ -15,6 +15,37 @@ def test_fallback_when_disabled(monkeypatch):
     assert prompts.get_prompt("classify-article", "FALLBACK {x}") == "FALLBACK {x}"
 
 
+def test_get_prompt_records_version(monkeypatch):
+    class FakePrompt:
+        prompt = "REMOTE {ticker}"
+        version = 7
+
+    class FakeClient:
+        def get_prompt(self, name, label=None):
+            assert label == prompts.PROMPT_LABEL
+            return FakePrompt()
+
+    monkeypatch.setattr(prompts, "client", lambda: FakeClient())
+    assert prompts.get_prompt("classify-article", "fb") == "REMOTE {ticker}"
+    assert prompts.versions_seen() == {"classify-article": 7}
+
+
+def test_versions_seen_empty_when_disabled(monkeypatch):
+    _disable(monkeypatch)
+    prompts.get_prompt("classify-article", "fb")
+    assert prompts.versions_seen() == {}
+
+
+def test_versions_seen_empty_on_fetch_failure(monkeypatch):
+    class FakeClient:
+        def get_prompt(self, name, label=None):
+            raise RuntimeError("network down")
+
+    monkeypatch.setattr(prompts, "client", lambda: FakeClient())
+    assert prompts.get_prompt("classify-article", "fb") == "fb"
+    assert prompts.versions_seen() == {}
+
+
 def test_registry_covers_all_llm_prompts(monkeypatch):
     _disable(monkeypatch)
     reg = prompts.registry()

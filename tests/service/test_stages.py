@@ -170,7 +170,7 @@ async def test_sentiment_skips_non_real_news(monkeypatch):
     conn = _StubConn([(1, "T", "body", "marketing fluff", "NVDA", None, None)])
     called = {}
     monkeypatch.setattr(stages, "judge_article", lambda a, config=None: called.setdefault("x", True))
-    stages.sentiment_stage(conn, "https://example.com/a")
+    assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert "x" not in called
     assert conn.rolled_back == 1
 
@@ -178,14 +178,22 @@ async def test_sentiment_skips_non_real_news(monkeypatch):
 async def test_sentiment_skips_untagged(monkeypatch):
     conn = _StubConn([(1, "T", "body", "real news", None, None, None)])
     monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
-    stages.sentiment_stage(conn, "https://example.com/a")
+    assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
 
 async def test_sentiment_skips_empty_content(monkeypatch):
     conn = _StubConn([(1, "T", "   ", "real news", "NVDA", None, None)])
     monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
-    stages.sentiment_stage(conn, "https://example.com/a")
+    assert stages.sentiment_stage(conn, "https://example.com/a") is None
+    assert conn.rolled_back == 1
+
+
+async def test_sentiment_skips_existing_verdict(monkeypatch):
+    conn = _StubConn([(1, "T", "body", "real news", "NVDA", None, None)])
+    monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: True)
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
+    assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
 
@@ -208,7 +216,39 @@ async def test_sentiment_judges_real_news(monkeypatch):
         stages.sentiment_store, "save_verdict",
         lambda c, aid, t, v, an, m: saved.update(aid=aid, ticker=t, action=v.action),
     )
-    stages.sentiment_stage(conn, "https://example.com/a")
+    result = stages.sentiment_stage(conn, "https://example.com/a")
     assert seen["provider_sentiment"] == "positive"
     assert seen["precedents"] == ["p1"]
     assert saved == {"aid": 1, "ticker": "NVDA", "action": "hold"}
+    assert result == {"ticker": "NVDA", "action": "hold", "confidence": 0.5}
+
+
+# ---------------------------------------------------------------------------
+# classify_stage offline tests
+# ---------------------------------------------------------------------------
+
+
+async def test_classify_returns_category(monkeypatch):
+    from types import SimpleNamespace
+
+    # Second queued row feeds the UPDATE execute (its cursor result is unused).
+    conn = _StubConn([(1, "T", "body", None), None])
+    monkeypatch.setattr(
+        stages, "classify_article",
+        lambda title, content, config=None: (
+            SimpleNamespace(category="real news", reason="solid"), True),
+    )
+    assert stages.classify_stage(conn, "https://example.com/a") == "real news"
+
+
+async def test_classify_skip_paths_return_none(monkeypatch):
+    monkeypatch.setattr(
+        stages, "classify_article",
+        lambda *a, **kw: (_ for _ in ()).throw(AssertionError),
+    )
+    already = _StubConn([(1, "T", "body", "marketing fluff")])
+    assert stages.classify_stage(already, "https://example.com/a") is None
+    assert already.rolled_back == 1
+    empty = _StubConn([(1, "T", "   ", None)])
+    assert stages.classify_stage(empty, "https://example.com/a") is None
+    assert empty.rolled_back == 1

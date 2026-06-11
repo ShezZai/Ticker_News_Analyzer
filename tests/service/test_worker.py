@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import contextmanager
 
 import pytest
 
@@ -91,6 +92,89 @@ async def test_permanent_failure_parks_immediately():
     await worker.process_article(_job(), {"scrape": scrape}, q, conn=None)
     assert q.advanced == []
     assert len(q.failed) == 1
+
+
+class FakeRoot:
+    """Captures root.update kwargs the way a Langfuse span would receive them."""
+
+    def __init__(self):
+        self.updates = []
+
+    def update(self, **kwargs):
+        self.updates.append(kwargs)
+
+
+def _fake_trace(monkeypatch, root):
+    @contextmanager
+    def fake_article_trace(url, *, ticker=None, entrypoint="service"):
+        yield root
+
+    monkeypatch.setattr(worker.obs, "article_trace", fake_article_trace)
+
+
+async def test_root_output_carries_category_and_verdict(monkeypatch):
+    root = FakeRoot()
+    _fake_trace(monkeypatch, root)
+    verdict = {"ticker": "NVDA", "action": "buy", "confidence": 0.9}
+    runners = {
+        "classify": lambda job: "real news",
+        "tag": lambda job: None,
+        "insights": lambda job: None,
+        "sentiment": lambda job: verdict,
+    }
+    q = FakeQueue()
+    assert await worker.process_article(_job(stage="classify"), runners, q, conn=None)
+    (kw,) = root.updates
+    assert kw["output"] == {
+        "final_stage": DONE, "ok": True,
+        "category": "real news", "verdict": verdict,
+    }
+    assert "metadata" in kw
+
+
+async def test_root_metadata_carries_prompt_versions(monkeypatch):
+    from ticker_news.shared import prompts as prompts_mod
+
+    root = FakeRoot()
+    _fake_trace(monkeypatch, root)
+    monkeypatch.setitem(prompts_mod._seen_versions, "classify-article", 3)
+    q = FakeQueue()
+    await worker.process_article(
+        _job(stage="sentiment"), {"sentiment": lambda job: None}, q, conn=None)
+    (kw,) = root.updates
+    assert kw["metadata"] == {"prompt_versions": {"classify-article": 3}}
+
+
+async def test_root_error_output_keeps_partial_summary(monkeypatch):
+    root = FakeRoot()
+    _fake_trace(monkeypatch, root)
+
+    def tag(job):
+        raise worker.StageError("boom")
+
+    runners = {"classify": lambda job: "real news", "tag": tag}
+    q = FakeQueue()
+    ok = await worker.process_article(_job(stage="classify"), runners, q, conn=None)
+    assert ok is False
+    (kw,) = root.updates
+    assert kw["level"] == "ERROR"
+    assert "boom" in kw["status_message"]
+    assert kw["output"] == {"final_stage": "tag", "ok": False, "category": "real news"}
+    assert "metadata" in kw
+
+
+async def test_root_output_on_empty_scrape_early_return(monkeypatch):
+    root = FakeRoot()
+    _fake_trace(monkeypatch, root)
+
+    async def scrape(job):
+        return "empty"
+
+    q = FakeQueue()
+    await worker.process_article(_job(), {"scrape": scrape}, q, conn=None)
+    (kw,) = root.updates
+    assert kw["output"] == {"final_stage": DONE, "ok": True}
+    assert "metadata" in kw
 
 
 async def test_process_article_unchanged_under_disabled_observability(monkeypatch):

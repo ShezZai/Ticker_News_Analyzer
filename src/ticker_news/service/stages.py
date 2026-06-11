@@ -117,7 +117,8 @@ def embed_stage(conn: psycopg.Connection, url: str) -> None:
     conn.commit()
 
 
-def classify_stage(conn: psycopg.Connection, url: str) -> None:
+def classify_stage(conn: psycopg.Connection, url: str) -> str | None:
+    """Returns the assigned category, or None when the article was skipped."""
     row = conn.execute(
         "SELECT id, title, content, category FROM public.articles WHERE url = %s",
         (url,),
@@ -127,16 +128,17 @@ def classify_stage(conn: psycopg.Connection, url: str) -> None:
     aid, title, content, current = row
     if current is not None:
         conn.rollback()
-        return
+        return None
     if not (content or "").strip():
         conn.rollback()
-        return
+        return None
     verdict, _confirmed = classify_article(title, content or "", config=obs.chain_config() or None)
     conn.execute(
         "UPDATE public.articles SET category = %s, category_reason = %s WHERE id = %s",
         (verdict.category, verdict.reason or None, aid),
     )
     conn.commit()
+    return verdict.category
 
 
 @dataclass
@@ -249,11 +251,12 @@ def similar_past_articles(conn: psycopg.Connection, article_id: int, k: int = 5)
     return [f"{d} [{t or '?'}] {title}" for d, t, title in rows]
 
 
-def sentiment_stage(conn: psycopg.Connection, url: str) -> None:
+def sentiment_stage(conn: psycopg.Connection, url: str) -> dict | None:
     """Judge buy/sell/hold for the article's primary ticker.
 
     Policy: only 'real news' articles with a tagged primary_ticker are judged;
-    everything else skips (cheap, idempotent).
+    everything else skips (cheap, idempotent). Returns a verdict summary dict,
+    or None when the article was skipped.
     """
     row = conn.execute(
         "SELECT id, title, content, category, primary_ticker, published_utc, "
@@ -264,10 +267,10 @@ def sentiment_stage(conn: psycopg.Connection, url: str) -> None:
     aid, title, content, category, ticker, published, provider = row
     if category != "real news" or not ticker or not (content or "").strip():
         conn.rollback()
-        return
+        return None
     if sentiment_store.has_verdict(conn, aid, ticker):
         conn.rollback()
-        return
+        return None
     precedents = similar_past_articles(conn, aid)
     provider_sentiment = ""
     if provider and isinstance(provider, dict):
@@ -284,3 +287,5 @@ def sentiment_stage(conn: psycopg.Connection, url: str) -> None:
     conn.rollback()  # release the read transaction; LLM calls can take minutes
     verdict, analyses = judge_article(article, config=obs.chain_config() or None)
     sentiment_store.save_verdict(conn, aid, ticker, verdict, analyses, GEMINI_FLASH)
+    return {"ticker": ticker, "action": verdict.action,
+            "confidence": verdict.confidence}
