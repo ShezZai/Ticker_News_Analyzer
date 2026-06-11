@@ -230,10 +230,13 @@ flowchart TD
 `scored` tuples); the `score` for `two-phase-similarity`/`fusion` is the RRF score, for
 `cascade`/`intersection` it's the insight-to-seed cosine. Knobs: `net_k` (default 150),
 `rrf_c` (60), `budget`, plus the two cosine floors `net_min_sim` (article-level) and
-`tau_ins` (insight-level). These are **method-aware**: `two-phase-similarity` defaults both floors to a
-tight **0.8** (it filters articles *and* insights at >0.8 for precision) with a
-**25**-insight `budget`, while `cascade`/`fusion` keep the wide-net `0.45` / `0.70` and a
-`50` budget. The tuning sweep lives in `scripts/validate_retreival/sweep_two_phase.py`.
+`tau_ins` (insight-level). These are **method-aware**: `two-phase-similarity` uses
+**asymmetric** floors — a *loose* article net (`net_min_sim` **0.55**) to fill the pool for
+recall and a *tight* insight gate (`tau_ins` **0.75**) to hold precision — with a **40**-insight
+`budget`, while `cascade`/`fusion` keep the wide-net `0.45` / `0.70` and a `50` budget. The
+tuning rationale is in `docs/validations/validate_retrieval.md` §10 (the `0.55/0.75/40` point
+beat the earlier symmetric-`0.8` and `0.7` configs); the sweep harness lives in
+`scripts/validate_retreival/sweep_two_phase.py`.
 
 ---
 
