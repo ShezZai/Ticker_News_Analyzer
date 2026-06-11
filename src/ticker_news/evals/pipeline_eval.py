@@ -309,6 +309,14 @@ def make_task(dsn: str | None, skip_stages: frozenset[str] = frozenset()):
                 stages.embed_stage(conn, url)
             with obs.stage_span("classify"):
                 category = stages.classify_stage(conn, url)
+            if category is None:
+                # classify no-ops when category is already set (e.g. the stage
+                # was kept via --skip-stages); report the stored value.
+                row = conn.execute(
+                    "SELECT category FROM public.articles WHERE id = %s",
+                    (article_id,),
+                ).fetchone()
+                category = row[0] if row else None
             with obs.stage_span("tag"):
                 stages.tag_stage(conn, url, tag_ctx)
             with obs.stage_span("insights"):
@@ -317,10 +325,10 @@ def make_task(dsn: str | None, skip_stages: frozenset[str] = frozenset()):
                 verdict = stages.sentiment_stage(conn, url)
             if verdict is None:
                 row = conn.execute(
-                    "SELECT category, primary_ticker FROM public.articles WHERE id = %s",
+                    "SELECT primary_ticker FROM public.articles WHERE id = %s",
                     (article_id,),
                 ).fetchone()
-                category, ticker = row if row else (None, None)
+                ticker = row[0] if row else None
                 reason = (
                     f"category={category}" if category != "real news"
                     else "no primary ticker" if not ticker

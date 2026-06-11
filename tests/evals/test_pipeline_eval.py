@@ -287,6 +287,31 @@ class TestParseSkipStages:
             parse_skip_stages("embed,sentiment")
 
 
+class TestRunPipelineTaskCategoryBackfill:
+    def test_skipped_classify_reports_stored_category(self, monkeypatch):
+        from ticker_news.evals import pipeline_eval
+        from ticker_news.service import stages
+
+        conn = FakeConn(rows=[("real news",)])  # SELECT category -> stored value
+        conn.close = lambda: None
+        monkeypatch.setattr(pipeline_eval, "connect_eval", lambda dsn: conn)
+        monkeypatch.setattr(pipeline_eval, "reset_article",
+                            lambda c, aid, keep=frozenset(): None)
+        monkeypatch.setattr(stages.TagContext, "load", classmethod(lambda cls, c: None))
+        monkeypatch.setattr(stages, "embed_stage", lambda c, u: None)
+        monkeypatch.setattr(stages, "classify_stage", lambda c, u: None)  # no-op: kept
+        monkeypatch.setattr(stages, "tag_stage", lambda c, u, t: None)
+        monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
+        monkeypatch.setattr(
+            stages, "sentiment_stage",
+            lambda c, u: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
+        )
+        task = pipeline_eval.make_task(dsn=None, skip_stages=frozenset({"classify"}))
+        out = task(item={"input": {"article_id": 20512, "url": "https://x/20512"}})
+        assert out["category"] == "real news"
+        assert out["action"] == "buy"
+
+
 class TestParseIdsFile:
     def test_parses_one_id_per_line(self, tmp_path):
         f = tmp_path / "ids.csv"
