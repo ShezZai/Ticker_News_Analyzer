@@ -177,6 +177,49 @@ def search(
         raise typer.BadParameter(str(exc)) from exc
 
 
+@app.command(name="search-insights")
+def search_insights(
+    query: str | None = typer.Argument(None, help="Free-text insight search query."),
+    like: int | None = typer.Option(None, "--like", metavar="ID", help="Search using the insights of this article id."),
+    like_url: str | None = typer.Option(None, "--like-url", metavar="URL", help="Search using the insights of the article at this URL."),
+    k: int = typer.Option(5, "-k", "--k", help="Top-k similar insights retrieved per seed insight (also total results in text mode)."),
+    per_insight: bool = typer.Option(False, "--per-insight", help="With --like/--like-url, show the per-insight breakdown instead of the consolidated article list."),
+    top_articles: int | None = typer.Option(None, "--top-articles", metavar="N", help="Cap how many consolidated articles to show (default: all)."),
+    ticker: list[str] | None = typer.Option(None, "--ticker", metavar="SYM", help="Filter matches by ticker (repeatable)."),
+    segment: str | None = typer.Option(None, "--segment", metavar="NAME", help="Filter matches by AI segment (primary or more_segments)."),
+    domain: str | None = typer.Option(None, "--domain", help="Filter matches by source_domain."),
+    since: str | None = typer.Option(None, "--since", "--after", help="Earliest published_utc of the matched article (YYYY-MM-DD)."),
+    until: str | None = typer.Option(None, "--until", "--before", help="Latest published_utc of the matched article (YYYY-MM-DD)."),
+    months_before: int | None = typer.Option(None, "--months-before", metavar="N", help="With --like/--like-url, only match insights from the N months before the seed article's own publish date."),
+    min_similarity: float = typer.Option(0.7, "--min-similarity", help="Drop matches below this cosine similarity (pass 0 to show all)."),
+    exclusive: bool = typer.Option(False, "--exclusive", help="Make the upper date bound strict on the exact timestamp; with --months-before this anchors the window on the seed's exact publish time."),
+    ef_search: int | None = typer.Option(None, "--ef-search", metavar="N", help="HNSW ANN candidate breadth (default 40, or HNSW_EF_SEARCH); raise it if a selective filter returns too few/no results."),
+) -> None:
+    """Insight-level semantic search over article_insights (pgvector ANN)."""
+    from ticker_news.research import insight_search as insight_mod
+
+    try:
+        insight_mod.run_cli(
+            query,
+            like=like,
+            like_url=like_url,
+            k=k,
+            per_insight=per_insight,
+            top_articles=top_articles,
+            tickers=list(ticker) if ticker else None,
+            segment=segment,
+            domain=domain,
+            since=since,
+            until=until,
+            months_before=months_before,
+            min_similarity=min_similarity,
+            exclusive=exclusive,
+            ef_search=ef_search,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
 @app.command()
 def serve(
     workers: int = typer.Option(4, min=1, help="Concurrent pipeline workers."),
