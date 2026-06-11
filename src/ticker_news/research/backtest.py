@@ -81,7 +81,9 @@ def load_verdicts(conn, start: str, end: str) -> list[dict]:
             "url": url,
             "ticker": (ticker or "").strip().upper(),
             "action": (action or "").strip().lower(),
-            "confidence": float(confidence),
+            # article_sentiment.confidence is a Postgres real; round away the
+            # float32 noise (0.7 -> 0.699999988) so bucket edges hold exactly.
+            "confidence": round(float(confidence), 4),
             "published_utc": pub_utc,
             "title": title,
         }

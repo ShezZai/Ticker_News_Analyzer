@@ -201,6 +201,41 @@ def test_write_csv_row_fields_complete(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# load_verdicts row shaping
+# --------------------------------------------------------------------------- #
+def test_load_verdicts_rounds_float32_confidence():
+    """article_sentiment.confidence is a Postgres real: 0.7 arrives as
+    0.699999988 and must still land in the 0.7-0.85 bucket."""
+    import struct
+
+    f32_07 = struct.unpack("f", struct.pack("f", 0.7))[0]
+    row = (1, "https://x.test/1", "nvda", "BUY", f32_07,
+           datetime(2025, 1, 6, 15, 0, tzinfo=MARKET_TZ), "t")
+
+    class _Cur:
+        def execute(self, sql, params):
+            pass
+
+        def fetchall(self):
+            return [row]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    class _Conn:
+        def cursor(self):
+            return _Cur()
+
+    verdicts = bt.load_verdicts(_Conn(), "2025-01-01", "2025-01-31")
+    assert verdicts[0]["confidence"] == 0.7
+    s = summarize([{**verdicts[0], "signed_return_pct": 1.0, "skip_reason": ""}])
+    assert s["by_confidence"]["0.7-0.85"]["n"] == 1
+
+
+# --------------------------------------------------------------------------- #
 # run_backtest orchestration (all stubbed)
 # --------------------------------------------------------------------------- #
 def test_run_backtest_writes_default_csv_and_returns_summary(tmp_path, monkeypatch, capsys):
