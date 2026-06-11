@@ -1,5 +1,7 @@
 """Offline tests for the experimental classification variants."""
 
+import asyncio
+
 import pytest
 from pydantic import ValidationError
 
@@ -70,9 +72,6 @@ class TestActMapping:
             "legal-call", "conference-PR", "marketing fluff", "book PR",
             "Other-filing-reporting", "other",
         }
-
-
-import asyncio
 
 
 class StubChain:
