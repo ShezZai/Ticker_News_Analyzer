@@ -140,6 +140,7 @@ def _render(pending: Sequence[tuple[RenderJob, str]]) -> tuple[int, int]:
 # --------------------------------------------------------------------------- #
 def render_bombs(input_csv: str, out_dir: str = "pics_bombs") -> int:
     """Render a chart for every article attached in an articled CSV."""
+    candles._require_charts()  # fail fast with the install hint, not once per job
     os.makedirs(out_dir, exist_ok=True)
     csv.field_size_limit(_CSV_FIELD_LIMIT)
     with open(input_csv, newline="") as fh:
@@ -160,6 +161,7 @@ def render_catalysts(
     input_csv: str, *, threshold: float = 3.0, out_dir: str = "pics_bombs/catalysts"
 ) -> int:
     """Render entry-point charts for the big movers in a catalyst_returns CSV."""
+    candles._require_charts()  # fail fast with the install hint, not once per job
     os.makedirs(out_dir, exist_ok=True)
     csv.field_size_limit(_CSV_FIELD_LIMIT)
     with open(input_csv, newline="") as fh:
@@ -220,6 +222,7 @@ def all_ticker_jobs(
 
 def render_all_tickers(csv_path: str, pics_dir: str, out_dir: str | None = None) -> int:
     """For each article behind `pics_dir`, render the charts of EVERY ticker it names."""
+    candles._require_charts()  # fail fast with the install hint, not once per job
     out_dir = out_dir or pics_dir
     os.makedirs(out_dir, exist_ok=True)
     csv.field_size_limit(_CSV_FIELD_LIMIT)

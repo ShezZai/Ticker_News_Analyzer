@@ -85,7 +85,7 @@ Markers (pyproject.toml): `db` = needs Postgres, `integration` = live network.
 - **Embeddings are unit-normalized** (text-embedding-3-small, 1536 dims; cosine == inner product). Query and stored vectors must come from the same code path — `embedding/embedder.py`. Don't fork the model/truncation config.
 - **Sync psycopg connections are not shareable** across threads/concurrent `to_thread` calls — each service worker owns its own connection + scraper `Store` (`service/worker.py`). Follow that pattern for any new concurrency.
 - **Langfuse `CallbackHandler` instances are not thread-safe** — `obs.chain_config()` builds a fresh handler per invocation; do that inside thread-pool workers, never share one handler.
-- **The universe CSV is not committed** (`*.csv` gitignored). `load-universe` and `research scan-ranges` expect `ai_compute_us_market_universe_consolidated_segments_min5.csv` at repo root.
+- **The universe CSV is not committed** (`*.csv` gitignored). `load-universe` expects `ai_compute_us_market_universe_consolidated_segments_min5.csv` at repo root; `research scan-ranges` reads `public.ticker_data` instead, so run `load-universe` first to populate it.
 - **`charts` extra required** for `research chart` / `render-*` (pandas/matplotlib/mplfinance are lazy-imported; missing ⇒ clear error telling you to `pip install -e ".[charts]"`).
 - **Scraper behavior**: HTTP-first (httpx), Playwright Chromium fallback only on bad responses; per-domain rate limiting; robots.txt honored unless `--ignore-robots`; autocommit store (one row per transaction) makes runs kill-safe and resumable.
 

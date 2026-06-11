@@ -101,6 +101,18 @@ def stage_span(name: str):
         yield span
 
 
+def trace_metadata() -> dict:
+    """Prompt versions actually used this process — A/B attribution on traces.
+
+    Lazy import: shared.prompts imports this module at import time, so a
+    top-level import here would be circular.
+    """
+    from ticker_news.shared import prompts
+
+    versions = prompts.versions_seen()
+    return {"prompt_versions": versions} if versions else {}
+
+
 def flush() -> None:
     c = client()
     if c is not None:

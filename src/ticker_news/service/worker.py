@@ -48,14 +48,6 @@ async def _run_stage(runner: StageRunner, job: Job) -> object:
     return result
 
 
-def _trace_metadata() -> dict:
-    """Prompt versions actually used this process — A/B attribution on traces."""
-    from ticker_news.shared import prompts
-
-    versions = prompts.versions_seen()
-    return {"prompt_versions": versions} if versions else {}
-
-
 async def process_article(
     job: Job,
     runners: Mapping[str, StageRunner],
@@ -86,20 +78,20 @@ async def process_article(
                     await asyncio.to_thread(queue.advance, conn, job.article_url, DONE)
                     if root is not None:
                         root.update(output={"final_stage": jobs.DONE, "ok": True, **summary},
-                                    metadata=_trace_metadata())
+                                    metadata=obs.trace_metadata())
                     return True
                 stage = jobs.next_stage(stage)
                 await asyncio.to_thread(queue.advance, conn, job.article_url, stage)
             if root is not None:
                 root.update(output={"final_stage": jobs.DONE, "ok": True, **summary},
-                            metadata=_trace_metadata())
+                            metadata=obs.trace_metadata())
             return True
         except PermanentStageError as exc:
             logger.warning("article %s permanently failed at stage %s: %r", job.article_url, stage, exc)
             if root is not None:
                 root.update(level="ERROR", status_message=repr(exc),
                             output={"final_stage": stage, "ok": False, **summary},
-                            metadata=_trace_metadata())
+                            metadata=obs.trace_metadata())
             await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc), permanent=True)
             return False
         except Exception as exc:
@@ -107,7 +99,7 @@ async def process_article(
             if root is not None:
                 root.update(level="ERROR", status_message=repr(exc),
                             output={"final_stage": stage, "ok": False, **summary},
-                            metadata=_trace_metadata())
+                            metadata=obs.trace_metadata())
             await asyncio.to_thread(queue.fail, conn, job.article_url, repr(exc))
             return False
 

@@ -2,8 +2,17 @@
 
 import csv
 import json
+import sys
+
+import pytest
 
 from ticker_news.research import candles, render
+
+
+@pytest.fixture
+def charts_ok(monkeypatch):
+    """Neutralize the charts-extra guard so tests run without mplfinance installed."""
+    monkeypatch.setattr(candles, "_require_charts", lambda: None)
 
 
 # --------------------------------------------------------------------------- #
@@ -92,7 +101,7 @@ def _write_articled_csv(path, rows):
         writer.writerows(rows)
 
 
-def test_render_bombs_skips_existing_files(tmp_path, monkeypatch):
+def test_render_bombs_skips_existing_files(tmp_path, monkeypatch, charts_ok):
     csv_path = tmp_path / "scan_articled.csv"
     _write_articled_csv(csv_path, [{
         "date": "2025-01-07",
@@ -117,7 +126,7 @@ def test_render_bombs_skips_existing_files(tmp_path, monkeypatch):
     assert (out_dir / "NVDA_11_2025-01-07.jpg").read_bytes() == b"existing"
 
 
-def test_render_bombs_counts_failures_separately(tmp_path, monkeypatch):
+def test_render_bombs_counts_failures_separately(tmp_path, monkeypatch, charts_ok):
     csv_path = tmp_path / "scan_articled.csv"
     _write_articled_csv(csv_path, [{
         "date": "2025-01-07",
@@ -138,7 +147,7 @@ def test_render_bombs_counts_failures_separately(tmp_path, monkeypatch):
     assert n == 1  # the failed chart is not counted as written
 
 
-def test_render_catalysts_filters_and_skips(tmp_path, monkeypatch):
+def test_render_catalysts_filters_and_skips(tmp_path, monkeypatch, charts_ok):
     csv_path = tmp_path / "catalyst_returns.csv"
     with open(csv_path, "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=["article_id", "ticker", "buy_et", "gain_pct"])
@@ -164,7 +173,7 @@ def test_render_catalysts_filters_and_skips(tmp_path, monkeypatch):
 # --------------------------------------------------------------------------- #
 # render_all_tickers — DB seam + existing-pics skip
 # --------------------------------------------------------------------------- #
-def test_render_all_tickers_renders_only_missing_tickers(tmp_path, monkeypatch):
+def test_render_all_tickers_renders_only_missing_tickers(tmp_path, monkeypatch, charts_ok):
     csv_path = tmp_path / "catalyst_returns.csv"
     with open(csv_path, "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=["article_id", "ticker", "buy_et", "gain_pct"])
@@ -199,7 +208,7 @@ def test_render_all_tickers_renders_only_missing_tickers(tmp_path, monkeypatch):
     ]
 
 
-def test_render_all_tickers_skips_articles_without_buy_et(tmp_path, monkeypatch):
+def test_render_all_tickers_skips_articles_without_buy_et(tmp_path, monkeypatch, charts_ok):
     csv_path = tmp_path / "catalyst_returns.csv"
     with open(csv_path, "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=["article_id", "ticker", "buy_et", "gain_pct"])
@@ -223,10 +232,21 @@ def test_render_all_tickers_skips_articles_without_buy_et(tmp_path, monkeypatch)
     assert calls == ["NVDA"]
 
 
-def test_render_all_tickers_empty_pics_dir(tmp_path):
+def test_render_all_tickers_empty_pics_dir(tmp_path, charts_ok):
     csv_path = tmp_path / "c.csv"
     with open(csv_path, "w", newline="") as fh:
         fh.write("article_id,ticker,buy_et,gain_pct\n")
     pics = tmp_path / "pics"
     pics.mkdir()
     assert render.render_all_tickers(str(csv_path), str(pics)) == 0
+
+
+# --------------------------------------------------------------------------- #
+# charts-extra guard fires before any I/O
+# --------------------------------------------------------------------------- #
+def test_render_bombs_fails_fast_without_charts_extra(monkeypatch):
+    monkeypatch.setitem(sys.modules, "mplfinance", None)  # forces ImportError
+    # A nonexistent CSV proves the guard fires BEFORE the file is read:
+    # without it this would be FileNotFoundError, not the install hint.
+    with pytest.raises(RuntimeError, match=r"charts extra.*\[charts\]"):
+        render.render_bombs("does_not_exist.csv", out_dir="unused")

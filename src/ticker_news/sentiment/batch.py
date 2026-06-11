@@ -45,9 +45,14 @@ def run_batch(*, limit: int | None = None, reprocess: bool = False) -> int:
         bar = tqdm(rows, unit="article") if tqdm else rows
         for url, ticker in bar:
             try:
-                with obs.article_trace(url, ticker=ticker, entrypoint="batch"):
+                with obs.article_trace(url, ticker=ticker, entrypoint="batch") as root:
                     with obs.stage_span("sentiment"):
-                        sentiment_stage(conn, url)
+                        result = sentiment_stage(conn, url)
+                    if root is not None:
+                        output: dict = {"ok": True}
+                        if isinstance(result, dict):
+                            output["verdict"] = result
+                        root.update(output=output, metadata=obs.trace_metadata())
                 done += 1
             except Exception as exc:
                 print(f"  {url}: {exc!r}")
