@@ -438,15 +438,58 @@ class TestWarnFailedItems:
     def test_silent_when_all_items_completed(self, capsys):
         from ticker_news.evals.classify_eval import _warn_failed_items
 
-        _warn_failed_items(self._result(1, 2), [1, 2], "run-x")
+        _warn_failed_items(self._result(1, 2), [1, 2], "binary", "lite", "run-x")
         assert capsys.readouterr().out == ""
 
     def test_warns_with_missing_ids_and_rerun_hint(self, capsys):
         from ticker_news.evals.classify_eval import _warn_failed_items
 
-        _warn_failed_items(self._result(1), [1, 2, 3], "binary-lite-20260613-101500")
+        _warn_failed_items(self._result(1), [1, 2, 3], "binary", "lite",
+                           "binary-lite-20260613-101500")
         out = capsys.readouterr().out
         assert "2 item(s) errored" in out
         assert "[2, 3]" in out
+        assert "--variant binary --model lite" in out
         assert "--ids 2,3" in out
         assert "--run-name binary-lite-20260613-101500" in out
+
+
+class TestWithMissingItems:
+    def _dataset_item(self, article_id, expected_label):
+        return {"input": {"article_id": article_id},
+                "expected_output": {"label": expected_label}}
+
+    def test_sdk_dropped_items_count_as_wrong(self):
+        from ticker_news.evals.classify_eval import (
+            _with_missing_items,
+            binary_confusion_run_evaluator,
+            label_accuracy_run_evaluator,
+        )
+
+        data = [self._dataset_item(1, "YES"), self._dataset_item(2, "NO"),
+                self._dataset_item(3, "YES")]
+        # the SDK delivered only item 1 (correct); items 2 and 3 errored away
+        survived = [_ir("YES", _out("YES"))]
+        survived[0].item["input"] = {"article_id": 1}
+
+        acc = _by_name(_with_missing_items(label_accuracy_run_evaluator, data)(
+            item_results=survived))
+        assert acc["label_accuracy_avg"].value == pytest.approx(1 / 3)
+
+        conf = _by_name(_with_missing_items(binary_confusion_run_evaluator, data)(
+            item_results=survived))
+        # item 3 (YES, errored) -> FN; item 2 (NO, errored) -> FP
+        assert "TP=1 FP=1 FN=1 TN=0" in conf["act_precision"].comment
+
+    def test_no_injection_when_all_items_survived(self):
+        from ticker_news.evals.classify_eval import (
+            _with_missing_items,
+            label_accuracy_run_evaluator,
+        )
+
+        data = [self._dataset_item(1, "YES")]
+        survived = [_ir("YES", _out("YES"))]
+        survived[0].item["input"] = {"article_id": 1}
+        acc = _by_name(_with_missing_items(label_accuracy_run_evaluator, data)(
+            item_results=survived))
+        assert acc["label_accuracy_avg"].value == pytest.approx(1.0)

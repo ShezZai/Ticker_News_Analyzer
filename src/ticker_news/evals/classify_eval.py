@@ -16,6 +16,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from types import SimpleNamespace
 
 import psycopg
 from langfuse import Evaluation
@@ -292,23 +293,42 @@ _DESCRIPTION = (
 )
 
 
-def _warn_failed_items(result, requested_ids: list[int], run_name: str) -> None:
+def _item_article_id(item) -> int | None:
+    data = item.get("input") if isinstance(item, dict) else item.input
+    return (data or {}).get("article_id")
+
+
+def _warn_failed_items(
+    result, requested_ids: list[int], variant: str, model: str, run_name: str
+) -> None:
     """Failed items vanish from the result (SDK logs only); make them loud.
 
     Nothing is left dirty in the DB — the task is read-only — but a missing
     item silently skews the run metrics."""
     done: set[int] = set()
     for r in result.item_results:
-        item = r.item
-        data = item["input"] if isinstance(item, dict) else item.input
-        done.add(data["article_id"])
+        done.add(_item_article_id(r.item))
     failed = sorted(set(requested_ids) - done)
     if failed:
         print(
             f"WARNING: {len(failed)} item(s) errored and are missing from the "
-            f"run: {failed}. Re-run with --ids {','.join(map(str, failed))} "
-            f"--run-name {run_name} to fill them in."
+            f"run: {failed}. Re-run with --variant {variant} --model {model} "
+            f"--ids {','.join(map(str, failed))} --run-name {run_name} to fill them in."
         )
+
+
+def _with_missing_items(run_evaluator, data):
+    """The SDK silently drops errored items from item_results before run
+    evaluators execute; re-inject them as output=None results so
+    'errored = wrong' actually holds in production runs."""
+
+    def wrapped(*, item_results, **kwargs):
+        done = {_item_article_id(r.item) for r in item_results}
+        missing = [SimpleNamespace(item=it, output=None)
+                   for it in data if _item_article_id(it) not in done]
+        return run_evaluator(item_results=[*item_results, *missing], **kwargs)
+
+    return wrapped
 
 
 def run_eval(
@@ -361,9 +381,13 @@ def run_eval(
                 if dropped:
                     print(f"WARNING: --ids not in dataset '{ds_name}' (skipped): {dropped}")
             article_ids = [(it.input or {}).get("article_id") for it in data]
+            if any(aid is None for aid in article_ids):
+                raise SystemExit(f"dataset '{ds_name}' has items without an article_id input")
             conn = connect_eval(dsn)
             try:
                 articles = prefetch_articles(conn, article_ids)
+            except ValueError as exc:
+                raise SystemExit(str(exc))
             finally:
                 conn.close()
             classifier = make_classifier(variant, model_name)  # fetches prompts -> versions_seen
@@ -379,7 +403,10 @@ def run_eval(
                 data=data,
                 task=make_task(classifier, articles, spec.experiment_name),
                 evaluators=list(spec.evaluators),
-                run_evaluators=[make_totals_run_evaluator(t0), *spec.run_evaluators],
+                run_evaluators=[
+                    make_totals_run_evaluator(t0),
+                    *(_with_missing_items(ev, data) for ev in spec.run_evaluators),
+                ],
                 # async task -> max_concurrency gates real parallelism; the
                 # shared Gemini rate limiter caps requests per second anyway.
                 max_concurrency=concurrency,
@@ -390,7 +417,7 @@ def run_eval(
                     "entrypoint": "eval",
                 },
             )
-            _warn_failed_items(result, article_ids, rn)
+            _warn_failed_items(result, article_ids, variant, model, rn)
             results.append((variant, result))
     finally:
         obs.flush()
