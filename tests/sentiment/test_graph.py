@@ -66,6 +66,18 @@ def test_historical_prompt_omits_own_insights_when_absent():
     assert "SIMILAR PAST ARTICLES" in prompt
 
 
+def test_label_legend_only_when_precedents_are_labelled():
+    # unlabelled (article/insights) modes: no [label] legend
+    plain = render_analyst("historical_precedent", ARTICLE)
+    assert "CERTAINTY / CLOSURE" not in plain
+    # labelled (distilled) modes: legend present
+    labelled = render_analyst(
+        "historical_precedent", {**ARTICLE, "precedent_labelled": True}
+    )
+    assert "CERTAINTY / CLOSURE" in labelled
+    assert "evidance-event" in labelled
+
+
 def test_judge_article_returns_verdict_and_analyses():
     analyst, judge, _, _ = _fakes()
     graph = build_graph(analyst_llm=analyst, judge=judge)

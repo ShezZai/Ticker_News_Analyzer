@@ -2,7 +2,7 @@ ARTICLE id=20310  [GOOG]  Consumer Tech News (May 18-22): Meta Cuts 8,000 Jobs, 
 published_utc: 2026-05-24 13:36:09+00:00
 
 ############################################################################################
-# PRECEDENT-SOURCE: article   (precedent groups=5, own_insights=0)
+# PRECEDENT-SOURCE: article   (precedent groups=5, own_insights=0, label_legend=False)
 ############################################################################################
 TICKER UNDER ANALYSIS: GOOG
 PUBLISHED (UTC): 2026-05-24 13:36:09+00:00
@@ -24,20 +24,6 @@ specific insight excerpts from that article that matched this news:
 - 2026-05-17 [AMAT] Consumer Tech News (May 11-15): Trump–Xi Talk Fails to Deliver Chip Deal, Elon Musk vs. OpenAI Trail & Mo
 - 2026-03-01 [AI] Consumer Tech News (Feb 23-27): US–Taiwan Trade Tensions Escalates, Amazon Invests $12B In US & More - Ap
 
-A leading "[label]" on an insight is its classification tag; the split is about
-CERTAINTY / CLOSURE, not topic:
-- "evidance-event" = it definitively HAPPENED or was reported - a settled,
-  quotable fact (reported earnings/guidance/margins, completed M&A, a signed deal
-  with terms, a suit filed, a recall, layoffs, a regulatory ruling, a macro
-  release, a disclosed position, a real price move on news). Bullish or bearish,
-  but settled.
-- "informative" = it was ANNOUNCED but isn't settled yet - real but soft/open/
-  unverified (an MoU/LoI/proposed deal with no terms, a product launch, a funding
-  round, a planned/future action, a self-reported milestone not independently
-  confirmed). In motion, but terms/close/materiality unsettled.
-("DROP"-labelled low-signal insights are excluded from the lists above.)
-Weight settled evidance-event overlaps more heavily than soft informative ones.
-
 You are a quantitative analyst of historical precedent. Judge how distinctive
 this news actually is versus the precedents above: is it a recurring news
 pattern for this name/sector or genuinely new information? When this article's
@@ -46,7 +32,7 @@ concrete points of overlap with them. If the precedent list is empty or weak,
 say so. 3-6 sentences, no preamble.
 
 ############################################################################################
-# PRECEDENT-SOURCE: insights   (precedent groups=20, own_insights=30)
+# PRECEDENT-SOURCE: insights   (precedent groups=20, own_insights=30, label_legend=False)
 ############################################################################################
 TICKER UNDER ANALYSIS: GOOG
 PUBLISHED (UTC): 2026-05-24 13:36:09+00:00
@@ -144,20 +130,6 @@ specific insight excerpts from that article that matched this news:
 - 2026-01-11 [AMD] Consumer Tech News (Jan 5-9): Semiconductors Steal CES 2026 Spotlight, AI Regulation Tightens As Governme — Elon Musk's AI venture, xAI, has successfully raised a substantial $20 billion, valuing the company at over $200 billion, indicating strong investor confidence in its potential.
 - 2026-05-20 [CRWD] CrowdStrike Expands In Germany, Boosts Falcon Platform Adoption - CrowdStrike Holdings (NASDAQ:CRWD) — CrowdStrike has partnered with SVA System Vertrieb Alexander GmbH to deliver its AI-native Falcon platform to German public sector, enterprise, and mid-market clients. This deal aims to consolidate cybersecurity, reduce complexity, and scale protection, especially as demand for cloud and AI accelerates.
 
-A leading "[label]" on an insight is its classification tag; the split is about
-CERTAINTY / CLOSURE, not topic:
-- "evidance-event" = it definitively HAPPENED or was reported - a settled,
-  quotable fact (reported earnings/guidance/margins, completed M&A, a signed deal
-  with terms, a suit filed, a recall, layoffs, a regulatory ruling, a macro
-  release, a disclosed position, a real price move on news). Bullish or bearish,
-  but settled.
-- "informative" = it was ANNOUNCED but isn't settled yet - real but soft/open/
-  unverified (an MoU/LoI/proposed deal with no terms, a product launch, a funding
-  round, a planned/future action, a self-reported milestone not independently
-  confirmed). In motion, but terms/close/materiality unsettled.
-("DROP"-labelled low-signal insights are excluded from the lists above.)
-Weight settled evidance-event overlaps more heavily than soft informative ones.
-
 You are a quantitative analyst of historical precedent. Judge how distinctive
 this news actually is versus the precedents above: is it a recurring news
 pattern for this name/sector or genuinely new information? When this article's
@@ -166,7 +138,7 @@ concrete points of overlap with them. If the precedent list is empty or weak,
 say so. 3-6 sentences, no preamble.
 
 ############################################################################################
-# PRECEDENT-SOURCE: distilled-first   (precedent groups=23, own_insights=25)
+# PRECEDENT-SOURCE: distilled-first   (precedent groups=23, own_insights=25, label_legend=True)
 ############################################################################################
 TICKER UNDER ANALYSIS: GOOG
 PUBLISHED (UTC): 2026-05-24 13:36:09+00:00
@@ -280,7 +252,7 @@ concrete points of overlap with them. If the precedent list is empty or weak,
 say so. 3-6 sentences, no preamble.
 
 ############################################################################################
-# PRECEDENT-SOURCE: distilled-second   (precedent groups=22, own_insights=23)
+# PRECEDENT-SOURCE: distilled-second   (precedent groups=22, own_insights=23, label_legend=True)
 ############################################################################################
 TICKER UNDER ANALYSIS: GOOG
 PUBLISHED (UTC): 2026-05-24 13:36:09+00:00

@@ -522,6 +522,9 @@ def sentiment_stage(
         "provider_sentiment": provider_sentiment,
         "precedents": precedents,
         "own_insights": own_insights,
+        # drives the [label] legend in the historical-precedent prompt: only the
+        # labelled (distilled) corpora tag their excerpts.
+        "precedent_labelled": bool(src and src.label_col),
     }
     conn.rollback()  # release the read transaction; LLM calls can take minutes
     verdict, analyses = judge_article(article, config=obs.chain_config() or None)

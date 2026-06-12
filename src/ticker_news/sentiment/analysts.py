@@ -38,6 +38,19 @@ Each entry is one prior article; any indented "- " lines beneath it are the
 specific insight excerpts from that article that matched this news:
 {precedents}
 
+{label_legend}You are a quantitative analyst of historical precedent. Judge how distinctive
+this news actually is versus the precedents above: is it a recurring news
+pattern for this name/sector or genuinely new information? When this article's
+own insights are listed above, treat the indented precedent excerpts as the
+concrete points of overlap with them. If the precedent list is empty or weak,
+say so. 3-6 sentences, no preamble.""",
+}
+
+# Inserted (via {label_legend}) only when the precedent excerpts carry "[label]"
+# classification tags - i.e. the distilled precedent-source modes. Omitted for
+# the article/insights modes, whose excerpts have no tags, so the analyst is
+# never shown a legend for tags it will not see.
+LABEL_LEGEND = """\
 A leading "[label]" on an insight is its classification tag; the split is about
 CERTAINTY / CLOSURE, not topic:
 - "evidance-event" = it definitively HAPPENED or was reported - a settled,
@@ -52,13 +65,7 @@ CERTAINTY / CLOSURE, not topic:
 ("DROP"-labelled low-signal insights are excluded from the lists above.)
 Weight settled evidance-event overlaps more heavily than soft informative ones.
 
-You are a quantitative analyst of historical precedent. Judge how distinctive
-this news actually is versus the precedents above: is it a recurring news
-pattern for this name/sector or genuinely new information? When this article's
-own insights are listed above, treat the indented precedent excerpts as the
-concrete points of overlap with them. If the precedent list is empty or weak,
-say so. 3-6 sentences, no preamble.""",
-}
+"""
 
 SYNTHESIS_PROMPT = ARTICLE_BLOCK + """
 The following analysts examined this article for {ticker}:
@@ -106,6 +113,11 @@ def render_analyst(role: str, article: dict) -> str:
             + "\n".join(f"- {o}" for o in own)
             + "\n\n"
             if own else ""
+        )
+        # Only show the [label] legend when the excerpts are actually tagged
+        # (distilled modes set precedent_labelled); article/insights have no tags.
+        kwargs["label_legend"] = (
+            LABEL_LEGEND if article.get("precedent_labelled") else ""
         )
     template = get_prompt(f"analyst-{role}", ANALYST_PROMPTS[role])
     return safe_format(template, ANALYST_PROMPTS[role], **kwargs)
