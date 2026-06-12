@@ -426,3 +426,27 @@ class TestExperimentSpecs:
             assert label_accuracy_run_evaluator in spec.run_evaluators
             assert label_accuracy_evaluator in spec.evaluators
             assert cost_evaluator in spec.evaluators
+
+
+class TestWarnFailedItems:
+    def _result(self, *article_ids):
+        return SimpleNamespace(item_results=[
+            SimpleNamespace(item={"input": {"article_id": aid}}, output=None)
+            for aid in article_ids
+        ])
+
+    def test_silent_when_all_items_completed(self, capsys):
+        from ticker_news.evals.classify_eval import _warn_failed_items
+
+        _warn_failed_items(self._result(1, 2), [1, 2])
+        assert capsys.readouterr().out == ""
+
+    def test_warns_with_missing_ids_and_rerun_hint(self, capsys):
+        from ticker_news.evals.classify_eval import _warn_failed_items
+
+        _warn_failed_items(self._result(1), [1, 2, 3])
+        out = capsys.readouterr().out
+        assert "2 item(s) errored" in out
+        assert "[2, 3]" in out
+        assert "--ids 2,3" in out
+        assert "--run-name" in out

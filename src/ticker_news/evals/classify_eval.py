@@ -307,7 +307,7 @@ def _warn_failed_items(result, requested_ids: list[int]) -> None:
         print(
             f"WARNING: {len(failed)} item(s) errored and are missing from the "
             f"run: {failed}. Re-run with --ids {','.join(map(str, failed))} "
-            f"to fill them in."
+            f"and the same --run-name to fill them in."
         )
 
 
@@ -356,6 +356,10 @@ def run_eval(
                 data = [it for it in data if (it.input or {}).get("article_id") in wanted]
                 if not data:
                     raise SystemExit("none of the requested --ids are in the dataset")
+                found_ids = {(it.input or {}).get("article_id") for it in data}
+                dropped = sorted(wanted - found_ids)
+                if dropped:
+                    print(f"WARNING: --ids not in dataset '{ds_name}' (skipped): {dropped}")
             article_ids = [(it.input or {}).get("article_id") for it in data]
             conn = connect_eval(dsn)
             try:
