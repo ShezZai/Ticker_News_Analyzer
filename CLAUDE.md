@@ -65,9 +65,11 @@ All config flows through `shared/config.py` (`AppSettings`, pydantic-settings, r
 ## Observability & prompts
 
 - **One Langfuse trace per article** (`shared/observability.article_trace`), trace id deterministically seeded from the URL — re-runs and batch re-judges land in the same trace; `entrypoint` metadata (`service`/`batch`) distinguishes runs.
-- **Stable observation names are the eval contract** — do not rename: `process-article` (root), `scrape`, `embed`, `classify`, `tag`, `insights`, `sentiment`, `analyst:<role>`, `synthesize`. Root output carries `category` + `verdict`; metadata carries `prompt_versions` + `entrypoint`. Evals on these are designed for but not built yet (next milestone).
+- **Stable observation names are the eval contract** — do not rename: `process-article` (root), `scrape`, `embed`, `classify`, `tag`, `insights`, `sentiment`, `analyst:<role>`, `synthesize`. Root output carries `category` + `verdict`; metadata carries `prompt_versions` + `entrypoint`. Evals: `eval pipeline` (E2E verdict vs price move) and `eval classify` (single-pass prompt experiments) both run as Langfuse experiments.
 - **Prompts** (`shared/prompts.py`): in-repo fallback templates are the source of truth; `ticker-news prompts push` publishes them to Langfuse under the `production` label. `get_prompt()` prefers the Langfuse copy, falls back silently. Chains are `lru_cache`d — restart the process to pick up Langfuse prompt edits.
-- **Accepted gap**: embedding costs are not traced (OpenAI embeddings bypass the LangChain callback handler).
+- **Prompt↔generation linking**: `get_prompt_entry()` returns `(text, prompt_object)`; attach the object via `prompt.metadata = {"langfuse_prompt": obj}` (see `classification/variants._build`) so generations carry a `promptId`. Never use `get_langchain_prompt()` — it mangles the escaped `{{...}}` JSON braces in our f-string templates. Eval chains are rebuilt per run (no cache), so Langfuse prompt edits apply immediately there.
+- **Eval datasets in Langfuse**: `140-articles-act-no-act` (expected `{label: YES|NO}`, 42/98) and `140-articles-categories` (expected `{label: <FinegrainedCategory>}`); items hold only `{article_id}` — bodies are read from the DB at run time, never stored in the dataset.
+- **Accepted gap**: embedding costs are not traced (OpenAI embeddings bypass the LangChain callback handler). `eval classify` computes run cost from the in-repo price table `classify_eval.GEMINI_PRICES_USD_PER_1M` — update it if Google reprices.
 
 ## Testing
 
@@ -87,6 +89,7 @@ Markers (pyproject.toml): `db` = needs Postgres, `integration` = live network.
 - **Embeddings are unit-normalized** (text-embedding-3-small, 1536 dims; cosine == inner product). Query and stored vectors must come from the same code path — `embedding/embedder.py`. Don't fork the model/truncation config.
 - **Sync psycopg connections are not shareable** across threads/concurrent `to_thread` calls — each service worker owns its own connection + scraper `Store` (`service/worker.py`). Follow that pattern for any new concurrency.
 - **Langfuse `CallbackHandler` instances are not thread-safe** — `obs.chain_config()` builds a fresh handler per invocation; do that inside thread-pool workers, never share one handler.
+- **langfuse `run_experiment` silently drops errored items** from `item_results` before run-level evaluators execute, shrinking metric denominators. `evals/classify_eval._with_missing_items` re-injects them as `output=None` ("errored = wrong") — wrap run evaluators the same way in any new experiment.
 - **The universe CSV is not committed** (`*.csv` gitignored). `load-universe` expects `ai_compute_us_market_universe_consolidated_segments_min5.csv` at repo root; `research scan-ranges` reads `public.ticker_data` instead, so run `load-universe` first to populate it.
 - **`charts` extra required** for `research chart` / `render-*` (pandas/matplotlib/mplfinance are lazy-imported; missing ⇒ clear error telling you to `pip install -e ".[charts]"`).
 - **Scraper behavior**: HTTP-first (httpx), Playwright Chromium fallback only on bad responses; per-domain rate limiting; robots.txt honored unless `--ignore-robots`; autocommit store (one row per transaction) makes runs kill-safe and resumable.
