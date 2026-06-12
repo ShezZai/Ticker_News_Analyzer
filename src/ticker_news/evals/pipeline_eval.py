@@ -32,10 +32,18 @@ _STAGE_COLUMNS = {
 
 
 def parse_skip_stages(raw: str | None) -> frozenset[str]:
-    """Validate a comma-separated --skip-stages value. ValueError on unknowns."""
+    """Validate a comma-separated --skip-stages value. ValueError on unknowns.
+
+    The sentinel ``all`` expands to every skippable stage (reuse all stable
+    upstream outputs, re-run only sentiment); it must stand alone.
+    """
     if not raw:
         return frozenset()
     stages = {s.strip() for s in raw.split(",") if s.strip()}
+    if "all" in stages:
+        if stages != {"all"}:
+            raise ValueError("'all' cannot be combined with other stages")
+        return frozenset(SKIPPABLE_STAGES)
     unknown = stages - set(SKIPPABLE_STAGES)
     if unknown:
         raise ValueError(

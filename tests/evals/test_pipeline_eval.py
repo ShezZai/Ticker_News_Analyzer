@@ -288,6 +288,13 @@ class TestParseSkipStages:
         with pytest.raises(ValueError, match="sentiment"):
             parse_skip_stages("embed,sentiment")
 
+    def test_all_expands_to_every_skippable_stage(self):
+        assert parse_skip_stages("all") == frozenset(SKIPPABLE_STAGES)
+
+    def test_all_cannot_combine_with_other_stages(self):
+        with pytest.raises(ValueError, match="cannot be combined"):
+            parse_skip_stages("all,embed")
+
 
 class TestRunPipelineTaskCategoryBackfill:
     def test_skipped_classify_reports_stored_category(self, monkeypatch):

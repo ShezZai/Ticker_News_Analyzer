@@ -572,7 +572,7 @@ def eval_pipeline(
     dataset: str | None = typer.Option(None, "--dataset", help="Langfuse dataset name: upsert --ids as items, then run over the whole dataset."),
     dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
     run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: auto-generated)."),
-    skip_stages: str | None = typer.Option(None, "--skip-stages", help="Comma-separated stages whose stored outputs are reused instead of re-run: embed, classify, tag, insights."),
+    skip_stages: str | None = typer.Option(None, "--skip-stages", help="Comma-separated stages whose stored outputs are reused instead of re-run: embed, classify, tag, insights (or 'all' for every one)."),
 ) -> None:
     """Re-run articles E2E through the pipeline; score verdicts against actual price moves."""
     from ticker_news.evals import pipeline_eval
