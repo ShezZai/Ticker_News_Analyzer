@@ -239,6 +239,22 @@ class TestBinaryConfusionRunEvaluator:
         evals = _by_name(binary_confusion_run_evaluator(item_results=[]))
         assert set(evals) == {"act_metrics_skip"}
 
+    def test_malformed_output_on_no_item_is_false_positive(self):
+        from ticker_news.evals.classify_eval import binary_confusion_run_evaluator
+
+        # a present-but-labelless output must hurt like an errored one
+        results = [_ir("NO", {}), _ir("NO", _out("NO"))]
+        evals = _by_name(binary_confusion_run_evaluator(item_results=results))
+        assert "TP=0 FP=1 FN=0 TN=1" in evals["act_precision"].comment
+
+    def test_f1_is_zero_not_absent_when_all_wrong(self):
+        from ticker_news.evals.classify_eval import binary_confusion_run_evaluator
+
+        # TP=0 FP=1 FN=1 -> P=0, R=0 -> F1 must be 0.0, not missing
+        results = [_ir("NO", _out("YES")), _ir("YES", _out("NO"))]
+        evals = _by_name(binary_confusion_run_evaluator(item_results=results))
+        assert evals["act_f1"].value == 0.0
+
 
 class TestDerivedActRunEvaluator:
     def test_miscategorization_within_same_side_still_counts(self):

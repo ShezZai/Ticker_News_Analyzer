@@ -158,7 +158,7 @@ def binary_confusion_run_evaluator(*, item_results, **kwargs) -> list[Evaluation
         if expected == "YES":
             tp, fn = (tp + 1, fn) if predicted == "YES" else (tp, fn + 1)
         elif expected == "NO":
-            wrong = predicted == "YES" or r.output is None
+            wrong = predicted != "NO"
             fp, tn = (fp + 1, tn) if wrong else (fp, tn + 1)
     if tp + fp + fn + tn == 0:
         return [Evaluation(name="act_metrics_skip", value="no scorable items")]
@@ -176,10 +176,10 @@ def binary_confusion_run_evaluator(*, item_results, **kwargs) -> list[Evaluation
                                 value=f"no YES items ({counts})"))
     else:
         evals.append(Evaluation(name="act_recall", value=recall, comment=counts))
-    if precision is not None and recall is not None and (precision + recall) > 0:
-        evals.append(Evaluation(name="act_f1",
-                                value=2 * precision * recall / (precision + recall),
-                                comment=counts))
+    if precision is not None and recall is not None:
+        f1 = (2 * precision * recall / (precision + recall)
+              if (precision + recall) > 0 else 0.0)
+        evals.append(Evaluation(name="act_f1", value=f1, comment=counts))
     return evals
 
 
