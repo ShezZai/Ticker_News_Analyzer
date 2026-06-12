@@ -36,23 +36,29 @@ def safe_format(template: str, fallback: str, **kwargs) -> str:
         return fallback.format(**kwargs)
 
 
-def get_prompt(name: str, fallback: str) -> str:
-    """Return Langfuse prompt text (label=production) or the in-repo fallback.
+def get_prompt_entry(name: str, fallback: str) -> tuple[str, object | None]:
+    """Return (prompt text, Langfuse prompt object) for label=production.
 
-    When Langfuse is disabled (no keys) or the prompt is unavailable (e.g.
-    not yet pushed, network error), returns the fallback unchanged so the
-    service stays fully operational.
+    The object is None when Langfuse is disabled or the fetch fails — callers
+    use it to link generations to the prompt version (metadata
+    {"langfuse_prompt": obj} on a LangChain prompt template); text falls back
+    to the in-repo template so the service stays fully operational.
     """
     c = client()
     if c is None:
-        return fallback
+        return fallback, None
     try:
         p = c.get_prompt(name, label=PROMPT_LABEL)
         _seen_versions[name] = p.version
-        return p.prompt
+        return p.prompt, p
     except Exception as exc:
         logger.warning("langfuse prompt %r unavailable (%r); using fallback", name, exc)
-        return fallback
+        return fallback, None
+
+
+def get_prompt(name: str, fallback: str) -> str:
+    """Return Langfuse prompt text (label=production) or the in-repo fallback."""
+    return get_prompt_entry(name, fallback)[0]
 
 
 def versions_seen() -> dict[str, int]:

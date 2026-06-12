@@ -67,3 +67,40 @@ def test_safe_format_falls_back_on_bad_placeholder(monkeypatch):
 def test_safe_format_happy_path(monkeypatch):
     _disable(monkeypatch)
     assert prompts.safe_format("hi {ticker}", "x {ticker}", ticker="NVDA") == "hi NVDA"
+
+
+def test_get_prompt_entry_returns_text_and_object(monkeypatch):
+    class FakePrompt:
+        prompt = "REMOTE {title} {body}"
+        version = 3
+
+    fake = FakePrompt()
+
+    class FakeClient:
+        def get_prompt(self, name, label=None):
+            assert label == prompts.PROMPT_LABEL
+            return fake
+
+    monkeypatch.setattr(prompts, "client", lambda: FakeClient())
+    text, obj = prompts.get_prompt_entry("classify-binary", "fb")
+    assert text == "REMOTE {title} {body}"
+    assert obj is fake
+    assert prompts.versions_seen()["classify-binary"] == 3
+
+
+def test_get_prompt_entry_fallback_when_disabled(monkeypatch):
+    _disable(monkeypatch)
+    text, obj = prompts.get_prompt_entry("classify-binary", "fb {x}")
+    assert text == "fb {x}"
+    assert obj is None
+
+
+def test_get_prompt_entry_fallback_on_fetch_failure(monkeypatch):
+    class FakeClient:
+        def get_prompt(self, name, label=None):
+            raise RuntimeError("network down")
+
+    monkeypatch.setattr(prompts, "client", lambda: FakeClient())
+    text, obj = prompts.get_prompt_entry("classify-binary", "fb")
+    assert text == "fb"
+    assert obj is None
