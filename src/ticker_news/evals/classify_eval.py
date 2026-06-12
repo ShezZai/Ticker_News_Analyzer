@@ -1,351 +1,96 @@
-"""Classification prompt-variant eval against the hand-labeled ground truth.
+"""Single-pass classification prompt experiments against Langfuse datasets.
 
-Read-only: loads article text from the DB, runs the binary and/or
-fine-grained variant chains, and scores ACT/DON'T-ACT agreement with the
-ground-truth labels as Langfuse experiments on a shared dataset. Never
-writes to pipeline tables (the production `category` column is untouched).
+Two experiments, one LLM call per dataset item, everything else deterministic:
+- binary      -> dataset 140-articles-act-no-act   (expected {"label": YES|NO})
+- finegrained -> dataset 140-articles-categories   (expected {"label": <category>})
 
-Design: docs/superpowers/specs/2026-06-12-classify-eval-design.md
+Read-only: article text is prefetched from the DB in one query; production
+pipeline tables are never written. Scores include accuracy, per-item latency
+and cost, and run-level totals (time, cost, tokens).
+
+Design: docs/superpowers/specs/2026-06-12-classify-single-pass-experiments-design.md
 """
 
 from __future__ import annotations
 
-import asyncio
-import csv
+import time
+from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 
 import psycopg
 from langfuse import Evaluation
 
-from ticker_news.evals.pipeline_eval import connect_eval, upsert_dataset_items
+from ticker_news.evals.pipeline_eval import connect_eval
 
-DATASET_DEFAULT = "classify-ground-truth"
+# USD per 1M tokens (input, output); paid tier, verified 2026-06-13.
+GEMINI_PRICES_USD_PER_1M: dict[str, tuple[float, float]] = {
+    "gemini-2.5-flash-lite": (0.10, 0.40),
+    "gemini-2.5-flash": (0.30, 2.50),
+}
 
-_REQUIRED_COLUMNS = {"article id", "Act_GT"}
 
+def item_cost_usd(output) -> float | None:
+    """Cost of one item from its token usage, or None when unknowable.
 
-def load_ground_truth(csv_path: str | Path) -> list[dict]:
-    """Parse the GT csv into [{article_id, header, act}] with validation.
-
-    utf-8-sig tolerates the Excel BOM; Act_GT is normalized to upper-case
-    YES/NO; integer, unique article ids enforced. Raises ValueError with the
-    offending line number on any violation.
+    Longest price-table key wins so 'gemini-2.5-flash' never shadows
+    'gemini-2.5-flash-lite' in a substring match.
     """
-    rows: list[dict] = []
-    seen: set[int] = set()
-    with open(csv_path, encoding="utf-8-sig", newline="") as fh:
-        reader = csv.DictReader(fh)
-        missing = _REQUIRED_COLUMNS - set(reader.fieldnames or [])
-        if missing:
-            raise ValueError(
-                f"{csv_path}: missing required column(s): {', '.join(sorted(missing))}"
-            )
-        for lineno, row in enumerate(reader, start=2):
-            raw_id = (row.get("article id") or "").strip()
-            if not raw_id.isdigit():
-                raise ValueError(f"{csv_path} line {lineno}: bad article id {raw_id!r}")
-            article_id = int(raw_id)
-            if article_id in seen:
-                raise ValueError(
-                    f"{csv_path} line {lineno}: duplicate article id {article_id}"
-                )
-            seen.add(article_id)
-            act = (row.get("Act_GT") or "").strip().upper()
-            if act not in ("YES", "NO"):
-                raise ValueError(
-                    f"{csv_path} line {lineno}: Act_GT must be YES or NO, got {act!r}"
-                )
-            rows.append({
-                "article_id": article_id,
-                "header": (row.get("header") or "").strip(),
-                "act": act,
-            })
-    if not rows:
-        raise ValueError(f"{csv_path}: ground-truth csv has no rows")
-    return rows
-
-
-def build_items(conn: psycopg.Connection, gt_rows: list[dict]) -> list[dict]:
-    """GT rows -> Langfuse dataset items; loud failure on unusable articles.
-
-    Bodies are NOT stored in the dataset — the DB row is the single source
-    of truth (same convention as the pipeline eval); the task reads content
-    by article id at run time.
-    """
-    ids = [r["article_id"] for r in gt_rows]
-    db_rows = conn.execute(
-        "SELECT id, title, status, coalesce(content, '') <> '' "
-        "FROM public.articles WHERE id = ANY(%s)",
-        (ids,),
-    ).fetchall()
-    found = {row[0]: row for row in db_rows}
-    missing = sorted(set(ids) - set(found))
-    if missing:
-        raise ValueError(f"article ids not found: {missing}")
-    bad = sorted(
-        aid for aid, (_, _, status, has_content) in found.items()
-        if status != "ok" or not has_content
-    )
-    if bad:
-        raise ValueError(f"articles have no scraped content: {bad}")
-    return [
-        {
-            "input": {
-                "article_id": r["article_id"],
-                "title": found[r["article_id"]][1] or "",
-            },
-            "expected_output": {"act": r["act"]},
-            "metadata": {"gt_header": r["header"]},
-        }
-        for r in gt_rows
-    ]
-
-
-def act_accuracy_evaluator(*, output, expected_output, **kwargs) -> Evaluation:
-    """Langfuse item evaluator: predicted ACT vs ground truth (1.0 / 0.0).
-
-    Items without a ground-truth label (e.g. a dataset seeded for the pipeline
-    eval) get a categorical skip score instead of a misleading 0.0 — same
-    pattern as the pipeline eval's *_skip scores."""
-    expected = (expected_output or {}).get("act")
-    if expected is None:
-        return Evaluation(name="act_accuracy_skip", value="no ground truth")
     if not output:
-        return Evaluation(name="act_accuracy", value=0.0,
-                          comment=f"no output, gt={expected}")
-    predicted, act = output.get("predicted"), output.get("act")
-    value = 1.0 if act == expected else 0.0
+        return None
+    model = output.get("model") or ""
+    tokens_in, tokens_out = output.get("input_tokens"), output.get("output_tokens")
+    if tokens_in is None or tokens_out is None:
+        return None
+    for known in sorted(GEMINI_PRICES_USD_PER_1M, key=len, reverse=True):
+        if known in model:
+            p_in, p_out = GEMINI_PRICES_USD_PER_1M[known]
+            return (tokens_in * p_in + tokens_out * p_out) / 1_000_000
+    return None
+
+
+def label_accuracy_evaluator(*, output, expected_output, **kwargs) -> Evaluation:
+    """Predicted dataset-space label vs the item's expected label (1.0 / 0.0)."""
+    expected = (expected_output or {}).get("label")
+    if expected is None:
+        return Evaluation(name="label_accuracy_skip", value="no expected label")
+    if not output:
+        return Evaluation(name="label_accuracy", value=0.0,
+                          comment=f"no output, expected={expected}")
+    predicted, label = output.get("predicted"), output.get("label")
     return Evaluation(
-        name="act_accuracy", value=value,
-        comment=f"predicted={predicted!r} -> act={act}, gt={expected}",
+        name="label_accuracy", value=1.0 if label == expected else 0.0,
+        comment=f"predicted={predicted!r} -> {label}, expected={expected}",
     )
 
 
 def predicted_label_evaluator(*, output, **kwargs) -> Evaluation:
-    """Langfuse item evaluator: raw predicted label/category (categorical),
-    so misclassifications are filterable in the UI."""
+    """Raw predicted label/category (categorical) — misclassifications are
+    filterable in the UI."""
     predicted = (output or {}).get("predicted")
     return Evaluation(name="predicted_label", value=predicted or "<none>")
 
 
-def _expected_act(item) -> str | None:
-    expected = item.get("expected_output") if isinstance(item, dict) else item.expected_output
-    return (expected or {}).get("act")
+def latency_evaluator(*, output, **kwargs) -> Evaluation:
+    lat = (output or {}).get("latency_s")
+    if lat is None:
+        return Evaluation(name="latency_s_skip", value="no latency recorded")
+    return Evaluation(name="latency_s", value=lat)
 
 
-def act_metrics_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
-    """Run-level confusion metrics for the YES class.
-
-    The GT is imbalanced (42 YES / 98 NO) — precision/recall/F1 keep an
-    always-NO classifier from looking good. A task that errored (output None)
-    always counts as wrong — FN on YES items, FP on NO items — rather than
-    vanishing from the denominator (or being rewarded as a TN).
-    """
-    tp = fp = fn = tn = 0
-    for r in item_results:
-        expected = _expected_act(r.item)
-        predicted = (r.output or {}).get("act")
-        if expected == "YES":
-            tp, fn = (tp + 1, fn) if predicted == "YES" else (tp, fn + 1)
-        elif expected == "NO":
-            # An errored task (r.output is None) is always wrong — treat as FP,
-            # not TN. Only a genuine {"act": "NO"} output earns TN credit.
-            wrong = predicted == "YES" or r.output is None
-            fp, tn = (fp + 1, tn) if wrong else (fp, tn + 1)
-    total = tp + fp + fn + tn
-    if total == 0:
-        return [Evaluation(name="act_metrics_skip", value="no scorable items")]
-    counts = f"TP={tp} FP={fp} FN={fn} TN={tn}"
-    evals = [Evaluation(
-        name="act_accuracy_avg", value=(tp + tn) / total,
-        comment=f"{counts}; {total} items",
-    )]
-    precision = tp / (tp + fp) if (tp + fp) else None
-    recall = tp / (tp + fn) if (tp + fn) else None
-    if precision is None:
-        evals.append(Evaluation(name="act_precision_skip",
-                                value=f"no YES predictions ({counts})"))
-    else:
-        evals.append(Evaluation(name="act_precision", value=precision, comment=counts))
-    if recall is None:
-        evals.append(Evaluation(name="act_recall_skip",
-                                value=f"no YES items ({counts})"))
-    else:
-        evals.append(Evaluation(name="act_recall", value=recall, comment=counts))
-    if precision is not None and recall is not None and (precision + recall) > 0:
-        f1 = 2 * precision * recall / (precision + recall)
-        evals.append(Evaluation(name="act_f1", value=f1, comment=counts))
-    return evals
+def cost_evaluator(*, output, **kwargs) -> Evaluation:
+    cost = item_cost_usd(output)
+    if cost is None:
+        model = (output or {}).get("model") or "<none>"
+        return Evaluation(name="cost_usd_skip", value=f"unknown model/usage: {model}")
+    return Evaluation(name="cost_usd", value=cost)
 
 
-EXPERIMENT_PREFIX = "classify"
-_DESCRIPTION = (
-    "Classification prompt-variant eval: predicted ACT/DON'T-ACT vs the "
-    "hand-labeled ground truth (binary and fine-grained prompts)."
+SHARED_EVALUATORS = (
+    label_accuracy_evaluator,
+    predicted_label_evaluator,
+    latency_evaluator,
+    cost_evaluator,
 )
 
-
-def make_task(runner, dsn: str | None, trace_prefix: str = EXPERIMENT_PREFIX):
-    """Async experiment task: read the article, classify, return the verdict.
-
-    Read-only — never writes to pipeline tables. A fresh connection per
-    invocation (sync psycopg connections must not be shared across the
-    runner's concurrent tasks; the blocking fetch runs in a thread).
-    """
-
-    async def classify_task(*, item, **kwargs) -> dict:
-        from langfuse import propagate_attributes
-
-        from ticker_news.shared import observability as obs
-
-        data = item["input"] if isinstance(item, dict) else item.input
-        article_id = data["article_id"]
-
-        def _fetch() -> tuple[str | None, str | None]:
-            conn = connect_eval(dsn)
-            try:
-                row = conn.execute(
-                    "SELECT title, content FROM public.articles WHERE id = %s",
-                    (article_id,),
-                ).fetchone()
-            finally:
-                conn.close()
-            if row is None:
-                raise ValueError(f"article {article_id} not found")
-            return row
-
-        # The SDK names every experiment-item trace AND its root span
-        # "experiment-item-run"; rename both — the trace via
-        # propagate_attributes, the root span in place.
-        with propagate_attributes(trace_name=f"{trace_prefix}:article-{article_id}"):
-            if (lf := obs.client()) is not None:
-                lf.update_current_span(name=f"{trace_prefix}:article-{article_id}")
-            # own span: over the tunneled shared DB this fetch can dwarf the
-            # LLM call — without it the trace shows minutes of dead time
-            with obs.stage_span("fetch-article"):
-                title, content = await asyncio.to_thread(_fetch)
-            verdict, confirmed = await runner.classify(
-                title, content or "", config=obs.chain_config() or None
-            )
-        label = runner.label_of(verdict)
-        return {
-            "predicted": label,
-            "act": "YES" if runner.is_act(label) else "NO",
-            "confidence": getattr(verdict, "confidence", None),
-            "reason": verdict.reason or None,
-            "confirmed": confirmed,
-        }
-
-    return classify_task
-
-
-def _warn_failed_items(result, requested_ids: list[int]) -> None:
-    """Failed items vanish from the result (SDK logs only); make them loud.
-
-    Unlike the pipeline eval, nothing is left dirty in the DB — the task is
-    read-only — but a missing item silently skews the run metrics."""
-    done: set[int] = set()
-    for r in result.item_results:
-        item = r.item
-        data = item["input"] if isinstance(item, dict) else item.input
-        done.add(data["article_id"])
-    failed = sorted(set(requested_ids) - done)
-    if failed:
-        print(
-            f"WARNING: {len(failed)} item(s) errored and are missing from the "
-            f"run: {failed}. Re-run with --ids {','.join(map(str, failed))} "
-            f"to fill them in."
-        )
-
-
-def run_eval(
-    variants: tuple[str, ...],
-    *,
-    mode: str = "two-pass",
-    dataset_name: str = DATASET_DEFAULT,
-    gt_csv: str | None = None,
-    dsn: str | None = None,
-    run_name: str | None = None,
-    ids: list[int] | None = None,
-) -> list[tuple[str, object]]:
-    """Run one experiment per variant over the GT dataset.
-
-    With gt_csv, (re)seeds the dataset first (idempotent upsert keyed on
-    article id). Returns [(variant, ExperimentResult), ...].
-    """
-    from ticker_news.classification.variants import make_runner, models_for_mode
-    from ticker_news.shared import observability as obs
-    from ticker_news.shared import prompts
-    from ticker_news.shared.config import get_settings
-
-    client = obs.client()
-    if client is None:
-        raise SystemExit(
-            "LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY are required - "
-            "eval results live in Langfuse."
-        )
-    if not get_settings().google_api_key:
-        raise SystemExit("missing required keys: GOOGLE_API_KEY")
-
-    if gt_csv:
-        gt_rows = load_ground_truth(gt_csv)
-        conn = connect_eval(dsn)
-        try:
-            items = build_items(conn, gt_rows)
-        finally:
-            conn.close()
-        try:
-            client.create_dataset(name=dataset_name, description=_DESCRIPTION)
-        except Exception:  # noqa: BLE001 - already exists is fine
-            pass
-        upsert_dataset_items(client, dataset_name, items)
-
-    dataset = client.get_dataset(dataset_name)
-    data = list(dataset.items)
-    if not data:
-        raise SystemExit(
-            f"dataset '{dataset_name}' has no items (seed it with --gt-csv)"
-        )
-    if ids:
-        wanted = set(ids)
-        data = [it for it in data if (it.input or {}).get("article_id") in wanted]
-        if not data:
-            raise SystemExit("none of the requested --ids are in the dataset")
-    requested_ids = [(it.input or {}).get("article_id") for it in data]
-
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    results: list[tuple[str, object]] = []
-    try:
-        for variant in variants:
-            runner = make_runner(variant, mode)  # fetches prompts -> versions_seen
-            if run_name:
-                rn = f"{run_name}-{variant}" if len(variants) > 1 else run_name
-            else:
-                rn = f"{variant}-{mode}-{stamp}"
-            result = client.run_experiment(
-                name=f"{EXPERIMENT_PREFIX}-{variant}",
-                run_name=rn,
-                description=_DESCRIPTION,
-                data=data,
-                task=make_task(
-                    runner, dsn, trace_prefix=f"{EXPERIMENT_PREFIX}-{variant}"
-                ),
-                evaluators=[act_accuracy_evaluator, predicted_label_evaluator],
-                run_evaluators=[act_metrics_run_evaluator],
-                # async task -> max_concurrency gates real parallelism; the
-                # shared Gemini rate limiter caps requests per second anyway.
-                max_concurrency=8,
-                metadata={
-                    "variant": variant,
-                    "mode": mode,
-                    "models": models_for_mode(mode),
-                    "prompt_versions": prompts.versions_seen(),
-                    "entrypoint": "eval",
-                },
-            )
-            _warn_failed_items(result, requested_ids)
-            results.append((variant, result))
-    finally:
-        obs.flush()
-    return results
+# Completed in Task 5 (run evaluators + dataclass); placeholder keeps imports working.
+EXPERIMENTS: dict = {}
