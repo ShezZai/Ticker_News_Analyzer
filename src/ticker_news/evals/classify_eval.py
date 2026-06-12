@@ -180,7 +180,7 @@ _DESCRIPTION = (
 )
 
 
-def make_task(runner, dsn: str | None):
+def make_task(runner, dsn: str | None, trace_prefix: str = EXPERIMENT_PREFIX):
     """Async experiment task: read the article, classify, return the verdict.
 
     Read-only — never writes to pipeline tables. A fresh connection per
@@ -189,6 +189,8 @@ def make_task(runner, dsn: str | None):
     """
 
     async def classify_task(*, item, **kwargs) -> dict:
+        from langfuse import propagate_attributes
+
         from ticker_news.shared import observability as obs
 
         data = item["input"] if isinstance(item, dict) else item.input
@@ -207,10 +209,13 @@ def make_task(runner, dsn: str | None):
                 raise ValueError(f"article {article_id} not found")
             return row
 
-        title, content = await asyncio.to_thread(_fetch)
-        verdict, confirmed = await runner.classify(
-            title, content or "", config=obs.chain_config() or None
-        )
+        # The SDK names every experiment-item trace "experiment-item-run";
+        # propagate a descriptive name onto the active root span instead.
+        with propagate_attributes(trace_name=f"{trace_prefix}:article-{article_id}"):
+            title, content = await asyncio.to_thread(_fetch)
+            verdict, confirmed = await runner.classify(
+                title, content or "", config=obs.chain_config() or None
+            )
         label = runner.label_of(verdict)
         return {
             "predicted": label,
@@ -311,7 +316,9 @@ def run_eval(
                 run_name=rn,
                 description=_DESCRIPTION,
                 data=data,
-                task=make_task(runner, dsn),
+                task=make_task(
+                    runner, dsn, trace_prefix=f"{EXPERIMENT_PREFIX}-{variant}"
+                ),
                 evaluators=[act_accuracy_evaluator, predicted_label_evaluator],
                 run_evaluators=[act_metrics_run_evaluator],
                 # async task -> max_concurrency gates real parallelism; the

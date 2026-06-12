@@ -1,6 +1,7 @@
 """Offline unit tests for the classification eval. No DB, no network."""
 
 import asyncio
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -268,3 +269,24 @@ class TestMakeTask:
         task = make_task(runner, dsn=None)
         with pytest.raises(ValueError, match="595"):
             asyncio.run(task(item={"input": {"article_id": 595, "title": "T"}}))
+
+    def test_task_names_the_trace_after_variant_and_article(self, monkeypatch):
+        import langfuse
+
+        seen = {}
+
+        @contextmanager
+        def fake_propagate(**kwargs):
+            seen.update(kwargs)
+            yield
+
+        monkeypatch.setattr(langfuse, "propagate_attributes", fake_propagate)
+        conn = FakeConn(rows=[("Title", "Body")])
+        monkeypatch.setattr(classify_eval, "connect_eval", lambda dsn: conn)
+        runner = VariantRunner(
+            lite=StubChain(BinaryClassification(label="none news")),
+            confirm=None, is_act=is_act_binary, label_of=lambda v: v.label,
+        )
+        task = make_task(runner, dsn=None, trace_prefix="classify-binary")
+        asyncio.run(task(item={"input": {"article_id": 595, "title": "T"}}))
+        assert seen["trace_name"] == "classify-binary:article-595"

@@ -326,51 +326,58 @@ def make_task(dsn: str | None, skip_stages: frozenset[str] = frozenset()):
     """
 
     def run_pipeline_task(*, item, **kwargs) -> dict:
+        from langfuse import propagate_attributes
+
         from ticker_news.service import stages
         from ticker_news.shared import observability as obs
 
         data = item["input"] if isinstance(item, dict) else item.input
         article_id, url = data["article_id"], data["url"]
         conn = connect_eval(dsn)
-        try:
-            reset_article(conn, article_id, keep=skip_stages)
-            tag_ctx = stages.TagContext.load(conn)
-            with obs.stage_span("embed"):
-                stages.embed_stage(conn, url)
-            with obs.stage_span("classify"):
-                category = stages.classify_stage(conn, url)
-            if category is None:
-                # classify no-ops when category is already set (e.g. the stage
-                # was kept via --skip-stages); report the stored value.
-                row = conn.execute(
-                    "SELECT category FROM public.articles WHERE id = %s",
-                    (article_id,),
-                ).fetchone()
-                category = row[0] if row else None
-            with obs.stage_span("tag"):
-                stages.tag_stage(conn, url, tag_ctx)
-            with obs.stage_span("insights"):
-                stages.insights_stage(conn, url, tag_ctx)
-            with obs.stage_span("sentiment"):
-                verdict = stages.sentiment_stage(conn, url)
-            if verdict is None:
-                row = conn.execute(
-                    "SELECT primary_ticker FROM public.articles WHERE id = %s",
-                    (article_id,),
-                ).fetchone()
-                ticker = row[0] if row else None
-                reason = (
-                    f"category={category}" if category != "real news"
-                    else "no primary ticker" if not ticker
-                    else "sentiment skipped"
-                )
-                return {"action": None, "confidence": None, "category": category,
-                        "ticker": ticker, "skip_reason": reason}
-            return {"action": verdict["action"], "confidence": verdict["confidence"],
-                    "category": category, "ticker": verdict["ticker"],
-                    "skip_reason": None}
-        finally:
-            conn.close()
+        # The SDK names every experiment-item trace "experiment-item-run";
+        # propagate a descriptive name onto the active root span instead.
+        with propagate_attributes(
+            trace_name=f"{EXPERIMENT_NAME}:article-{article_id}"
+        ):
+            try:
+                reset_article(conn, article_id, keep=skip_stages)
+                tag_ctx = stages.TagContext.load(conn)
+                with obs.stage_span("embed"):
+                    stages.embed_stage(conn, url)
+                with obs.stage_span("classify"):
+                    category = stages.classify_stage(conn, url)
+                if category is None:
+                    # classify no-ops when category is already set (e.g. the stage
+                    # was kept via --skip-stages); report the stored value.
+                    row = conn.execute(
+                        "SELECT category FROM public.articles WHERE id = %s",
+                        (article_id,),
+                    ).fetchone()
+                    category = row[0] if row else None
+                with obs.stage_span("tag"):
+                    stages.tag_stage(conn, url, tag_ctx)
+                with obs.stage_span("insights"):
+                    stages.insights_stage(conn, url, tag_ctx)
+                with obs.stage_span("sentiment"):
+                    verdict = stages.sentiment_stage(conn, url)
+                if verdict is None:
+                    row = conn.execute(
+                        "SELECT primary_ticker FROM public.articles WHERE id = %s",
+                        (article_id,),
+                    ).fetchone()
+                    ticker = row[0] if row else None
+                    reason = (
+                        f"category={category}" if category != "real news"
+                        else "no primary ticker" if not ticker
+                        else "sentiment skipped"
+                    )
+                    return {"action": None, "confidence": None, "category": category,
+                            "ticker": ticker, "skip_reason": reason}
+                return {"action": verdict["action"], "confidence": verdict["confidence"],
+                        "category": category, "ticker": verdict["ticker"],
+                        "skip_reason": None}
+            finally:
+                conn.close()
 
     return run_pipeline_task
 
