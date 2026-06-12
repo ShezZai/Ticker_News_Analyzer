@@ -92,5 +92,114 @@ SHARED_EVALUATORS = (
     cost_evaluator,
 )
 
+
+# ---------------------------------------------------------------------------
+# Run-level evaluators
+# ---------------------------------------------------------------------------
+
+def _expected_label(item) -> str | None:
+    expected = item.get("expected_output") if isinstance(item, dict) else item.expected_output
+    return (expected or {}).get("label")
+
+
+def make_totals_run_evaluator(started_monotonic: float):
+    """Run-level wall-clock/cost/token totals. The closure pins the start time
+    taken just before run_experiment; the evaluator runs after the last item."""
+
+    def totals_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
+        outputs = [r.output for r in item_results]
+        evals = [Evaluation(
+            name="total_time_s",
+            value=time.monotonic() - started_monotonic,
+            comment=f"{len(item_results)} items",
+        )]
+        lats = [o["latency_s"] for o in outputs if o and o.get("latency_s") is not None]
+        if lats:
+            evals.append(Evaluation(name="avg_time_per_item_s",
+                                    value=sum(lats) / len(lats),
+                                    comment=f"{len(lats)} timed items"))
+        costs = [item_cost_usd(o) for o in outputs]
+        known = [c for c in costs if c is not None]
+        if known:
+            evals.append(Evaluation(name="total_cost_usd", value=sum(known),
+                                    comment=f"{len(known)}/{len(costs)} items with usage"))
+        tin = sum(o.get("input_tokens") or 0 for o in outputs if o)
+        tout = sum(o.get("output_tokens") or 0 for o in outputs if o)
+        if tin or tout:
+            evals.append(Evaluation(name="total_tokens", value=tin + tout,
+                                    comment=f"input={tin} output={tout}"))
+        return evals
+
+    return totals_run_evaluator
+
+
+def label_accuracy_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
+    """Fraction of labeled items predicted exactly right; an errored task
+    (output None) counts as wrong, not absent."""
+    labeled = [r for r in item_results if _expected_label(r.item) is not None]
+    if not labeled:
+        return [Evaluation(name="label_accuracy_avg_skip", value="no labeled items")]
+    correct = sum(
+        1 for r in labeled
+        if r.output and r.output.get("label") == _expected_label(r.item)
+    )
+    return [Evaluation(name="label_accuracy_avg", value=correct / len(labeled),
+                       comment=f"{correct}/{len(labeled)} exact (errored = wrong)")]
+
+
+def binary_confusion_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
+    """Precision/recall/F1 for the YES class (the GT is 42 YES / 98 NO —
+    accuracy alone would flatter an always-NO classifier). An errored task is
+    always wrong: FN on YES items, FP on NO items."""
+    tp = fp = fn = tn = 0
+    for r in item_results:
+        expected = _expected_label(r.item)
+        predicted = (r.output or {}).get("label")
+        if expected == "YES":
+            tp, fn = (tp + 1, fn) if predicted == "YES" else (tp, fn + 1)
+        elif expected == "NO":
+            wrong = predicted == "YES" or r.output is None
+            fp, tn = (fp + 1, tn) if wrong else (fp, tn + 1)
+    if tp + fp + fn + tn == 0:
+        return [Evaluation(name="act_metrics_skip", value="no scorable items")]
+    counts = f"TP={tp} FP={fp} FN={fn} TN={tn}"
+    evals: list[Evaluation] = []
+    precision = tp / (tp + fp) if (tp + fp) else None
+    recall = tp / (tp + fn) if (tp + fn) else None
+    if precision is None:
+        evals.append(Evaluation(name="act_precision_skip",
+                                value=f"no YES predictions ({counts})"))
+    else:
+        evals.append(Evaluation(name="act_precision", value=precision, comment=counts))
+    if recall is None:
+        evals.append(Evaluation(name="act_recall_skip",
+                                value=f"no YES items ({counts})"))
+    else:
+        evals.append(Evaluation(name="act_recall", value=recall, comment=counts))
+    if precision is not None and recall is not None and (precision + recall) > 0:
+        evals.append(Evaluation(name="act_f1",
+                                value=2 * precision * recall / (precision + recall),
+                                comment=counts))
+    return evals
+
+
+def derived_act_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
+    """Finegrained only: collapse expected and predicted categories through
+    NEWS_SUBTYPES to YES/NO — do miscategorizations cross the ACT boundary?"""
+    from ticker_news.classification.variants import is_act_finegrained
+
+    labeled = [r for r in item_results if _expected_label(r.item) is not None]
+    if not labeled:
+        return [Evaluation(name="derived_act_accuracy_skip", value="no labeled items")]
+    correct = 0
+    for r in labeled:
+        expected_act = is_act_finegrained(_expected_label(r.item))
+        predicted = (r.output or {}).get("label")
+        if predicted is not None and is_act_finegrained(predicted) is expected_act:
+            correct += 1
+    return [Evaluation(name="derived_act_accuracy", value=correct / len(labeled),
+                       comment=f"{correct}/{len(labeled)} on the right ACT side")]
+
+
 # Completed in Task 5 (run evaluators + dataclass); placeholder keeps imports working.
 EXPERIMENTS: dict = {}
