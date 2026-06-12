@@ -43,8 +43,10 @@ class AppSettings(BaseSettings):
     )
 
     # Historical-precedent retrieval for the sentiment analyst panel.
-    # "article": top-k cosine-nearest prior articles (default, legacy behavior).
-    # "insights": union of per-insight-box neighbors above a similarity floor.
+    # "article":          top-k cosine-nearest prior articles (default, legacy).
+    # "insights":         per-insight-box neighbors over public.article_insights.
+    # "distilled-first":  same over distilled_article_insights, tagged by first_label.
+    # "distilled-second": same, tagged by second_label, with DROP-labelled excluded.
     precedent_source: str = Field(
         default="article", validation_alias="SENTIMENT_PRECEDENT_SOURCE"
     )

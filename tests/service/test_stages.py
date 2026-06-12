@@ -265,18 +265,19 @@ class _InsightsConn:
 
 
 def test_insights_similarity_groups_by_article():
-    # rows: (insight_id, article_id, date, ticker, headline, insight, topic, sim)
+    # rows: (insight_id, article_id, date, ticker, headline, insight, topic,
+    #        label, sim) - unlabelled corpus -> None label
     published = datetime(2025, 6, 1, tzinfo=timezone.utc)
     conn = _InsightsConn(
         published,
         [([0.0],), ([0.1],)],               # two embedded boxes
         [
             # box 1 hits: two insights from article 100, one from article 200
-            [(10, 100, "2025-01-01", "NVDA", "NVDA beats", "insight A", "topicA", 0.91),
-             (11, 100, "2025-01-01", "NVDA", "NVDA beats", None, "topic\nB", 0.80),
-             (12, 200, "2025-01-02", "AMD", "AMD news", "insight C", None, 0.85)],
+            [(10, 100, "2025-01-01", "NVDA", "NVDA beats", "insight A", "topicA", None, 0.91),
+             (11, 100, "2025-01-01", "NVDA", "NVDA beats", None, "topic\nB", None, 0.80),
+             (12, 200, "2025-01-02", "AMD", "AMD news", "insight C", None, None, 0.85)],
             # box 2 hits: insight 10 again, higher sim -> wins the dedup
-            [(10, 100, "2025-01-01", "NVDA", "NVDA beats", "insight A", "topicA", 0.95)],
+            [(10, 100, "2025-01-01", "NVDA", "NVDA beats", "insight A", "topicA", None, 0.95)],
         ],
     )
     lines = stages.insights_similarity(conn, 1)
@@ -285,6 +286,26 @@ def test_insights_similarity_groups_by_article():
         "2025-01-01 [NVDA] NVDA beats\n    - insight A\n    - topic B",
         # article 200, single excerpt -> inlined after the em dash
         "2025-01-02 [AMD] AMD news — insight C",
+    ]
+
+
+def test_insights_similarity_tags_label_on_distilled():
+    published = datetime(2025, 6, 1, tzinfo=timezone.utc)
+    conn = _InsightsConn(
+        published,
+        [([0.0],)],                          # one embedded box
+        [[
+            (10, 100, "2025-01-01", "NVDA", "NVDA beats", "insight A", "t", "evidance-event", 0.95),
+            (11, 100, "2025-01-01", "NVDA", "NVDA beats", "insight B", "t", "informative", 0.90),
+        ]],
+    )
+    lines = stages.insights_similarity(
+        conn, 1, table="public.distilled_article_insights", label_col="first_label"
+    )
+    assert lines == [
+        "2025-01-01 [NVDA] NVDA beats\n"
+        "    - [evidance-event] insight A\n"
+        "    - [informative] insight B",
     ]
 
 
@@ -299,17 +320,30 @@ def test_insights_similarity_empty_when_no_published():
 
 
 def test_own_article_insights_collapses_and_drops_empty():
+    # rows: (insight, topic, label) - unlabelled -> None
     conn = _StubConn([[
-        ("insight one", "topicX"),
-        (None, "topic\ntwo"),      # insight None -> topic, newline collapsed
-        ("   ", None),             # all-whitespace -> dropped
+        ("insight one", "topicX", None),
+        (None, "topic\ntwo", None),   # insight None -> topic, newline collapsed
+        ("   ", None, None),          # all-whitespace -> dropped
     ]])
     assert stages.own_article_insights(conn, 1) == ["insight one", "topic two"]
 
 
+def test_own_article_insights_tags_label_on_distilled():
+    conn = _StubConn([[
+        ("insight one", "t", "informative"),
+        ("insight two", "t", "evidance-event"),
+    ]])
+    out = stages.own_article_insights(
+        conn, 1, table="public.distilled_article_insights", label_col="second_label"
+    )
+    assert out == ["[informative] insight one", "[evidance-event] insight two"]
+
+
 def test_gather_precedents_dispatches_on_config(monkeypatch):
+    seen = {}
     monkeypatch.setattr(stages, "insights_similarity",
-                        lambda c, a, **kw: ["insight-line"])
+                        lambda c, a, **kw: seen.update(kw) or ["insight-line"])
     monkeypatch.setattr(stages, "article_similarity",
                         lambda c, a, k=5: ["article-line"])
 
@@ -320,6 +354,16 @@ def test_gather_precedents_dispatches_on_config(monkeypatch):
 
     monkeypatch.setattr(stages, "get_settings", lambda: _S())
     assert stages.gather_precedents(None, 1) == ["insight-line"]
+    assert (seen["table"], seen["label_col"], seen["filter_drop"]) == (
+        "public.article_insights", None, False)
+    _S.precedent_source = "distilled-first"
+    assert stages.gather_precedents(None, 1) == ["insight-line"]
+    assert (seen["table"], seen["label_col"], seen["filter_drop"]) == (
+        "public.distilled_article_insights", "first_label", False)
+    _S.precedent_source = "distilled-second"
+    assert stages.gather_precedents(None, 1) == ["insight-line"]
+    assert (seen["table"], seen["label_col"], seen["filter_drop"]) == (
+        "public.distilled_article_insights", "second_label", True)
     _S.precedent_source = "article"
     assert stages.gather_precedents(None, 1) == ["article-line"]
 

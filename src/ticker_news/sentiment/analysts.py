@@ -38,6 +38,20 @@ Each entry is one prior article; any indented "- " lines beneath it are the
 specific insight excerpts from that article that matched this news:
 {precedents}
 
+A leading "[label]" on an insight is its classification tag; the split is about
+CERTAINTY / CLOSURE, not topic:
+- "evidance-event" = it definitively HAPPENED or was reported - a settled,
+  quotable fact (reported earnings/guidance/margins, completed M&A, a signed deal
+  with terms, a suit filed, a recall, layoffs, a regulatory ruling, a macro
+  release, a disclosed position, a real price move on news). Bullish or bearish,
+  but settled.
+- "informative" = it was ANNOUNCED but isn't settled yet - real but soft/open/
+  unverified (an MoU/LoI/proposed deal with no terms, a product launch, a funding
+  round, a planned/future action, a self-reported milestone not independently
+  confirmed). In motion, but terms/close/materiality unsettled.
+("DROP"-labelled low-signal insights are excluded from the lists above.)
+Weight settled evidance-event overlaps more heavily than soft informative ones.
+
 You are a quantitative analyst of historical precedent. Judge how distinctive
 this news actually is versus the precedents above: is it a recurring news
 pattern for this name/sector or genuinely new information? When this article's
