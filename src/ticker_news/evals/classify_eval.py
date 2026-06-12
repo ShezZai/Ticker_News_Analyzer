@@ -292,7 +292,7 @@ _DESCRIPTION = (
 )
 
 
-def _warn_failed_items(result, requested_ids: list[int]) -> None:
+def _warn_failed_items(result, requested_ids: list[int], run_name: str) -> None:
     """Failed items vanish from the result (SDK logs only); make them loud.
 
     Nothing is left dirty in the DB — the task is read-only — but a missing
@@ -307,7 +307,7 @@ def _warn_failed_items(result, requested_ids: list[int]) -> None:
         print(
             f"WARNING: {len(failed)} item(s) errored and are missing from the "
             f"run: {failed}. Re-run with --ids {','.join(map(str, failed))} "
-            f"and the same --run-name to fill them in."
+            f"--run-name {run_name} to fill them in."
         )
 
 
@@ -390,7 +390,7 @@ def run_eval(
                     "entrypoint": "eval",
                 },
             )
-            _warn_failed_items(result, article_ids)
+            _warn_failed_items(result, article_ids, rn)
             results.append((variant, result))
     finally:
         obs.flush()

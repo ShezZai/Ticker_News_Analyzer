@@ -455,6 +455,11 @@ def test_eval_classify_rejects_dataset_with_both_variants():
     assert result.exit_code != 0
 
 
+def test_eval_classify_rejects_zero_concurrency():
+    result = runner.invoke(cli.app, ["eval", "classify", "--concurrency", "0"])
+    assert result.exit_code != 0
+
+
 def test_eval_pipeline_passes_skip_stages_and_ids_file(monkeypatch, tmp_path):
     ids_file = tmp_path / "ids.csv"
     ids_file.write_text("671\n685\n", encoding="utf-8")

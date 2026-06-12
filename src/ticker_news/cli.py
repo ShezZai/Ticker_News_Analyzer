@@ -611,7 +611,7 @@ def eval_classify(
     ids: str | None = typer.Option(None, "--ids", help="Comma-separated article ids: run only this dataset subset (fast prompt iteration)."),
     dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
     run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: <variant>-<model>-<timestamp>)."),
-    concurrency: int = typer.Option(16, "--concurrency", help="Max concurrent dataset items."),
+    concurrency: int = typer.Option(16, "--concurrency", min=1, help="Max concurrent dataset items."),
 ) -> None:
     """Single-pass classifier experiments: binary vs ACT labels, finegrained vs categories."""
     from ticker_news.classification.variants import MODEL_CHOICES, VARIANTS

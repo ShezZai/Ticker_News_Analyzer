@@ -438,15 +438,15 @@ class TestWarnFailedItems:
     def test_silent_when_all_items_completed(self, capsys):
         from ticker_news.evals.classify_eval import _warn_failed_items
 
-        _warn_failed_items(self._result(1, 2), [1, 2])
+        _warn_failed_items(self._result(1, 2), [1, 2], "run-x")
         assert capsys.readouterr().out == ""
 
     def test_warns_with_missing_ids_and_rerun_hint(self, capsys):
         from ticker_news.evals.classify_eval import _warn_failed_items
 
-        _warn_failed_items(self._result(1), [1, 2, 3])
+        _warn_failed_items(self._result(1), [1, 2, 3], "binary-lite-20260613-101500")
         out = capsys.readouterr().out
         assert "2 item(s) errored" in out
         assert "[2, 3]" in out
         assert "--ids 2,3" in out
-        assert "--run-name" in out
+        assert "--run-name binary-lite-20260613-101500" in out
