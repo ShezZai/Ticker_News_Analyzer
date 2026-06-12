@@ -401,20 +401,22 @@ def test_eval_classify_passes_args(monkeypatch):
     from ticker_news.evals import classify_eval
     monkeypatch.setattr(classify_eval, "run_eval", fake_run_eval)
     result = runner.invoke(cli.app, [
-        "eval", "classify", "--variant", "binary", "--mode", "lite",
-        "--gt-csv", "gt.csv", "--ids", "595,14682", "--dsn", "postgresql://x",
-        "--run-name", "tuning-1",
+        "eval", "classify", "--variant", "binary", "--model", "flash",
+        "--ids", "595,14682", "--dsn", "postgresql://x",
+        "--run-name", "tuning-1", "--concurrency", "4",
+        "--dataset", "my-dataset",
     ])
     assert result.exit_code == 0, result.output
     assert captured["variants"] == ("binary",)
-    assert captured["mode"] == "lite"
-    assert captured["gt_csv"] == "gt.csv"
+    assert captured["model"] == "flash"
     assert captured["ids"] == [595, 14682]
     assert captured["dsn"] == "postgresql://x"
     assert captured["run_name"] == "tuning-1"
+    assert captured["concurrency"] == 4
+    assert captured["dataset_name"] == "my-dataset"
 
 
-def test_eval_classify_defaults_to_both_two_pass(monkeypatch):
+def test_eval_classify_defaults(monkeypatch):
     captured = {}
 
     def fake_run_eval(variants, **kwargs):
@@ -427,9 +429,10 @@ def test_eval_classify_defaults_to_both_two_pass(monkeypatch):
     result = runner.invoke(cli.app, ["eval", "classify"])
     assert result.exit_code == 0, result.output
     assert captured["variants"] == ("binary", "finegrained")
-    assert captured["mode"] == "two-pass"
-    assert captured["dataset_name"] == "classify-ground-truth"
+    assert captured["model"] == "lite"
+    assert captured["dataset_name"] is None
     assert captured["ids"] is None
+    assert captured["concurrency"] == 16
 
 
 def test_eval_classify_rejects_bad_variant():
@@ -437,13 +440,18 @@ def test_eval_classify_rejects_bad_variant():
     assert result.exit_code != 0
 
 
-def test_eval_classify_rejects_bad_mode():
-    result = runner.invoke(cli.app, ["eval", "classify", "--mode", "warp"])
+def test_eval_classify_rejects_bad_model():
+    result = runner.invoke(cli.app, ["eval", "classify", "--model", "ultra"])
     assert result.exit_code != 0
 
 
 def test_eval_classify_rejects_bad_ids():
     result = runner.invoke(cli.app, ["eval", "classify", "--ids", "1,x"])
+    assert result.exit_code != 0
+
+
+def test_eval_classify_rejects_dataset_with_both_variants():
+    result = runner.invoke(cli.app, ["eval", "classify", "--dataset", "d"])
     assert result.exit_code != 0
 
 

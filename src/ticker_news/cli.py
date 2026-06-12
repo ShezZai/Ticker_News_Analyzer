@@ -606,30 +606,32 @@ def eval_pipeline(
 @eval_app.command("classify")
 def eval_classify(
     variant: str = typer.Option("both", "--variant", help="both | binary | finegrained."),
-    mode: str = typer.Option("two-pass", "--mode", help="two-pass | lite | flash."),
-    gt_csv: str | None = typer.Option(None, "--gt-csv", help="Seed/refresh the Langfuse dataset from this ground-truth csv (article id, header, Act_GT)."),
-    dataset: str = typer.Option("classify-ground-truth", "--dataset", help="Langfuse dataset name."),
+    model: str = typer.Option("lite", "--model", help="lite (gemini-2.5-flash-lite) | flash (gemini-2.5-flash)."),
+    dataset: str | None = typer.Option(None, "--dataset", help="Dataset override (single --variant only; default: the variant's own dataset)."),
     ids: str | None = typer.Option(None, "--ids", help="Comma-separated article ids: run only this dataset subset (fast prompt iteration)."),
     dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
-    run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: <variant>-<mode>-<timestamp>)."),
+    run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: <variant>-<model>-<timestamp>)."),
+    concurrency: int = typer.Option(16, "--concurrency", help="Max concurrent dataset items."),
 ) -> None:
-    """Compare classification prompt variants against the ground-truth labels."""
-    from ticker_news.classification.variants import MODES, VARIANTS
+    """Single-pass classifier experiments: binary vs ACT labels, finegrained vs categories."""
+    from ticker_news.classification.variants import MODEL_CHOICES, VARIANTS
     from ticker_news.evals import classify_eval
 
     if variant not in ("both", *VARIANTS):
         raise typer.BadParameter(f"--variant must be one of: both, {', '.join(VARIANTS)}")
-    if mode not in MODES:
-        raise typer.BadParameter(f"--mode must be one of: {', '.join(MODES)}")
+    if model not in MODEL_CHOICES:
+        raise typer.BadParameter(f"--model must be one of: {', '.join(MODEL_CHOICES)}")
     try:
         id_list = [int(x) for x in ids.split(",") if x.strip()] if ids else None
     except ValueError as exc:
         raise typer.BadParameter(f"--ids must be comma-separated integers: {exc}")
+    if dataset and variant == "both":
+        raise typer.BadParameter("--dataset requires a single --variant")
     variants = VARIANTS if variant == "both" else (variant,)
     try:
         results = classify_eval.run_eval(
-            variants, mode=mode, dataset_name=dataset, gt_csv=gt_csv,
-            dsn=dsn, run_name=run_name, ids=id_list,
+            variants, model=model, dataset_name=dataset,
+            dsn=dsn, run_name=run_name, ids=id_list, concurrency=concurrency,
         )
     except SystemExit as exc:
         typer.echo(str(exc), err=True)
