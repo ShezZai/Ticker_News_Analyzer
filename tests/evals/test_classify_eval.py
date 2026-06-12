@@ -283,3 +283,146 @@ class TestDerivedActRunEvaluator:
 
         evals = _by_name(derived_act_run_evaluator(item_results=[_ir(None, _out("x"))]))
         assert set(evals) == {"derived_act_accuracy_skip"}
+
+
+class FakeCursor:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+
+class FakeConn:
+    def __init__(self, rows=None):
+        self.executed = []
+        self._rows = rows or []
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+        return FakeCursor(self._rows)
+
+    def close(self):
+        pass
+
+
+class TestPrefetchArticles:
+    def test_returns_id_to_title_content(self):
+        from ticker_news.evals.classify_eval import prefetch_articles
+
+        conn = FakeConn(rows=[(595, "Title 595", "Body 595"), (14682, None, "Body")])
+        articles = prefetch_articles(conn, [595, 14682])
+        assert articles == {595: ("Title 595", "Body 595"), 14682: ("", "Body")}
+        # one parametrized query for all ids
+        assert len(conn.executed) == 1
+        assert conn.executed[0][1] == ([595, 14682],)
+
+    def test_missing_ids_raise(self):
+        from ticker_news.evals.classify_eval import prefetch_articles
+
+        conn = FakeConn(rows=[(595, "T", "B")])
+        with pytest.raises(ValueError, match="not found.*14682"):
+            prefetch_articles(conn, [595, 14682])
+
+    def test_empty_content_raises(self):
+        from ticker_news.evals.classify_eval import prefetch_articles
+
+        conn = FakeConn(rows=[(595, "T", "   ")])
+        with pytest.raises(ValueError, match="no scraped content.*595"):
+            prefetch_articles(conn, [595])
+
+
+class StubChain:
+    def __init__(self, *verdicts):
+        self._verdicts = list(verdicts)
+        self.calls = []
+        self.configs = []
+
+    async def ainvoke(self, inputs, config=None):
+        self.calls.append(inputs)
+        self.configs.append(config or {})
+        return self._verdicts.pop(0)
+
+
+def _binary_classifier(*verdicts):
+    chain = StubChain(*verdicts)
+    return Classifier(
+        chain=chain, variant="binary", model="gemini-2.5-flash-lite",
+        label_of=lambda v: v.label,
+        dataset_label_of=lambda v: "YES" if is_act_binary(v.label) else "NO",
+    ), chain
+
+
+class TestMakeTask:
+    def test_task_returns_output_dict(self):
+        from ticker_news.evals.classify_eval import make_task
+
+        clf, chain = _binary_classifier(
+            BinaryClassification(label="real news", confidence=0.7, reason="earnings")
+        )
+        task = make_task(clf, {595: ("Title", "Body text")}, "classify-binary")
+        out = asyncio.run(task(item={"input": {"article_id": 595}}))
+        assert out["predicted"] == "real news"
+        assert out["label"] == "YES"
+        assert out["confidence"] == 0.7
+        assert out["reason"] == "earnings"
+        assert out["model"] == "gemini-2.5-flash-lite"
+        assert out["latency_s"] >= 0
+        # no usage captured from the stub chain -> tokens None, cost skips
+        assert out["input_tokens"] is None
+        assert out["output_tokens"] is None
+        # prefetched text was used; no DB call possible (no conn anywhere)
+        assert chain.calls[0]["title"] == "Title"
+
+    def test_task_appends_usage_handler_to_config(self):
+        from langchain_core.callbacks import UsageMetadataCallbackHandler
+
+        from ticker_news.evals.classify_eval import make_task
+
+        clf, chain = _binary_classifier(BinaryClassification(label="none news"))
+        task = make_task(clf, {1: ("T", "B")}, "classify-binary")
+        asyncio.run(task(item={"input": {"article_id": 1}}))
+        callbacks = chain.configs[0].get("callbacks", [])
+        assert any(isinstance(cb, UsageMetadataCallbackHandler) for cb in callbacks)
+
+    def test_task_names_the_trace(self, monkeypatch):
+        import langfuse
+
+        from ticker_news.evals.classify_eval import make_task
+
+        seen = {}
+
+        @contextmanager
+        def fake_propagate(**kwargs):
+            seen.update(kwargs)
+            yield
+
+        monkeypatch.setattr(langfuse, "propagate_attributes", fake_propagate)
+        clf, _ = _binary_classifier(BinaryClassification(label="none news"))
+        task = make_task(clf, {595: ("T", "B")}, "classify-binary")
+        asyncio.run(task(item={"input": {"article_id": 595}}))
+        assert seen["trace_name"] == "classify-binary:article-595"
+
+
+class TestExperimentSpecs:
+    def test_spec_table(self):
+        assert set(EXPERIMENTS) == {"binary", "finegrained"}
+        b, f = EXPERIMENTS["binary"], EXPERIMENTS["finegrained"]
+        assert b.dataset == "140-articles-act-no-act"
+        assert b.experiment_name == "classify-binary"
+        assert f.dataset == "140-articles-categories"
+        assert f.experiment_name == "classify-finegrained"
+
+    def test_binary_has_confusion_finegrained_has_derived_act(self):
+        from ticker_news.evals.classify_eval import (
+            binary_confusion_run_evaluator,
+            derived_act_run_evaluator,
+            label_accuracy_run_evaluator,
+        )
+
+        assert binary_confusion_run_evaluator in EXPERIMENTS["binary"].run_evaluators
+        assert derived_act_run_evaluator in EXPERIMENTS["finegrained"].run_evaluators
+        for spec in EXPERIMENTS.values():
+            assert label_accuracy_run_evaluator in spec.run_evaluators
+            assert label_accuracy_evaluator in spec.evaluators
+            assert cost_evaluator in spec.evaluators

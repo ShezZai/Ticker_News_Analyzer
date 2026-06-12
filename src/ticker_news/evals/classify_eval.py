@@ -201,5 +201,193 @@ def derived_act_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
                        comment=f"{correct}/{len(labeled)} on the right ACT side")]
 
 
-# Completed in Task 5 (run evaluators + dataclass); placeholder keeps imports working.
-EXPERIMENTS: dict = {}
+def prefetch_articles(
+    conn: psycopg.Connection, ids: list[int]
+) -> dict[int, tuple[str, str]]:
+    """One query for every article body up front — the experiment task then
+    does zero DB work (the per-item fetch over the tunneled shared DB used to
+    dwarf the LLM call). Loud failure on unusable articles."""
+    rows = conn.execute(
+        "SELECT id, title, coalesce(content, '') FROM public.articles WHERE id = ANY(%s)",
+        (ids,),
+    ).fetchall()
+    found = {row[0]: (row[1] or "", row[2]) for row in rows}
+    missing = sorted(set(ids) - set(found))
+    if missing:
+        raise ValueError(f"article ids not found: {missing}")
+    empty = sorted(aid for aid, (_, content) in found.items() if not content.strip())
+    if empty:
+        raise ValueError(f"articles have no scraped content: {empty}")
+    return found
+
+
+def make_task(classifier, articles: dict[int, tuple[str, str]], trace_prefix: str):
+    """Async experiment task: exactly one LLM call, everything else local."""
+
+    async def classify_task(*, item, **kwargs) -> dict:
+        from langchain_core.callbacks import UsageMetadataCallbackHandler
+        from langfuse import propagate_attributes
+
+        from ticker_news.shared import observability as obs
+
+        data = item["input"] if isinstance(item, dict) else item.input
+        article_id = data["article_id"]
+        title, content = articles[article_id]
+        # fresh handler per invocation — callbacks are not thread-safe to share
+        usage = UsageMetadataCallbackHandler()
+        cfg = obs.chain_config() or {}
+        cfg = {**cfg, "callbacks": [*cfg.get("callbacks", []), usage]}
+        t0 = time.monotonic()
+        # The SDK names every experiment-item trace AND its root span
+        # "experiment-item-run"; rename both.
+        with propagate_attributes(trace_name=f"{trace_prefix}:article-{article_id}"):
+            if (lf := obs.client()) is not None:
+                lf.update_current_span(name=f"{trace_prefix}:article-{article_id}")
+            verdict = await classifier.classify(title, content, config=cfg)
+        latency = time.monotonic() - t0
+        tin = tout = None
+        if usage.usage_metadata:  # {model: {input_tokens, output_tokens, ...}}
+            tin = sum(u.get("input_tokens", 0) for u in usage.usage_metadata.values())
+            tout = sum(u.get("output_tokens", 0) for u in usage.usage_metadata.values())
+        return {
+            "predicted": classifier.label_of(verdict),
+            "label": classifier.dataset_label_of(verdict),
+            "reason": verdict.reason or None,
+            "confidence": getattr(verdict, "confidence", None),
+            "latency_s": round(latency, 3),
+            "input_tokens": tin,
+            "output_tokens": tout,
+            "model": classifier.model,
+        }
+
+    return classify_task
+
+
+@dataclass(frozen=True)
+class ExperimentSpec:
+    dataset: str
+    experiment_name: str
+    evaluators: tuple
+    run_evaluators: tuple  # totals evaluator is added per run (needs a start time)
+
+
+EXPERIMENTS: dict[str, ExperimentSpec] = {
+    "binary": ExperimentSpec(
+        dataset="140-articles-act-no-act",
+        experiment_name="classify-binary",
+        evaluators=SHARED_EVALUATORS,
+        run_evaluators=(label_accuracy_run_evaluator, binary_confusion_run_evaluator),
+    ),
+    "finegrained": ExperimentSpec(
+        dataset="140-articles-categories",
+        experiment_name="classify-finegrained",
+        evaluators=SHARED_EVALUATORS,
+        run_evaluators=(label_accuracy_run_evaluator, derived_act_run_evaluator),
+    ),
+}
+
+_DESCRIPTION = (
+    "Single-pass classification prompt experiment: one LLM call per article, "
+    "scored against the dataset's expected label."
+)
+
+
+def _warn_failed_items(result, requested_ids: list[int]) -> None:
+    """Failed items vanish from the result (SDK logs only); make them loud.
+
+    Nothing is left dirty in the DB — the task is read-only — but a missing
+    item silently skews the run metrics."""
+    done: set[int] = set()
+    for r in result.item_results:
+        item = r.item
+        data = item["input"] if isinstance(item, dict) else item.input
+        done.add(data["article_id"])
+    failed = sorted(set(requested_ids) - done)
+    if failed:
+        print(
+            f"WARNING: {len(failed)} item(s) errored and are missing from the "
+            f"run: {failed}. Re-run with --ids {','.join(map(str, failed))} "
+            f"to fill them in."
+        )
+
+
+def run_eval(
+    variants: tuple[str, ...],
+    *,
+    model: str = "lite",
+    dataset_name: str | None = None,
+    dsn: str | None = None,
+    run_name: str | None = None,
+    ids: list[int] | None = None,
+    concurrency: int = 16,
+) -> list[tuple[str, object]]:
+    """Run one experiment per variant. Returns [(variant, ExperimentResult), ...]."""
+    from ticker_news.classification.variants import MODEL_CHOICES, make_classifier
+    from ticker_news.shared import observability as obs
+    from ticker_news.shared import prompts
+    from ticker_news.shared.config import get_settings
+
+    client = obs.client()
+    if client is None:
+        raise SystemExit(
+            "LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY are required - "
+            "eval results live in Langfuse."
+        )
+    if not get_settings().google_api_key:
+        raise SystemExit("missing required keys: GOOGLE_API_KEY")
+    if model not in MODEL_CHOICES:
+        raise SystemExit(f"unknown model {model!r} (expected one of {sorted(MODEL_CHOICES)})")
+    if dataset_name and len(variants) > 1:
+        raise SystemExit("--dataset override requires a single --variant")
+
+    model_name = MODEL_CHOICES[model]
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    results: list[tuple[str, object]] = []
+    try:
+        for variant in variants:
+            spec = EXPERIMENTS[variant]
+            ds_name = dataset_name or spec.dataset
+            dataset = client.get_dataset(ds_name)
+            data = list(dataset.items)
+            if not data:
+                raise SystemExit(f"dataset '{ds_name}' has no items")
+            if ids:
+                wanted = set(ids)
+                data = [it for it in data if (it.input or {}).get("article_id") in wanted]
+                if not data:
+                    raise SystemExit("none of the requested --ids are in the dataset")
+            article_ids = [(it.input or {}).get("article_id") for it in data]
+            conn = connect_eval(dsn)
+            try:
+                articles = prefetch_articles(conn, article_ids)
+            finally:
+                conn.close()
+            classifier = make_classifier(variant, model_name)  # fetches prompts -> versions_seen
+            if run_name:
+                rn = f"{run_name}-{variant}" if len(variants) > 1 else run_name
+            else:
+                rn = f"{variant}-{model}-{stamp}"
+            t0 = time.monotonic()
+            result = client.run_experiment(
+                name=spec.experiment_name,
+                run_name=rn,
+                description=_DESCRIPTION,
+                data=data,
+                task=make_task(classifier, articles, spec.experiment_name),
+                evaluators=list(spec.evaluators),
+                run_evaluators=[make_totals_run_evaluator(t0), *spec.run_evaluators],
+                # async task -> max_concurrency gates real parallelism; the
+                # shared Gemini rate limiter caps requests per second anyway.
+                max_concurrency=concurrency,
+                metadata={
+                    "variant": variant,
+                    "model": model_name,
+                    "prompt_versions": prompts.versions_seen(),
+                    "entrypoint": "eval",
+                },
+            )
+            _warn_failed_items(result, article_ids)
+            results.append((variant, result))
+    finally:
+        obs.flush()
+    return results
