@@ -233,8 +233,10 @@ def _build(model_name: str, prompt_name: str, fallback: str, schema: type):
     from ticker_news.shared.prompts import get_prompt
 
     llm = gemini_chat(model_name, timeout_s=GEMINI_TIMEOUT_S)
-    structured = llm.with_structured_output(schema).with_retry(
-        stop_after_attempt=RETRIES, wait_exponential_jitter=True
+    structured = (
+        llm.with_structured_output(schema)
+        .with_config(run_name="structured-output")
+        .with_retry(stop_after_attempt=RETRIES, wait_exponential_jitter=True)
     )
     template = get_prompt(prompt_name, fallback)
     try:
@@ -272,6 +274,10 @@ class VariantRunner:
     confirm: Optional[Any]
     is_act: Callable[[str], bool]
     label_of: Callable[[Any], str]
+    variant: str = "unnamed"
+
+    def _pass_config(self, config, pass_name: str) -> dict:
+        return {**(config or {}), "run_name": f"classify-{self.variant}:{pass_name}"}
 
     async def classify(self, title: Optional[str], body: str,
                        config=None) -> Tuple[Any, bool]:
@@ -282,12 +288,16 @@ class VariantRunner:
             "body": (body or "")[:MAX_ARTICLE_CHARS],
         }
         first_chain = self.lite if self.lite is not None else self.confirm
-        first = await first_chain.ainvoke(inputs, config=config)
+        first = await first_chain.ainvoke(
+            inputs, config=self._pass_config(config, "label-pass")
+        )
         two_pass = self.lite is not None and self.confirm is not None
         if not two_pass or not self.is_act(self.label_of(first)):
             return first, False
         try:
-            return await self.confirm.ainvoke(inputs, config=config), True
+            return await self.confirm.ainvoke(
+                inputs, config=self._pass_config(config, "confirm-pass")
+            ), True
         except Exception as exc:
             logger.warning("confirmation pass failed (%r); keeping lite verdict", exc)
             return first, True
@@ -313,7 +323,8 @@ def make_runner(variant: str, mode: str) -> VariantRunner:
             build_finegrained_classifier, is_act_finegrained, lambda v: v.category)
     lite = build(GEMINI_FLASH_LITE) if mode in ("lite", "two-pass") else None
     confirm = build(GEMINI_FLASH) if mode in ("flash", "two-pass") else None
-    return VariantRunner(lite=lite, confirm=confirm, is_act=is_act, label_of=label_of)
+    return VariantRunner(lite=lite, confirm=confirm, is_act=is_act,
+                         label_of=label_of, variant=variant)
 
 
 def models_for_mode(mode: str) -> dict[str, str]:

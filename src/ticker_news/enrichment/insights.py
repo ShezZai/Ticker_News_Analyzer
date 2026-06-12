@@ -101,17 +101,17 @@ def _box_chain():
     lite = gemini_chat(GEMINI_FLASH_LITE, timeout_s=GEMINI_TIMEOUT_S)
     flash = gemini_chat(GEMINI_FLASH, timeout_s=GEMINI_TIMEOUT_S)
     lite_chain = _tagged(
-        lite.with_structured_output(InsightBoxes).with_retry(
-            stop_after_attempt=RETRIES, wait_exponential_jitter=True
-        ),
+        lite.with_structured_output(InsightBoxes)
+        .with_config(run_name="structured-output")
+        .with_retry(stop_after_attempt=RETRIES, wait_exponential_jitter=True),
         GEMINI_FLASH_LITE,
-    )
+    ).with_config(run_name=f"insight-boxes:{GEMINI_FLASH_LITE}")
     flash_chain = _tagged(
-        flash.with_structured_output(InsightBoxes).with_retry(
-            stop_after_attempt=2, wait_exponential_jitter=True
-        ),
+        flash.with_structured_output(InsightBoxes)
+        .with_config(run_name="structured-output")
+        .with_retry(stop_after_attempt=2, wait_exponential_jitter=True),
         GEMINI_FLASH,
-    )
+    ).with_config(run_name=f"insight-boxes:{GEMINI_FLASH}")
     # NOTE: falls back on ANY lite-chain failure (legacy only swapped on 5xx/parse
     # errors) — auth/quota errors will burn 5+2 attempts before surfacing.
     return lite_chain.with_fallbacks([flash_chain])
@@ -128,7 +128,10 @@ def generate_boxes(article_text: str, *, chain=None, config=None) -> tuple[list[
 
     chain = chain if chain is not None else _box_chain()
     template = get_prompt("extract-insights", PROMPT_TEMPLATE)
-    result = chain.invoke(safe_format(template, PROMPT_TEMPLATE, article=article_text[:MAX_ARTICLE_CHARS]), config=config)
+    result = chain.invoke(
+        safe_format(template, PROMPT_TEMPLATE, article=article_text[:MAX_ARTICLE_CHARS]),
+        config={**(config or {}), "run_name": "extract-insight-boxes"},
+    )
     return result["boxes"], result["model"]
 
 

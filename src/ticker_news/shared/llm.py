@@ -47,6 +47,10 @@ def gemini_chat(model: str, *, timeout_s: float = 60.0) -> ChatGoogleGenerativeA
         raise SystemExit("GOOGLE_API_KEY is not set (put it in .env).")
     return ChatGoogleGenerativeAI(
         model=model,
+        # Runnable name: generation spans read "gemini-2.5-flash-lite" instead
+        # of the class name. Invoke-time run_name (analyst:<role>, synthesize)
+        # still takes precedence, so contract observation names are unaffected.
+        name=model,
         temperature=0.0,
         timeout=timeout_s,
         google_api_key=s.google_api_key,

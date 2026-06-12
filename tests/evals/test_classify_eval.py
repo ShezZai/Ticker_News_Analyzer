@@ -161,6 +161,14 @@ class TestItemEvaluators:
         assert ev.value == 0.0
         assert "no output" in ev.comment
 
+    def test_no_ground_truth_skips_accuracy(self):
+        ev = act_accuracy_evaluator(
+            output={"predicted": "real news", "act": "YES"},
+            expected_output=None,
+        )
+        assert ev.name == "act_accuracy_skip"
+        assert "no ground truth" in ev.value
+
     def test_predicted_label_is_categorical(self):
         ev = predicted_label_evaluator(output={"predicted": "legal-call", "act": "NO"})
         assert ev.name == "predicted_label"
@@ -173,7 +181,7 @@ class TestItemEvaluators:
 
 def _item_result(expected_act, predicted_act):
     return SimpleNamespace(
-        item={"expected_output": {"act": expected_act}},
+        item={"expected_output": {"act": expected_act} if expected_act else None},
         output={"predicted": "x", "act": predicted_act} if predicted_act else None,
     )
 
@@ -228,6 +236,22 @@ class TestRunEvaluator:
 
     def test_empty_results_skip_everything(self):
         evals = _by_name(act_metrics_run_evaluator(item_results=[]))
+        assert set(evals) == {"act_metrics_skip"}
+
+    def test_items_without_ground_truth_are_excluded(self):
+        # unlabeled items (expected_output None) must not enter the confusion
+        # counts — only the two labeled ones below do (one TP, one TN)
+        results = [
+            _item_result(None, "YES"), _item_result(None, "NO"),
+            _item_result("YES", "YES"), _item_result("NO", "NO"),
+        ]
+        evals = _by_name(act_metrics_run_evaluator(item_results=results))
+        assert evals["act_accuracy_avg"].value == pytest.approx(1.0)
+        assert "TP=1 FP=0 FN=0 TN=1" in evals["act_accuracy_avg"].comment
+
+    def test_all_unlabeled_skips_everything(self):
+        results = [_item_result(None, "YES"), _item_result(None, "NO")]
+        evals = _by_name(act_metrics_run_evaluator(item_results=results))
         assert set(evals) == {"act_metrics_skip"}
 
 

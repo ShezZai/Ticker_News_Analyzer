@@ -103,8 +103,14 @@ def build_items(conn: psycopg.Connection, gt_rows: list[dict]) -> list[dict]:
 
 
 def act_accuracy_evaluator(*, output, expected_output, **kwargs) -> Evaluation:
-    """Langfuse item evaluator: predicted ACT vs ground truth (1.0 / 0.0)."""
+    """Langfuse item evaluator: predicted ACT vs ground truth (1.0 / 0.0).
+
+    Items without a ground-truth label (e.g. a dataset seeded for the pipeline
+    eval) get a categorical skip score instead of a misleading 0.0 — same
+    pattern as the pipeline eval's *_skip scores."""
     expected = (expected_output or {}).get("act")
+    if expected is None:
+        return Evaluation(name="act_accuracy_skip", value="no ground truth")
     if not output:
         return Evaluation(name="act_accuracy", value=0.0,
                           comment=f"no output, gt={expected}")
@@ -209,10 +215,16 @@ def make_task(runner, dsn: str | None, trace_prefix: str = EXPERIMENT_PREFIX):
                 raise ValueError(f"article {article_id} not found")
             return row
 
-        # The SDK names every experiment-item trace "experiment-item-run";
-        # propagate a descriptive name onto the active root span instead.
+        # The SDK names every experiment-item trace AND its root span
+        # "experiment-item-run"; rename both — the trace via
+        # propagate_attributes, the root span in place.
         with propagate_attributes(trace_name=f"{trace_prefix}:article-{article_id}"):
-            title, content = await asyncio.to_thread(_fetch)
+            if (lf := obs.client()) is not None:
+                lf.update_current_span(name=f"{trace_prefix}:article-{article_id}")
+            # own span: over the tunneled shared DB this fetch can dwarf the
+            # LLM call — without it the trace shows minutes of dead time
+            with obs.stage_span("fetch-article"):
+                title, content = await asyncio.to_thread(_fetch)
             verdict, confirmed = await runner.classify(
                 title, content or "", config=obs.chain_config() or None
             )

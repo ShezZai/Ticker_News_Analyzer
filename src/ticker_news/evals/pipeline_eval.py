@@ -334,11 +334,14 @@ def make_task(dsn: str | None, skip_stages: frozenset[str] = frozenset()):
         data = item["input"] if isinstance(item, dict) else item.input
         article_id, url = data["article_id"], data["url"]
         conn = connect_eval(dsn)
-        # The SDK names every experiment-item trace "experiment-item-run";
-        # propagate a descriptive name onto the active root span instead.
+        # The SDK names every experiment-item trace AND its root span
+        # "experiment-item-run"; rename both — the trace via
+        # propagate_attributes, the root span in place.
         with propagate_attributes(
             trace_name=f"{EXPERIMENT_NAME}:article-{article_id}"
         ):
+            if (lf := obs.client()) is not None:
+                lf.update_current_span(name=f"{EXPERIMENT_NAME}:article-{article_id}")
             try:
                 reset_article(conn, article_id, keep=skip_stages)
                 tag_ctx = stages.TagContext.load(conn)

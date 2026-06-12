@@ -82,8 +82,10 @@ def build_classifier(model_name: str):
     prompt updates from Langfuse take effect only after a process restart.
     """
     llm = gemini_chat(model_name, timeout_s=GEMINI_TIMEOUT_S)
-    structured = llm.with_structured_output(Classification).with_retry(
-        stop_after_attempt=RETRIES, wait_exponential_jitter=True
+    structured = (
+        llm.with_structured_output(Classification)
+        .with_config(run_name="structured-output")
+        .with_retry(stop_after_attempt=RETRIES, wait_exponential_jitter=True)
     )
     template = get_prompt("classify-article", PROMPT_TEMPLATE)
     try:
@@ -120,13 +122,15 @@ def classify_article(
         "title": (title or "").strip()[:300],
         "body": (content or "")[:MAX_ARTICLE_CHARS],
     }
-    first = lite.invoke(inputs, config=config)
+    first = lite.invoke(inputs, config={**(config or {}), "run_name": "classify:lite-pass"})
     if first.category != "real news":
         return first, False
 
     confirm = confirm if confirm is not None else _default_confirm()
     try:
-        return confirm.invoke(inputs, config=config), True
+        return confirm.invoke(
+            inputs, config={**(config or {}), "run_name": "classify:confirm-pass"}
+        ), True
     except Exception as exc:
         # confirmation exhausted its retries: keep the lite "real news" verdict
         logger.warning("confirmation pass failed (%r); keeping lite verdict", exc)

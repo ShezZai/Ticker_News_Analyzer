@@ -67,7 +67,8 @@ def test_config_passes_through_to_chains():
             return Classification(category="other")
 
     classify_article("T", "body", lite=CfgChain(), config={"callbacks": []})
-    assert captured["config"] == {"callbacks": []}
+    # callbacks pass through; each pass adds its observation run_name
+    assert captured["config"] == {"callbacks": [], "run_name": "classify:lite-pass"}
 
 
 def test_build_classifier_falls_back_on_bad_remote_template(monkeypatch):
