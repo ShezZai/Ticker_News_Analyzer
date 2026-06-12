@@ -313,12 +313,36 @@ class TestRunPipelineTaskCategoryBackfill:
         monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
         monkeypatch.setattr(
             stages, "sentiment_stage",
-            lambda c, u: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
+            lambda c, u, precedent_source=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None, skip_stages=frozenset({"classify"}))
         out = task(item={"input": {"article_id": 20512, "url": "https://x/20512"}})
         assert out["category"] == "real news"
         assert out["action"] == "buy"
+
+    def test_task_threads_precedent_source_into_sentiment(self, monkeypatch):
+        from ticker_news.evals import pipeline_eval
+        from ticker_news.service import stages
+
+        conn = FakeConn(rows=[("real news",)])
+        conn.close = lambda: None
+        monkeypatch.setattr(pipeline_eval, "connect_eval", lambda dsn: conn)
+        monkeypatch.setattr(pipeline_eval, "reset_article",
+                            lambda c, aid, keep=frozenset(): None)
+        monkeypatch.setattr(stages.TagContext, "load", classmethod(lambda cls, c: None))
+        monkeypatch.setattr(stages, "embed_stage", lambda c, u: None)
+        monkeypatch.setattr(stages, "classify_stage", lambda c, u: "real news")
+        monkeypatch.setattr(stages, "tag_stage", lambda c, u, t: None)
+        monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
+        seen = {}
+        monkeypatch.setattr(
+            stages, "sentiment_stage",
+            lambda c, u, precedent_source=None: seen.update(src=precedent_source)
+            or {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
+        )
+        task = pipeline_eval.make_task(dsn=None, precedent_source="insights")
+        task(item={"input": {"article_id": 20512, "url": "https://x/20512"}})
+        assert seen["src"] == "insights"
 
     def test_task_names_the_trace_after_experiment_and_article(self, monkeypatch):
         import langfuse
@@ -346,7 +370,7 @@ class TestRunPipelineTaskCategoryBackfill:
         monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
         monkeypatch.setattr(
             stages, "sentiment_stage",
-            lambda c, u: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
+            lambda c, u, precedent_source=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None)
         task(item={"input": {"article_id": 20512, "url": "https://x/20512"}})

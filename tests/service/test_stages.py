@@ -205,7 +205,7 @@ async def test_sentiment_judges_real_news(monkeypatch):
     ])
     seen = {}
     monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: False)
-    monkeypatch.setattr(stages, "similar_past_articles", lambda c, a, k=5: ["p1"])
+    monkeypatch.setattr(stages, "gather_precedents", lambda c, a, source=None: ["p1"])
     monkeypatch.setattr(
         stages, "judge_article",
         lambda article, config=None: (seen.update(article) or
@@ -221,6 +221,54 @@ async def test_sentiment_judges_real_news(monkeypatch):
     assert seen["precedents"] == ["p1"]
     assert saved == {"aid": 1, "ticker": "NVDA", "action": "hold"}
     assert result == {"ticker": "NVDA", "action": "hold", "confidence": 0.5}
+
+
+from datetime import datetime, timezone
+
+
+def test_insights_similarity_dedups_and_orders():
+    published = datetime(2025, 6, 1, tzinfo=timezone.utc)
+    conn = _StubConn([
+        (published,),                       # SELECT published_utc -> fetchone
+        [([0.0],), ([0.1],)],               # two embedded boxes -> fetchall
+        # box 1 hits: id 10 (sim .91) and id 11 (sim .80)
+        [(10, "2025-01-01", "NVDA", "insight A", "topicA", 0.91),
+         (11, "2025-01-02", "AMD", None, "topic B", 0.80)],
+        # box 2 hits: id 10 again, higher sim .95 -> wins the dedup
+        [(10, "2025-01-01", "NVDA", "insight A", "topicA", 0.95)],
+    ])
+    lines = stages.insights_similarity(conn, 1)
+    assert lines == [
+        "2025-01-01 [NVDA] insight A",   # id 10, dedup kept sim .95, sorted first
+        "2025-01-02 [AMD] topic B",      # id 11, insight None -> topic fallback
+    ]
+
+
+def test_insights_similarity_empty_when_no_boxes():
+    conn = _StubConn([(datetime(2025, 6, 1, tzinfo=timezone.utc),), []])
+    assert stages.insights_similarity(conn, 1) == []
+
+
+def test_insights_similarity_empty_when_no_published():
+    conn = _StubConn([(None,)])
+    assert stages.insights_similarity(conn, 1) == []
+
+
+def test_gather_precedents_dispatches_on_config(monkeypatch):
+    monkeypatch.setattr(stages, "insights_similarity",
+                        lambda c, a, **kw: ["insight-line"])
+    monkeypatch.setattr(stages, "article_similarity",
+                        lambda c, a, k=5: ["article-line"])
+
+    class _S:
+        precedent_source = "insights"
+        precedent_insights_threshold = 0.7
+        precedent_insights_limit = 40
+
+    monkeypatch.setattr(stages, "get_settings", lambda: _S())
+    assert stages.gather_precedents(None, 1) == ["insight-line"]
+    _S.precedent_source = "article"
+    assert stages.gather_precedents(None, 1) == ["article-line"]
 
 
 # ---------------------------------------------------------------------------

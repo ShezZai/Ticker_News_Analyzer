@@ -42,6 +42,19 @@ class AppSettings(BaseSettings):
         validation_alias="SCRAPER_UA",
     )
 
+    # Historical-precedent retrieval for the sentiment analyst panel.
+    # "article": top-k cosine-nearest prior articles (default, legacy behavior).
+    # "insights": union of per-insight-box neighbors above a similarity floor.
+    precedent_source: str = Field(
+        default="article", validation_alias="SENTIMENT_PRECEDENT_SOURCE"
+    )
+    precedent_insights_threshold: float = Field(
+        default=0.7, validation_alias="SENTIMENT_PRECEDENT_INSIGHTS_THRESHOLD"
+    )
+    precedent_insights_limit: int = Field(
+        default=40, validation_alias="SENTIMENT_PRECEDENT_INSIGHTS_LIMIT"
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> AppSettings:

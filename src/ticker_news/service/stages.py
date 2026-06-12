@@ -32,6 +32,7 @@ from ticker_news.sentiment import store as sentiment_store
 from ticker_news.sentiment.graph import judge_article
 from ticker_news.service.jobs import Job
 from ticker_news.shared import observability as obs
+from ticker_news.shared.config import get_settings
 from ticker_news.shared.llm import GEMINI_FLASH
 
 logger = logging.getLogger(__name__)
@@ -222,7 +223,7 @@ def insights_stage(conn: psycopg.Connection, url: str, tag_ctx: TagContext) -> N
     conn.commit()
 
 
-def similar_past_articles(conn: psycopg.Connection, article_id: int, k: int = 5) -> list[str]:
+def article_similarity(conn: psycopg.Connection, article_id: int, k: int = 5) -> list[str]:
     """Cosine-nearest earlier real-news articles, using the stored embedding.
 
     Two-step on purpose: fetching the target embedding first lets the planner
@@ -251,12 +252,97 @@ def similar_past_articles(conn: psycopg.Connection, article_id: int, k: int = 5)
     return [f"{d} [{t or '?'}] {title}" for d, t, title in rows]
 
 
-def sentiment_stage(conn: psycopg.Connection, url: str) -> dict | None:
+def insights_similarity(
+    conn: psycopg.Connection,
+    article_id: int,
+    *,
+    threshold: float = 0.7,
+    limit: int = 40,
+) -> list[str]:
+    """Insight-box neighbors of the target article's own insight boxes.
+
+    For each embedded insight box of the target article, find earlier real-news
+    insight boxes whose cosine similarity exceeds `threshold`; union the hits
+    across all boxes (dedup on insight id, keeping the highest similarity) and
+    return the top `limit` overall as display lines. Same precedent discipline
+    as article_similarity: only earlier-published 'real news' sources, and the
+    target's own boxes are excluded.
+
+    Empty when the target has no embedded boxes or no published_utc.
+    """
+    target = conn.execute(
+        "SELECT published_utc FROM public.articles WHERE id = %s", (article_id,)
+    ).fetchone()
+    if target is None or target[0] is None:
+        logger.debug("no published_utc for article %s; skipping insight precedents", article_id)
+        return []
+    published = target[0]
+    box_rows = conn.execute(
+        "SELECT embedding FROM public.article_insights "
+        "WHERE article_id = %s AND embedding IS NOT NULL",
+        (article_id,),
+    ).fetchall()
+    if not box_rows:
+        logger.debug("no embedded insight boxes for article %s; skipping precedents", article_id)
+        return []
+
+    # Cosine distance bound is the algebraic mirror of the similarity floor
+    # (similarity = 1 - distance), applied in SQL so the per-box scan returns
+    # only matches we'd keep. One ANN query per target box.
+    max_distance = 1.0 - threshold
+    best: dict[int, tuple[float, str, str | None, str]] = {}
+    for (box_embedding,) in box_rows:
+        rows = conn.execute(
+            "SELECT ai.id, to_char(a.published_utc, 'YYYY-MM-DD'), "
+            "       a.primary_ticker, ai.insight, ai.topic, "
+            "       1 - (ai.embedding <=> %s) AS similarity "
+            "FROM public.article_insights ai "
+            "JOIN public.articles a ON a.id = ai.article_id "
+            "WHERE ai.article_id != %s AND ai.embedding IS NOT NULL "
+            "  AND a.category = 'real news' AND a.published_utc < %s "
+            "  AND (ai.embedding <=> %s) < %s "
+            "ORDER BY ai.embedding <=> %s LIMIT %s",
+            (box_embedding, article_id, published, box_embedding, max_distance,
+             box_embedding, limit),
+        ).fetchall()
+        for iid, d, ticker, insight, topic, sim in rows:
+            sim = float(sim)
+            prior = best.get(iid)
+            if prior is None or sim > prior[0]:
+                best[iid] = (sim, d, ticker, (insight or topic or "").strip())
+
+    top = sorted(best.values(), key=lambda r: r[0], reverse=True)[:limit]
+    return [f"{d} [{t or '?'}] {text}" for _sim, d, t, text in top]
+
+
+def gather_precedents(
+    conn: psycopg.Connection, article_id: int, source: str | None = None
+) -> list[str]:
+    """Historical-precedent lines for the analyst panel.
+
+    `source` ("article" | "insights") overrides the configured default — the
+    eval harness uses it to compare retrieval strategies run-over-run without
+    mutating process env.
+    """
+    s = get_settings()
+    if (source or s.precedent_source) == "insights":
+        return insights_similarity(
+            conn, article_id,
+            threshold=s.precedent_insights_threshold,
+            limit=s.precedent_insights_limit,
+        )
+    return article_similarity(conn, article_id)
+
+
+def sentiment_stage(
+    conn: psycopg.Connection, url: str, precedent_source: str | None = None
+) -> dict | None:
     """Judge buy/sell/hold for the article's primary ticker.
 
     Policy: only 'real news' articles with a tagged primary_ticker are judged;
     everything else skips (cheap, idempotent). Returns a verdict summary dict,
-    or None when the article was skipped.
+    or None when the article was skipped. `precedent_source` overrides the
+    configured precedent-retrieval flow (used by the eval harness).
     """
     row = conn.execute(
         "SELECT id, title, content, category, primary_ticker, published_utc, "
@@ -271,7 +357,7 @@ def sentiment_stage(conn: psycopg.Connection, url: str) -> dict | None:
     if sentiment_store.has_verdict(conn, aid, ticker):
         conn.rollback()
         return None
-    precedents = similar_past_articles(conn, aid)
+    precedents = gather_precedents(conn, aid, source=precedent_source)
     provider_sentiment = ""
     if provider and isinstance(provider, dict):
         entry = provider.get(ticker) or {}
