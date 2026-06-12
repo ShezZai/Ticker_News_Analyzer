@@ -50,7 +50,7 @@ If the `news_pg` container already exists from a prior run, `docker start news_p
 | `ticker-news research chart\|scan-ranges\|attach-articles\|catalyst-returns\|backtest\|render-*` | Charts, big-mover scans, buy-the-news + verdict backtests |
 | `ticker-news jobs status` / `jobs retry [--url U]` | Queue counts; requeue failed jobs |
 | `ticker-news eval pipeline --ids N[,..]` | E2E eval: re-run articles through every stage, score verdict vs realized price move as a Langfuse experiment (`--dataset` for run-over-run comparison, `--dsn` for the shared DB, `--ids-file` for an id-per-line file, `--skip-stages embed[,..]` to reuse stable stage outputs) |
-| `ticker-news eval classify --gt-csv F` | Classification prompt eval: binary vs fine-grained variants scored against ground-truth ACT labels on a Langfuse dataset (`--variant`, `--mode lite\|flash\|two-pass`, `--ids` subset) |
+| `ticker-news eval classify` | Single-pass classifier experiments: binary vs `140-articles-act-no-act`, finegrained vs `140-articles-categories`; scores accuracy + time/cost per run (`--variant`, `--model lite\|flash`, `--ids`, `--concurrency`) |
 | `ticker-news prompts push` | Upsert in-repo prompts to Langfuse with the `production` label |
 
 ## Configuration
