@@ -252,6 +252,24 @@ def article_similarity(conn: psycopg.Connection, article_id: int, k: int = 5) ->
     return [f"{d} [{t or '?'}] {title}" for d, t, title in rows]
 
 
+def _apply_hnsw_gucs(cur, ef_search: int) -> None:
+    """Per-transaction HNSW tuning so selective WHERE filters still return rows.
+
+    SET LOCAL via set_config(..., true): scoped to the current transaction, never
+    interpolated into SQL, never leaks onto the reused worker connection. The
+    iterative_scan statement is savepoint-guarded so an older pgvector that lacks
+    the GUC leaves the caller's transaction intact.
+    """
+    cur.execute("SELECT set_config('hnsw.ef_search', %s, true)", (str(ef_search),))
+    cur.execute("SAVEPOINT hnsw_guc")
+    try:
+        cur.execute("SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true)")
+    except Exception:  # noqa: BLE001 - pgvector < 0.8.0 has no such GUC
+        cur.execute("ROLLBACK TO SAVEPOINT hnsw_guc")
+    else:
+        cur.execute("RELEASE SAVEPOINT hnsw_guc")
+
+
 def insights_similarity(
     conn: psycopg.Connection,
     article_id: int,
@@ -259,14 +277,17 @@ def insights_similarity(
     threshold: float = 0.7,
     limit: int = 40,
 ) -> list[str]:
-    """Insight-box neighbors of the target article's own insight boxes.
+    """Earlier real-news articles whose *insight boxes* echo this article's.
 
     For each embedded insight box of the target article, find earlier real-news
     insight boxes whose cosine similarity exceeds `threshold`; union the hits
-    across all boxes (dedup on insight id, keeping the highest similarity) and
-    return the top `limit` overall as display lines. Same precedent discipline
-    as article_similarity: only earlier-published 'real news' sources, and the
-    target's own boxes are excluded.
+    across all boxes (dedup on insight id, keeping the highest similarity), take
+    the top `limit` boxes overall, then GROUP them by source article. Each
+    returned element is one prior article: a `date [ticker] headline` line, with
+    the matching insight excerpt(s) listed beneath when there is more than one
+    (inlined after an em dash when there is exactly one). Same precedent
+    discipline as article_similarity: only earlier-published 'real news'
+    sources, and the target's own boxes are excluded.
 
     Empty when the target has no embedded boxes or no published_utc.
     """
@@ -290,29 +311,63 @@ def insights_similarity(
     # (similarity = 1 - distance), applied in SQL so the per-box scan returns
     # only matches we'd keep. One ANN query per target box.
     max_distance = 1.0 - threshold
-    best: dict[int, tuple[float, str, str | None, str]] = {}
-    for (box_embedding,) in box_rows:
-        rows = conn.execute(
-            "SELECT ai.id, to_char(a.published_utc, 'YYYY-MM-DD'), "
-            "       a.primary_ticker, ai.insight, ai.topic, "
-            "       1 - (ai.embedding <=> %s) AS similarity "
-            "FROM public.article_insights ai "
-            "JOIN public.articles a ON a.id = ai.article_id "
-            "WHERE ai.article_id != %s AND ai.embedding IS NOT NULL "
-            "  AND a.category = 'real news' AND a.published_utc < %s "
-            "  AND (ai.embedding <=> %s) < %s "
-            "ORDER BY ai.embedding <=> %s LIMIT %s",
-            (box_embedding, article_id, published, box_embedding, max_distance,
-             box_embedding, limit),
-        ).fetchall()
-        for iid, d, ticker, insight, topic, sim in rows:
-            sim = float(sim)
-            prior = best.get(iid)
-            if prior is None or sim > prior[0]:
-                best[iid] = (sim, d, ticker, (insight or topic or "").strip())
+    # insight_id -> (sim, source_article_id, date, ticker, headline, excerpt)
+    best: dict[int, tuple[float, int, str, str | None, str | None, str]] = {}
+    with conn.cursor() as cur:
+        # The category + date + self filters are selective: HNSW returns ~ef_search
+        # candidates BEFORE the WHERE applies, so without iterative_scan the post-
+        # filtered yield falls well short of `limit`. GUCs are SET LOCAL (scoped to
+        # this transaction), so they never leak onto the shared worker connection.
+        _apply_hnsw_gucs(cur, ef_search=max(40, limit))
+        for (box_embedding,) in box_rows:
+            cur.execute(
+                "SELECT ai.id, ai.article_id, to_char(a.published_utc, 'YYYY-MM-DD'), "
+                "       a.primary_ticker, a.title, ai.insight, ai.topic, "
+                "       1 - (ai.embedding <=> %s) AS similarity "
+                "FROM public.article_insights ai "
+                "JOIN public.articles a ON a.id = ai.article_id "
+                "WHERE ai.article_id != %s AND ai.embedding IS NOT NULL "
+                "  AND a.category = 'real news' AND a.published_utc < %s "
+                "  AND (ai.embedding <=> %s) < %s "
+                "ORDER BY ai.embedding <=> %s LIMIT %s",
+                (box_embedding, article_id, published, box_embedding, max_distance,
+                 box_embedding, limit),
+            )
+            for iid, aid, d, ticker, title, insight, topic, sim in cur.fetchall():
+                sim = float(sim)
+                prior = best.get(iid)
+                if prior is None or sim > prior[0]:
+                    # collapse internal whitespace so an excerpt is a single line.
+                    excerpt = " ".join((insight or topic or "").split())
+                    best[iid] = (sim, aid, d, ticker, title, excerpt)
 
-    top = sorted(best.values(), key=lambda r: r[0], reverse=True)[:limit]
-    return [f"{d} [{t or '?'}] {text}" for _sim, d, t, text in top]
+    ranked = sorted(best.values(), key=lambda r: r[0], reverse=True)[:limit]
+
+    # Group the top excerpts by source article, preserving similarity order so an
+    # article ranks by its strongest matching insight and its excerpts read best
+    # first. Each group renders as one prior article (the header line stays an
+    # article, so "SIMILAR PAST ARTICLES" remains accurate).
+    groups: dict[int, tuple[str, str | None, str | None, list[str]]] = {}
+    order: list[int] = []
+    for _sim, aid, d, ticker, title, excerpt in ranked:
+        if aid not in groups:
+            groups[aid] = (d, ticker, title, [])
+            order.append(aid)
+        groups[aid][3].append(excerpt)
+
+    lines: list[str] = []
+    for aid in order:
+        d, ticker, title, excerpts = groups[aid]
+        header = f"{d} [{ticker or '?'}] {(title or '').strip()}".rstrip()
+        excerpts = [e for e in excerpts if e]
+        if len(excerpts) == 1:
+            lines.append(f"{header} — {excerpts[0]}")
+        elif excerpts:
+            sub = "\n".join(f"    - {e}" for e in excerpts)
+            lines.append(f"{header}\n{sub}")
+        else:
+            lines.append(header)
+    return lines
 
 
 def gather_precedents(
@@ -332,6 +387,26 @@ def gather_precedents(
             limit=s.precedent_insights_limit,
         )
     return article_similarity(conn, article_id)
+
+
+def own_article_insights(conn: psycopg.Connection, article_id: int) -> list[str]:
+    """The target article's own distilled insights, in box order.
+
+    Shown to the historical-precedent analyst under insights mode so it can
+    judge overlap against the matched precedent excerpts. Whitespace is
+    collapsed so each insight is one line.
+    """
+    rows = conn.execute(
+        "SELECT insight, topic FROM public.article_insights "
+        "WHERE article_id = %s ORDER BY box_index",
+        (article_id,),
+    ).fetchall()
+    out = []
+    for insight, topic in rows:
+        text = " ".join((insight or topic or "").split())
+        if text:
+            out.append(text)
+    return out
 
 
 def sentiment_stage(
@@ -357,7 +432,11 @@ def sentiment_stage(
     if sentiment_store.has_verdict(conn, aid, ticker):
         conn.rollback()
         return None
-    precedents = gather_precedents(conn, aid, source=precedent_source)
+    mode = precedent_source or get_settings().precedent_source
+    precedents = gather_precedents(conn, aid, source=mode)
+    # In insights mode, also surface the target's OWN insights so the analyst can
+    # judge overlap against the matched precedent excerpts directly.
+    own_insights = own_article_insights(conn, aid) if mode == "insights" else []
     provider_sentiment = ""
     if provider and isinstance(provider, dict):
         entry = provider.get(ticker) or {}
@@ -369,6 +448,7 @@ def sentiment_stage(
         "published_utc": published,
         "provider_sentiment": provider_sentiment,
         "precedents": precedents,
+        "own_insights": own_insights,
     }
     conn.rollback()  # release the read transaction; LLM calls can take minutes
     verdict, analyses = judge_article(article, config=obs.chain_config() or None)

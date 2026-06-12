@@ -226,32 +226,85 @@ async def test_sentiment_judges_real_news(monkeypatch):
 from datetime import datetime, timezone
 
 
-def test_insights_similarity_dedups_and_orders():
+class _InsightsCursor:
+    """Cursor stub: no-ops GUC/savepoint statements, pops a result list per SELECT."""
+
+    def __init__(self, per_box_results):
+        self._results = list(per_box_results)
+        self._last: list = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def execute(self, sql, params=None):
+        low = sql.lower()
+        if "set_config" in low or "savepoint" in low:
+            return self  # ef_search / iterative_scan tuning - irrelevant to stub
+        self._last = self._results.pop(0)
+        return self
+
+    def fetchall(self):
+        return self._last
+
+
+class _InsightsConn:
+    """conn.execute serves published_utc + box embeddings; cursor serves hits."""
+
+    def __init__(self, published, boxes, per_box_results):
+        self._top = [(published,), boxes]
+        self._cursor = _InsightsCursor(per_box_results)
+
+    def execute(self, sql, params=None):
+        return _Row(self._top.pop(0))
+
+    def cursor(self):
+        return self._cursor
+
+
+def test_insights_similarity_groups_by_article():
+    # rows: (insight_id, article_id, date, ticker, headline, insight, topic, sim)
     published = datetime(2025, 6, 1, tzinfo=timezone.utc)
-    conn = _StubConn([
-        (published,),                       # SELECT published_utc -> fetchone
-        [([0.0],), ([0.1],)],               # two embedded boxes -> fetchall
-        # box 1 hits: id 10 (sim .91) and id 11 (sim .80)
-        [(10, "2025-01-01", "NVDA", "insight A", "topicA", 0.91),
-         (11, "2025-01-02", "AMD", None, "topic B", 0.80)],
-        # box 2 hits: id 10 again, higher sim .95 -> wins the dedup
-        [(10, "2025-01-01", "NVDA", "insight A", "topicA", 0.95)],
-    ])
+    conn = _InsightsConn(
+        published,
+        [([0.0],), ([0.1],)],               # two embedded boxes
+        [
+            # box 1 hits: two insights from article 100, one from article 200
+            [(10, 100, "2025-01-01", "NVDA", "NVDA beats", "insight A", "topicA", 0.91),
+             (11, 100, "2025-01-01", "NVDA", "NVDA beats", None, "topic\nB", 0.80),
+             (12, 200, "2025-01-02", "AMD", "AMD news", "insight C", None, 0.85)],
+            # box 2 hits: insight 10 again, higher sim -> wins the dedup
+            [(10, 100, "2025-01-01", "NVDA", "NVDA beats", "insight A", "topicA", 0.95)],
+        ],
+    )
     lines = stages.insights_similarity(conn, 1)
     assert lines == [
-        "2025-01-01 [NVDA] insight A",   # id 10, dedup kept sim .95, sorted first
-        "2025-01-02 [AMD] topic B",      # id 11, insight None -> topic fallback
+        # article 100 ranks first (best insight sim .95), >1 excerpt -> nested
+        "2025-01-01 [NVDA] NVDA beats\n    - insight A\n    - topic B",
+        # article 200, single excerpt -> inlined after the em dash
+        "2025-01-02 [AMD] AMD news — insight C",
     ]
 
 
 def test_insights_similarity_empty_when_no_boxes():
-    conn = _StubConn([(datetime(2025, 6, 1, tzinfo=timezone.utc),), []])
+    conn = _InsightsConn(datetime(2025, 6, 1, tzinfo=timezone.utc), [], [])
     assert stages.insights_similarity(conn, 1) == []
 
 
 def test_insights_similarity_empty_when_no_published():
-    conn = _StubConn([(None,)])
+    conn = _InsightsConn(None, [], [])
     assert stages.insights_similarity(conn, 1) == []
+
+
+def test_own_article_insights_collapses_and_drops_empty():
+    conn = _StubConn([[
+        ("insight one", "topicX"),
+        (None, "topic\ntwo"),      # insight None -> topic, newline collapsed
+        ("   ", None),             # all-whitespace -> dropped
+    ]])
+    assert stages.own_article_insights(conn, 1) == ["insight one", "topic two"]
 
 
 def test_gather_precedents_dispatches_on_config(monkeypatch):

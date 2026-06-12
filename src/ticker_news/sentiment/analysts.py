@@ -33,13 +33,17 @@ publication time: sector backdrop, what is likely already priced in, how
 similar names trade on such news, crowd positioning, and whether the headline
 overstates or understates the substance. 3-6 sentences, no preamble.""",
     "historical_precedent": ARTICLE_BLOCK + """
-SIMILAR PAST ARTICLES (same corpus, published earlier; cosine-nearest first):
+{own_insights}SIMILAR PAST ARTICLES (same corpus, published earlier; cosine-nearest first).
+Each entry is one prior article; any indented "- " lines beneath it are the
+specific insight excerpts from that article that matched this news:
 {precedents}
 
 You are a quantitative analyst of historical precedent. Judge how distinctive
 this news actually is versus the precedents above: is it a recurring news
-pattern for this name/sector or genuinely new information? If the precedent
-list is empty or weak, say so. 3-6 sentences, no preamble.""",
+pattern for this name/sector or genuinely new information? When this article's
+own insights are listed above, treat the indented precedent excerpts as the
+concrete points of overlap with them. If the precedent list is empty or weak,
+say so. 3-6 sentences, no preamble.""",
 }
 
 SYNTHESIS_PROMPT = ARTICLE_BLOCK + """
@@ -78,6 +82,16 @@ def render_analyst(role: str, article: dict) -> str:
         precedents = article.get("precedents") or []
         kwargs["precedents"] = (
             "\n".join(f"- {p}" for p in precedents) if precedents else "(none found)"
+        )
+        # The target article's own insights render as a self-contained section
+        # (header + bullets) when present, or empty so the prompt collapses to
+        # just the precedents block in article-similarity mode.
+        own = article.get("own_insights") or []
+        kwargs["own_insights"] = (
+            "THIS ARTICLE'S INSIGHTS (the news under analysis, distilled):\n"
+            + "\n".join(f"- {o}" for o in own)
+            + "\n\n"
+            if own else ""
         )
     template = get_prompt(f"analyst-{role}", ANALYST_PROMPTS[role])
     return safe_format(template, ANALYST_PROMPTS[role], **kwargs)
