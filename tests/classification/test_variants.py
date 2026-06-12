@@ -93,96 +93,148 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-class TestVariantRunner:
-    def test_two_pass_confirms_act_verdicts(self):
-        from ticker_news.classification.variants import VariantRunner, is_act_binary
+class TestClassifier:
+    def _binary(self, *verdicts):
+        from ticker_news.classification.variants import Classifier, is_act_binary
 
-        lite = StubChain(BinaryClassification(label="real news"))
-        confirm = StubChain(BinaryClassification(label="none news"))
-        runner = VariantRunner(lite=lite, confirm=confirm,
-                               is_act=is_act_binary, label_of=lambda v: v.label)
-        verdict, confirmed = _run(runner.classify("T", "B"))
-        assert verdict.label == "none news"   # confirm overturned
-        assert confirmed is True
-        assert len(lite.calls) == 1 and len(confirm.calls) == 1
+        chain = StubChain(*verdicts)
+        clf = Classifier(
+            chain=chain, variant="binary", model="gemini-2.5-flash-lite",
+            label_of=lambda v: v.label,
+            dataset_label_of=lambda v: "YES" if is_act_binary(v.label) else "NO",
+        )
+        return clf, chain
 
-    def test_two_pass_skips_confirm_for_non_act(self):
-        from ticker_news.classification.variants import VariantRunner, is_act_binary
-
-        lite = StubChain(BinaryClassification(label="none news"))
-        confirm = StubChain()
-        runner = VariantRunner(lite=lite, confirm=confirm,
-                               is_act=is_act_binary, label_of=lambda v: v.label)
-        verdict, confirmed = _run(runner.classify("T", "B"))
-        assert verdict.label == "none news"
-        assert confirmed is False
-        assert confirm.calls == []
-
-    def test_two_pass_keeps_lite_verdict_when_confirm_fails(self):
-        from ticker_news.classification.variants import VariantRunner, is_act_binary
-
-        lite = StubChain(BinaryClassification(label="real news", confidence=0.8))
-        confirm = StubChain(RuntimeError("quota"))
-        runner = VariantRunner(lite=lite, confirm=confirm,
-                               is_act=is_act_binary, label_of=lambda v: v.label)
-        verdict, confirmed = _run(runner.classify("T", "B"))
+    def test_single_llm_call(self):
+        clf, chain = self._binary(BinaryClassification(label="real news"))
+        verdict = _run(clf.classify("T", "B"))
         assert verdict.label == "real news"
-        assert confirmed is True
-
-    def test_single_pass_lite_never_confirms(self):
-        from ticker_news.classification.variants import VariantRunner, is_act_binary
-
-        lite = StubChain(BinaryClassification(label="real news"))
-        runner = VariantRunner(lite=lite, confirm=None,
-                               is_act=is_act_binary, label_of=lambda v: v.label)
-        verdict, confirmed = _run(runner.classify("T", "B"))
-        assert verdict.label == "real news"
-        assert confirmed is False
-
-    def test_single_pass_flash_only(self):
-        from ticker_news.classification.variants import VariantRunner, is_act_binary
-
-        flash = StubChain(BinaryClassification(label="real news"))
-        runner = VariantRunner(lite=None, confirm=flash,
-                               is_act=is_act_binary, label_of=lambda v: v.label)
-        verdict, confirmed = _run(runner.classify("T", "B"))
-        assert verdict.label == "real news"
-        assert confirmed is False
-        assert len(flash.calls) == 1
+        assert len(chain.calls) == 1
 
     def test_inputs_truncated_like_production(self):
         from ticker_news.classification.chain import MAX_ARTICLE_CHARS
-        from ticker_news.classification.variants import VariantRunner, is_act_binary
 
-        lite = StubChain(BinaryClassification(label="none news"))
-        runner = VariantRunner(lite=lite, confirm=None,
-                               is_act=is_act_binary, label_of=lambda v: v.label)
-        _run(runner.classify("  t  " * 200, "x" * 10_000))
-        sent = lite.calls[0]
+        clf, chain = self._binary(BinaryClassification(label="none news"))
+        _run(clf.classify("  t  " * 200, "x" * 10_000))
+        sent = chain.calls[0]
         assert len(sent["title"]) <= 300
         assert len(sent["body"]) == MAX_ARTICLE_CHARS
 
-    def test_fine_grained_two_pass_uses_news_subtypes(self):
-        from ticker_news.classification.variants import (
-            VariantRunner, is_act_finegrained,
-        )
+    def test_run_name_carries_variant(self):
+        from ticker_news.classification.variants import Classifier
 
-        lite = StubChain(FinegrainedClassification(category="conference-PR"))
-        confirm = StubChain()
-        runner = VariantRunner(lite=lite, confirm=confirm,
-                               is_act=is_act_finegrained,
-                               label_of=lambda v: v.category)
-        verdict, confirmed = _run(runner.classify("T", "B"))
-        assert verdict.category == "conference-PR"
-        assert confirmed is False
-        assert confirm.calls == []
+        seen = {}
+
+        class CfgChain(StubChain):
+            async def ainvoke(self, inputs, config=None):
+                seen.update(config or {})
+                return await super().ainvoke(inputs, config)
+
+        chain = CfgChain(FinegrainedClassification(category="other"))
+        clf = Classifier(chain=chain, variant="finegrained", model="m",
+                         label_of=lambda v: v.category,
+                         dataset_label_of=lambda v: v.category)
+        _run(clf.classify("T", "B"))
+        assert seen["run_name"] == "classify-finegrained"
 
 
-class TestMakeRunner:
-    def test_rejects_unknown_variant_and_mode(self):
-        from ticker_news.classification.variants import make_runner
+class TestDatasetLabelMapping:
+    def test_binary_maps_to_yes_no(self):
+        from ticker_news.classification.variants import make_classifier
+
+        clf = _make_offline(make_classifier, "binary")
+        assert clf.dataset_label_of(BinaryClassification(label="real news")) == "YES"
+        assert clf.dataset_label_of(BinaryClassification(label="none news")) == "NO"
+
+    def test_finegrained_passes_category_through(self):
+        from ticker_news.classification.variants import make_classifier
+
+        clf = _make_offline(make_classifier, "finegrained")
+        v = FinegrainedClassification(category="legal-call")
+        assert clf.dataset_label_of(v) == "legal-call"
+        assert clf.label_of(v) == "legal-call"
+
+
+def _make_offline(make_classifier, variant):
+    """make_classifier without a Gemini client: stub the chain builder."""
+    from unittest.mock import patch
+
+    target = ("ticker_news.classification.variants."
+              f"build_{'binary' if variant == 'binary' else 'finegrained'}_classifier")
+    with patch(target, return_value=StubChain()):
+        return make_classifier(variant, "gemini-2.5-flash-lite")
+
+
+class TestMakeClassifier:
+    def test_rejects_unknown_variant(self):
+        from ticker_news.classification.variants import make_classifier
 
         with pytest.raises(ValueError, match="variant"):
-            make_runner("ternary", "lite")
-        with pytest.raises(ValueError, match="mode"):
-            make_runner("binary", "warp")
+            make_classifier("ternary", "gemini-2.5-flash-lite")
+
+    def test_records_variant_and_model(self):
+        from ticker_news.classification.variants import make_classifier
+
+        clf = _make_offline(make_classifier, "binary")
+        assert clf.variant == "binary"
+        assert clf.model == "gemini-2.5-flash-lite"
+
+    def test_model_choices_map_cli_names(self):
+        from ticker_news.classification.variants import MODEL_CHOICES
+        from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE
+
+        assert MODEL_CHOICES == {"lite": GEMINI_FLASH_LITE, "flash": GEMINI_FLASH}
+
+
+class _FakeLLM:
+    """Stub for gemini_chat: each builder step returns self until with_retry,
+    which must return a real Runnable so `prompt | structured` composes."""
+
+    def with_structured_output(self, schema):
+        return self
+
+    def with_config(self, **kw):
+        return self
+
+    def with_retry(self, **kw):
+        from langchain_core.runnables import RunnableLambda
+
+        return RunnableLambda(lambda x: x)
+
+
+class TestBuildLinksPrompt:
+    def _patch(self, monkeypatch, prompt_text, prompt_obj):
+        from ticker_news.shared import prompts
+
+        monkeypatch.setattr(
+            prompts, "get_prompt_entry", lambda name, fb: (prompt_text, prompt_obj)
+        )
+        monkeypatch.setattr(
+            "ticker_news.shared.llm.gemini_chat", lambda m, timeout_s: _FakeLLM()
+        )
+
+    def test_build_attaches_langfuse_prompt_metadata(self, monkeypatch):
+        from ticker_news.classification import variants
+
+        class FakePromptObj:
+            prompt = variants.BINARY_PROMPT_TEMPLATE
+            version = 9
+
+        fake = FakePromptObj()
+        self._patch(monkeypatch, fake.prompt, fake)
+        chain = variants.build_binary_classifier("gemini-2.5-flash-lite")
+        # chain is prompt | llm; the first runnable is the ChatPromptTemplate
+        assert chain.first.metadata == {"langfuse_prompt": fake}
+
+    def test_bad_remote_template_falls_back_without_link(self, monkeypatch):
+        from ticker_news.classification import variants
+
+        class FakePromptObj:
+            prompt = "broken {only_title}"
+            version = 9
+
+        fake = FakePromptObj()
+        self._patch(monkeypatch, fake.prompt, fake)
+        chain = variants.build_binary_classifier("gemini-2.5-flash-lite")
+        assert set(chain.first.input_variables) == {"title", "body"}
+        assert not (chain.first.metadata or {}).get("langfuse_prompt")

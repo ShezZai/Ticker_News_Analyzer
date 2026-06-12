@@ -1,8 +1,7 @@
 """Experimental classification prompt variants: binary and fine-grained.
 
-Candidate replacements for the production classifier, evaluated by
-`ticker-news eval classify` against the hand-labeled ground-truth set
-(spec: docs/superpowers/specs/2026-06-12-classify-eval-design.md).
+Single-pass eval classifiers evaluated by `ticker-news eval classify` against
+the hand-labeled ground-truth set (spec: docs/superpowers/specs/2026-06-12-classify-single-pass-experiments-design.md).
 Not wired into the pipeline; promoting a winner stays a human decision.
 """
 
@@ -10,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Optional, Tuple, get_args
+from typing import Any, Callable, Literal, Optional, get_args
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 GEMINI_TIMEOUT_S = 60.0
 RETRIES = 4
 
-MODES = ("lite", "flash", "two-pass")
 VARIANTS = ("binary", "finegrained")
 
 # ---------------------------------------------------------------------------
@@ -226,19 +224,20 @@ ARTICLE BODY:
 
 
 def _build(model_name: str, prompt_name: str, fallback: str, schema: type):
-    """prompt | structured-output Gemini, with the same Langfuse-template
-    guard as the production classifier. NOT cached — the eval rebuilds per
-    run so Langfuse prompt edits apply without a process restart."""
-    from ticker_news.shared.llm import gemini_chat
-    from ticker_news.shared.prompts import get_prompt
+    """prompt | structured-output Gemini. The Langfuse prompt object (when
+    available) is attached as template metadata so generations link to the
+    prompt version in Langfuse. NOT cached — the eval rebuilds per run so
+    Langfuse prompt edits apply without a process restart."""
+    from ticker_news.shared import llm as shared_llm
+    from ticker_news.shared import prompts as shared_prompts
 
-    llm = gemini_chat(model_name, timeout_s=GEMINI_TIMEOUT_S)
+    llm = shared_llm.gemini_chat(model_name, timeout_s=GEMINI_TIMEOUT_S)
     structured = (
         llm.with_structured_output(schema)
         .with_config(run_name="structured-output")
         .with_retry(stop_after_attempt=RETRIES, wait_exponential_jitter=True)
     )
-    template = get_prompt(prompt_name, fallback)
+    template, prompt_obj = shared_prompts.get_prompt_entry(prompt_name, fallback)
     try:
         prompt = ChatPromptTemplate.from_template(template)
         if set(prompt.input_variables) != {"title", "body"}:
@@ -246,6 +245,9 @@ def _build(model_name: str, prompt_name: str, fallback: str, schema: type):
     except Exception as exc:
         logger.warning("%s prompt invalid (%r); using in-repo fallback", prompt_name, exc)
         prompt = ChatPromptTemplate.from_template(fallback)
+        prompt_obj = None
+    if prompt_obj is not None:
+        prompt.metadata = {"langfuse_prompt": prompt_obj}
     return prompt | structured
 
 
@@ -259,80 +261,57 @@ def build_finegrained_classifier(model_name: str):
                   FINEGRAINED_PROMPT_TEMPLATE, FinegrainedClassification)
 
 # ---------------------------------------------------------------------------
-# VariantRunner
+# Single-pass Classifier
 # ---------------------------------------------------------------------------
 
 
+# CLI model names -> Gemini model ids (single source for cli.py and the eval).
+def _model_choices() -> dict[str, str]:
+    from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE
+
+    return {"lite": GEMINI_FLASH_LITE, "flash": GEMINI_FLASH}
+
+
+MODEL_CHOICES = _model_choices()
+
+
 @dataclass
-class VariantRunner:
-    """One variant/mode pairing. Two-pass mirrors production semantics:
-    `lite` labels everything, `confirm` re-runs only verdicts `is_act` calls
-    ACT; a failed confirmation keeps the lite verdict. Single-pass modes set
-    exactly one chain."""
+class Classifier:
+    """Single-pass classifier: one chain, exactly one LLM call per article.
 
-    lite: Optional[Any]
-    confirm: Optional[Any]
-    is_act: Callable[[str], bool]
+    label_of: verdict -> the raw predicted label/category.
+    dataset_label_of: verdict -> the dataset's expected-output label space
+    (binary collapses to YES/NO; finegrained is the category itself).
+    """
+
+    chain: Any
+    variant: str
+    model: str
     label_of: Callable[[Any], str]
-    variant: str = "unnamed"
+    dataset_label_of: Callable[[Any], str]
 
-    def _pass_config(self, config, pass_name: str) -> dict:
-        return {**(config or {}), "run_name": f"classify-{self.variant}:{pass_name}"}
-
-    async def classify(self, title: Optional[str], body: str,
-                       config=None) -> Tuple[Any, bool]:
+    async def classify(self, title: Optional[str], body: str, config=None) -> Any:
         from ticker_news.classification.chain import MAX_ARTICLE_CHARS
 
         inputs = {
             "title": (title or "").strip()[:300],
             "body": (body or "")[:MAX_ARTICLE_CHARS],
         }
-        first_chain = self.lite if self.lite is not None else self.confirm
-        first = await first_chain.ainvoke(
-            inputs, config=self._pass_config(config, "label-pass")
-        )
-        two_pass = self.lite is not None and self.confirm is not None
-        if not two_pass or not self.is_act(self.label_of(first)):
-            return first, False
-        try:
-            return await self.confirm.ainvoke(
-                inputs, config=self._pass_config(config, "confirm-pass")
-            ), True
-        except Exception as exc:
-            logger.warning("confirmation pass failed (%r); keeping lite verdict", exc)
-            return first, True
-
-# ---------------------------------------------------------------------------
-# Factory helpers
-# ---------------------------------------------------------------------------
+        cfg = {**(config or {}), "run_name": f"classify-{self.variant}"}
+        return await self.chain.ainvoke(inputs, config=cfg)
 
 
-def make_runner(variant: str, mode: str) -> VariantRunner:
-    """Build the chains for a variant/mode pair (fresh — no lru_cache)."""
-    from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE
-
+def make_classifier(variant: str, model_name: str) -> Classifier:
+    """Build the single-pass classifier for a variant (fresh — no lru_cache)."""
     if variant not in VARIANTS:
         raise ValueError(f"unknown variant {variant!r} (expected one of {VARIANTS})")
-    if mode not in MODES:
-        raise ValueError(f"unknown mode {mode!r} (expected one of {MODES})")
     if variant == "binary":
-        build, is_act, label_of = (
-            build_binary_classifier, is_act_binary, lambda v: v.label)
+        chain = build_binary_classifier(model_name)
+        label_of = lambda v: v.label  # noqa: E731
+        dataset_label_of = lambda v: "YES" if is_act_binary(v.label) else "NO"  # noqa: E731
     else:
-        build, is_act, label_of = (
-            build_finegrained_classifier, is_act_finegrained, lambda v: v.category)
-    lite = build(GEMINI_FLASH_LITE) if mode in ("lite", "two-pass") else None
-    confirm = build(GEMINI_FLASH) if mode in ("flash", "two-pass") else None
-    return VariantRunner(lite=lite, confirm=confirm, is_act=is_act,
-                         label_of=label_of, variant=variant)
-
-
-def models_for_mode(mode: str) -> dict[str, str]:
-    """Model names per mode, for experiment-run metadata."""
-    from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE
-
-    if mode == "lite":
-        return {"lite": GEMINI_FLASH_LITE}
-    if mode == "flash":
-        return {"flash": GEMINI_FLASH}
-    return {"lite": GEMINI_FLASH_LITE, "confirm": GEMINI_FLASH}
+        chain = build_finegrained_classifier(model_name)
+        label_of = lambda v: v.category  # noqa: E731
+        dataset_label_of = label_of
+    return Classifier(chain=chain, variant=variant, model=model_name,
+                      label_of=label_of, dataset_label_of=dataset_label_of)
