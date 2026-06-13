@@ -7,8 +7,6 @@ fan-out and no separate synthesis step — one structured-output call produces
 the Verdict.
 """
 
-MAX_CONTENT_CHARS = 24_000
-
 ARTICLE_BLOCK = """\
 TICKER UNDER ANALYSIS: {ticker}
 PUBLISHED (UTC): {published_utc}
@@ -71,7 +69,7 @@ def render_article(article: dict) -> dict:
         "ticker": article.get("ticker") or "?",
         "published_utc": str(article.get("published_utc") or "unknown"),
         "title": (article.get("title") or "").strip(),
-        "content": (article.get("content") or "")[:MAX_CONTENT_CHARS],
+        "content": article.get("content") or "",
         "provider_sentiment": article.get("provider_sentiment") or "none given",
     }
 
