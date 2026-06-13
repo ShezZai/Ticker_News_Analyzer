@@ -306,6 +306,68 @@ class FakeConn:
         pass
 
 
+class TestFinegrainedConfusionRunEvaluator:
+    def test_per_class_macro_and_weighted_metrics(self):
+        from ticker_news.evals.classify_eval import finegrained_confusion_run_evaluator
+
+        # gold -> predicted
+        results = [
+            _ir("A", _out("A")), _ir("A", _out("A")),  # tp_A x2
+            _ir("A", _out("B")),                        # fn_A, fp_B
+            _ir("B", _out("B")),                        # tp_B
+            _ir("B", _out("A")),                        # fn_B, fp_A
+            _ir("C", _out("C")),                        # tp_C
+        ]
+        # A: tp=2 fp=1 fn=1 -> P=2/3 R=2/3 F1=2/3
+        # B: tp=1 fp=1 fn=1 -> P=1/2 R=1/2 F1=1/2
+        # C: tp=1 fp=0 fn=0 -> P=1   R=1   F1=1
+        evals = _by_name(finegrained_confusion_run_evaluator(item_results=results))
+        macro = (2 / 3 + 1 / 2 + 1) / 3
+        assert evals["cat_macro_precision"].value == pytest.approx(macro)
+        assert evals["cat_macro_recall"].value == pytest.approx(macro)
+        assert evals["cat_macro_f1"].value == pytest.approx(macro)
+        # weighted by gold support (A=3, B=2, C=1): (3*2/3 + 2*1/2 + 1*1)/6
+        assert evals["cat_weighted_f1"].value == pytest.approx(4 / 6)
+        # the comment carries a per-class breakdown
+        assert "A" in evals["cat_macro_f1"].comment
+
+    def test_errored_item_is_false_negative_only(self):
+        from ticker_news.evals.classify_eval import finegrained_confusion_run_evaluator
+
+        # an errored (None) prediction hurts recall of its gold class but is
+        # never a false positive for any class.
+        results = [_ir("A", _out("A")), _ir("A", None)]
+        # A: tp=1 fp=0 fn=1 -> P=1.0 R=0.5
+        evals = _by_name(finegrained_confusion_run_evaluator(item_results=results))
+        assert evals["cat_macro_precision"].value == pytest.approx(1.0)
+        assert evals["cat_macro_recall"].value == pytest.approx(0.5)
+
+    def test_spurious_predicted_class_penalizes_macro_not_weighted(self):
+        from ticker_news.evals.classify_eval import finegrained_confusion_run_evaluator
+
+        # predicting a class that has no gold support adds a zero-metric class
+        # to the macro average; weighted-F1 (gold support) is unaffected.
+        results = [_ir("A", _out("A")), _ir("A", _out("Z"))]
+        # A: tp=1 fp=0 fn=1 -> P=1 R=0.5 F1=2/3 ; Z: tp=0 fp=1 -> all 0
+        evals = _by_name(finegrained_confusion_run_evaluator(item_results=results))
+        assert evals["cat_macro_precision"].value == pytest.approx(0.5)
+        assert evals["cat_macro_recall"].value == pytest.approx(0.25)
+        assert evals["cat_weighted_f1"].value == pytest.approx(2 / 3)
+
+    def test_unlabeled_items_excluded(self):
+        from ticker_news.evals.classify_eval import finegrained_confusion_run_evaluator
+
+        results = [_ir(None, _out("A")), _ir("A", _out("A"))]
+        evals = _by_name(finegrained_confusion_run_evaluator(item_results=results))
+        assert evals["cat_macro_recall"].value == pytest.approx(1.0)
+
+    def test_no_labeled_items_skips(self):
+        from ticker_news.evals.classify_eval import finegrained_confusion_run_evaluator
+
+        evals = _by_name(finegrained_confusion_run_evaluator(item_results=[_ir(None, _out("A"))]))
+        assert set(evals) == {"cat_metrics_skip"}
+
+
 class TestPrefetchArticles:
     def test_returns_id_to_title_content(self):
         from ticker_news.evals.classify_eval import prefetch_articles
@@ -426,6 +488,14 @@ class TestExperimentSpecs:
             assert label_accuracy_run_evaluator in spec.run_evaluators
             assert label_accuracy_evaluator in spec.evaluators
             assert cost_evaluator in spec.evaluators
+
+    def test_finegrained_has_category_confusion(self):
+        from ticker_news.evals.classify_eval import finegrained_confusion_run_evaluator
+
+        assert (finegrained_confusion_run_evaluator
+                in EXPERIMENTS["finegrained"].run_evaluators)
+        assert (finegrained_confusion_run_evaluator
+                not in EXPERIMENTS["binary"].run_evaluators)
 
 
 class TestWarnFailedItems:

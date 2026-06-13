@@ -6,7 +6,9 @@ Two experiments, one LLM call per dataset item, everything else deterministic:
 
 Read-only: article text is prefetched from the DB in one query; production
 pipeline tables are never written. Scores include accuracy, per-item latency
-and cost, and run-level totals (time, cost, tokens).
+and cost, and run-level totals (time, cost, tokens). Binary runs add YES-class
+precision/recall/F1; finegrained runs add per-category macro precision/recall/F1
+plus support-weighted F1.
 
 Design: docs/superpowers/specs/2026-06-12-classify-single-pass-experiments-design.md
 """
@@ -202,6 +204,69 @@ def derived_act_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
                        comment=f"{correct}/{len(labeled)} on the right ACT side")]
 
 
+def finegrained_confusion_run_evaluator(*, item_results, **kwargs) -> list[Evaluation]:
+    """Finegrained only: per-category precision/recall/F1, reported as
+    macro-averaged (every class weighted equally — rare categories count) and
+    support-weighted F1 (tracks overall behaviour). Classes are the union of
+    expected and predicted labels, so a category the model invents but never
+    occurs in the gold set drags macro down. An errored task (no predicted
+    label) is a false negative for its gold class and never a false positive.
+    The full per-class table goes in the macro-F1 comment."""
+    labeled = [r for r in item_results if _expected_label(r.item) is not None]
+    if not labeled:
+        return [Evaluation(name="cat_metrics_skip", value="no labeled items")]
+
+    classes: set[str] = set()
+    tp: dict[str, int] = {}
+    fp: dict[str, int] = {}
+    fn: dict[str, int] = {}
+    support: dict[str, int] = {}
+    for r in labeled:
+        expected = _expected_label(r.item)
+        predicted = (r.output or {}).get("label")  # None when errored/malformed
+        classes.add(expected)
+        support[expected] = support.get(expected, 0) + 1
+        if predicted is not None:
+            classes.add(predicted)
+        if predicted == expected:
+            tp[expected] = tp.get(expected, 0) + 1
+        else:
+            fn[expected] = fn.get(expected, 0) + 1
+            if predicted is not None:
+                fp[predicted] = fp.get(predicted, 0) + 1
+
+    rows = []
+    for c in sorted(classes):
+        c_tp, c_fp, c_fn = tp.get(c, 0), fp.get(c, 0), fn.get(c, 0)
+        precision = c_tp / (c_tp + c_fp) if (c_tp + c_fp) else 0.0
+        recall = c_tp / (c_tp + c_fn) if (c_tp + c_fn) else 0.0
+        f1 = (2 * precision * recall / (precision + recall)
+              if (precision + recall) else 0.0)
+        rows.append((c, precision, recall, f1, support.get(c, 0)))
+
+    n = len(rows)
+    macro_p = sum(p for _, p, _, _, _ in rows) / n
+    macro_r = sum(r for _, _, r, _, _ in rows) / n
+    macro_f1 = sum(f for _, _, _, f, _ in rows) / n
+    total_support = sum(s for _, _, _, _, s in rows)
+    weighted_f1 = (sum(f * s for _, _, _, f, s in rows) / total_support
+                   if total_support else 0.0)
+
+    table = "; ".join(
+        f"{c}: P={p:.2f} R={r:.2f} F1={f:.2f} n={s}"
+        for c, p, r, f, s in rows
+    )
+    return [
+        Evaluation(name="cat_macro_precision", value=macro_p,
+                   comment=f"{n} classes"),
+        Evaluation(name="cat_macro_recall", value=macro_r,
+                   comment=f"{n} classes"),
+        Evaluation(name="cat_macro_f1", value=macro_f1, comment=table),
+        Evaluation(name="cat_weighted_f1", value=weighted_f1,
+                   comment=f"weighted by gold support over {total_support} items"),
+    ]
+
+
 def prefetch_articles(
     conn: psycopg.Connection, ids: list[int]
 ) -> dict[int, tuple[str, str]]:
@@ -283,7 +348,8 @@ EXPERIMENTS: dict[str, ExperimentSpec] = {
         dataset="140-articles-categories",
         experiment_name="classify-finegrained",
         evaluators=SHARED_EVALUATORS,
-        run_evaluators=(label_accuracy_run_evaluator, derived_act_run_evaluator),
+        run_evaluators=(label_accuracy_run_evaluator, derived_act_run_evaluator,
+                        finegrained_confusion_run_evaluator),
     ),
 }
 
