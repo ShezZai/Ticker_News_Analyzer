@@ -345,12 +345,14 @@ def test_gather_precedents_dispatches_on_config(monkeypatch):
     monkeypatch.setattr(stages, "insights_similarity",
                         lambda c, a, **kw: seen.update(kw) or ["insight-line"])
     monkeypatch.setattr(stages, "article_similarity",
-                        lambda c, a, k=5: ["article-line"])
+                        lambda c, a, k=5, **kw: ["article-line"])
 
     class _S:
         precedent_source = "insights"
         precedent_insights_threshold = 0.7
         precedent_insights_limit = 40
+        precedent_lookback_days = 90
+        precedent_real_news_only = False
 
     monkeypatch.setattr(stages, "get_settings", lambda: _S())
     assert stages.gather_precedents(None, 1) == ["insight-line"]
@@ -448,6 +450,8 @@ def _patch_sentiment_deps(monkeypatch, precedents, own_insights, mode):
         precedent_source = mode
         precedent_insights_threshold = 0.75
         precedent_insights_limit = 20
+        precedent_lookback_days = 90
+        precedent_real_news_only = False
 
     monkeypatch.setattr(stages, "get_settings", lambda: _S())
     monkeypatch.setattr(

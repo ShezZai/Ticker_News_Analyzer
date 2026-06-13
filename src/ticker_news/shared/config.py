@@ -54,7 +54,18 @@ class AppSettings(BaseSettings):
         default=0.7, validation_alias="SENTIMENT_PRECEDENT_INSIGHTS_THRESHOLD"
     )
     precedent_insights_limit: int = Field(
-        default=40, validation_alias="SENTIMENT_PRECEDENT_INSIGHTS_LIMIT"
+        default=60, validation_alias="SENTIMENT_PRECEDENT_INSIGHTS_LIMIT"
+    )
+    # Lower time bound on the precedent search (all modes): only consider sources
+    # published within this many days BEFORE the target. <= 0 means unlimited.
+    precedent_lookback_days: int = Field(
+        default=90, validation_alias="SENTIMENT_PRECEDENT_LOOKBACK_DAYS"
+    )
+    # When True, precedents are restricted to category='real news' sources. Default
+    # False: an insight is an insight regardless of its source article's category,
+    # so recap/analysis/etc. articles are eligible precedents too.
+    precedent_real_news_only: bool = Field(
+        default=False, validation_alias="SENTIMENT_PRECEDENT_REAL_NEWS_ONLY"
     )
 
 
