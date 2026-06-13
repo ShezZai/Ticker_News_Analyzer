@@ -4,7 +4,11 @@ experiment.
 
 Scoring is directional agreement: buy+up = 1, sell+down = 1, wrong direction
 = 0; hold / no-verdict / no-price-data are excluded (value None) with an
-explanatory comment. The raw entry->close move is recorded as a second score.
+explanatory comment. The raw published->close move is recorded as a second
+score. The realized move is read from the dataset item's
+``expected_output.gain_pct`` (prefetched when the dataset was seeded from
+langfuse_datasets/400-e2e.filled.csv) - no Massive call at eval time. Local
+``--ids`` runs carry no expected_output, so they get no price-based scores.
 
 Design: docs/superpowers/specs/2026-06-11-e2e-pipeline-eval-design.md
 """
@@ -12,8 +16,7 @@ Design: docs/superpowers/specs/2026-06-11-e2e-pipeline-eval-design.md
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
-from functools import lru_cache
+from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg
@@ -255,68 +258,43 @@ def reset_article(
     conn.commit()
 
 
-def realized_move(ticker: str, published_utc: datetime) -> tuple[float | None, str | None]:
-    """Entry->close move per the backtest rule. Returns (gain_pct, error).
-
-    Entry = first tradeable minute bar at/after publication; exit = that day's
-    regular close, or the next session's close for extended-hours entries
-    (include_after_hours=True so evening articles still get scored).
-    """
-    from ticker_news.research import ticker_scan as ts
-
-    pub_et = published_utc.astimezone(ts.MARKET_TZ)
-    frm = (pub_et.date() - timedelta(days=1)).isoformat()
-    to = (pub_et.date() + timedelta(days=7)).isoformat()
-    try:
-        prices = ts.fetch_prices(ticker, frm, to)
-    except RuntimeError as exc:  # covers ScanError; missing MASSIVE_API_KEY etc.
-        return None, str(exc)
-    sim = ts.simulate(
-        {"id": 0, "ticker": ticker, "published_et": pub_et}, prices,
-        include_after_hours=True,
-    )
-    if sim is None:
-        return None, "no tradeable entry/exit bar"
-    return sim["gain_pct"], None
+_NO_GAIN_PCT = "no prefetched gain_pct (local --ids run or unseeded dataset item)"
 
 
-@lru_cache(maxsize=256)
-def _cached_move(ticker: str, published_iso: str) -> tuple[float | None, str | None]:
-    """Both item evaluators need the move; fetch Massive bars only once."""
-    return realized_move(ticker, datetime.fromisoformat(published_iso))
-
-
-def directional_agreement_evaluator(*, input, output, **kwargs) -> Evaluation:
+def directional_agreement_evaluator(
+    *, input, output, expected_output=None, **kwargs
+) -> Evaluation:
     """Langfuse item evaluator (input/output names fixed by its contract).
 
-    Langfuse rejects value=None scores, so excluded items (hold, no verdict,
-    no price data) are recorded as a categorical sibling score instead —
-    visible and filterable rather than silently absent.
+    The realized move is read from ``expected_output.gain_pct`` (prefetched at
+    dataset-seed time) — no Massive call. Langfuse rejects value=None scores, so
+    excluded items (hold, no verdict, no prefetched price) are recorded as a
+    categorical sibling score instead — visible and filterable rather than
+    silently absent.
     """
     out = output or {}
-    action, ticker = out.get("action"), out.get("ticker")
-    gain_pct, price_err = None, "no primary ticker"
-    if ticker:
-        gain_pct, price_err = _cached_move(ticker, input["published_utc"])
-    value, comment = score_directional(
-        action, gain_pct, skip_reason=out.get("skip_reason") or price_err
-    )
+    action = out.get("action")
+    gain_pct = (expected_output or {}).get("gain_pct")
+    skip_reason = out.get("skip_reason") or (None if gain_pct is not None else _NO_GAIN_PCT)
+    value, comment = score_directional(action, gain_pct, skip_reason=skip_reason)
     if value is None:
         return Evaluation(name="directional_agreement_skip", value=comment)
     return Evaluation(name="directional_agreement", value=value, comment=comment)
 
 
-def price_move_evaluator(*, input, output, **kwargs) -> Evaluation:
-    """Langfuse item evaluator: raw entry->close move, recorded even when unscored."""
-    ticker = (output or {}).get("ticker")
-    if not ticker:
-        return Evaluation(name="price_move_pct_skip", value="no primary ticker")
-    gain_pct, price_err = _cached_move(ticker, input["published_utc"])
+def price_move_evaluator(*, input, output, expected_output=None, **kwargs) -> Evaluation:
+    """Langfuse item evaluator: raw published->close move from the dataset item.
+
+    Read straight from ``expected_output.gain_pct``; recorded even for items
+    whose verdict is unscored (hold etc.). Local --ids runs have no expected
+    output and become a categorical skip score.
+    """
+    gain_pct = (expected_output or {}).get("gain_pct")
     if gain_pct is None:
-        return Evaluation(name="price_move_pct_skip", value=price_err or "unknown")
+        return Evaluation(name="price_move_pct_skip", value=_NO_GAIN_PCT)
     return Evaluation(
         name="price_move_pct", value=gain_pct,
-        comment=f"entry->close move {gain_pct:+.2f}%",
+        comment=f"published->close move {gain_pct:+.2f}%",
     )
 
 
@@ -520,7 +498,6 @@ def run_eval(
     missing = [
         name
         for name, val in (
-            ("MASSIVE_API_KEY", s.massive_api_key),
             ("GOOGLE_API_KEY", s.google_api_key),
             ("OPENAI_API_KEY", s.openai_api_key),
         )

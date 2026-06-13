@@ -201,57 +201,61 @@ ITEM_INPUT = {
 
 
 class TestItemEvaluators:
-    @pytest.fixture(autouse=True)
-    def _clear_move_cache(self):
-        pipeline_eval._cached_move.cache_clear()
-
-    def test_buy_with_rising_price_scores_one(self, monkeypatch):
-        monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (2.5, None))
+    def test_buy_with_rising_price_scores_one(self):
         ev = directional_agreement_evaluator(
             input=ITEM_INPUT,
             output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
+            expected_output={"gain_pct": 2.5},
         )
         assert ev.name == "directional_agreement"
         assert ev.value == 1.0
 
-    def test_no_ticker_becomes_categorical_skip_score(self, monkeypatch):
-        monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (2.5, None))
+    def test_no_verdict_becomes_categorical_skip_score(self):
         ev = directional_agreement_evaluator(
             input=ITEM_INPUT,
             output={"action": None, "ticker": None, "skip_reason": "no primary ticker"},
+            expected_output={"gain_pct": 2.5},
         )
         # Langfuse rejects value=None; exclusions become a categorical sibling score
         assert ev.name == "directional_agreement_skip"
         assert "no primary ticker" in ev.value
 
-    def test_hold_becomes_categorical_skip_score(self, monkeypatch):
-        monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (2.5, None))
+    def test_hold_becomes_categorical_skip_score(self):
         ev = directional_agreement_evaluator(
             input=ITEM_INPUT,
             output={"action": "hold", "ticker": "MRVL", "skip_reason": None},
+            expected_output={"gain_pct": 2.5},
         )
         assert ev.name == "directional_agreement_skip"
         assert "hold" in ev.value
 
-    def test_price_move_recorded_even_for_hold(self, monkeypatch):
-        monkeypatch.setattr(pipeline_eval, "realized_move", lambda t, p: (-1.3, None))
+    def test_no_prefetched_gain_becomes_skip_score(self):
+        # local --ids run: no expected_output, so no realized move to score against
+        ev = directional_agreement_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
+            expected_output=None,
+        )
+        assert ev.name == "directional_agreement_skip"
+        assert "gain_pct" in ev.value
+
+    def test_price_move_recorded_even_for_hold(self):
         ev = price_move_evaluator(
             input=ITEM_INPUT,
             output={"action": "hold", "ticker": "MRVL", "skip_reason": None},
+            expected_output={"gain_pct": -1.3},
         )
         assert ev.name == "price_move_pct"
         assert ev.value == -1.3
 
-    def test_price_move_skip_score_when_no_data(self, monkeypatch):
-        monkeypatch.setattr(
-            pipeline_eval, "realized_move", lambda t, p: (None, "no tradeable entry/exit bar")
-        )
+    def test_price_move_skip_score_when_no_prefetched_gain(self):
         ev = price_move_evaluator(
             input=ITEM_INPUT,
             output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
+            expected_output=None,
         )
         assert ev.name == "price_move_pct_skip"
-        assert "no tradeable" in ev.value
+        assert "gain_pct" in ev.value
 
 
 class TestVerdictAcceptableEvaluator:
