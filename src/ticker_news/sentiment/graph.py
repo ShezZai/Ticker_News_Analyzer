@@ -31,14 +31,18 @@ class SentimentState(TypedDict):
     verdict: Optional[Verdict]
 
 
-def _default_verdict_llm():
-    """Structured-output Gemini for the verdict, model from settings."""
-    model = get_settings().sentiment_verdict_model
+def _verdict_llm(model: str):
+    """Structured-output Gemini for the verdict, using the given model id."""
     return (
         gemini_chat(model, timeout_s=GEMINI_TIMEOUT_S)
         .with_structured_output(Verdict)
         .with_retry(stop_after_attempt=RETRIES, wait_exponential_jitter=True)
     )
+
+
+def _default_verdict_llm():
+    """Structured-output Gemini for the verdict, model from settings."""
+    return _verdict_llm(get_settings().sentiment_verdict_model)
 
 
 def build_graph(*, verdict_llm=None):
@@ -70,8 +74,20 @@ def _default_graph():
     return build_graph()
 
 
-def judge_article(article: dict, *, graph=None, config=None) -> tuple[Verdict, list[dict]]:
-    """Run the historical-precedent verdict for one article/ticker."""
-    graph = graph if graph is not None else _default_graph()
+@lru_cache(maxsize=8)
+def _graph_for_model(model: str):
+    """A verdict graph bound to a specific model id (cached per model)."""
+    return build_graph(verdict_llm=_verdict_llm(model))
+
+
+def judge_article(
+    article: dict, *, graph=None, config=None, model: str | None = None
+) -> tuple[Verdict, list[dict]]:
+    """Run the historical-precedent verdict for one article/ticker.
+
+    `model` overrides the configured verdict model for this call (the default
+    graph, read from settings, is used when it is None)."""
+    if graph is None:
+        graph = _graph_for_model(model) if model else _default_graph()
     result = graph.invoke({"article": article, "analyses": [], "verdict": None}, config=config)
     return result["verdict"], result["analyses"]

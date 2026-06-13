@@ -574,6 +574,8 @@ def eval_pipeline(
     run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: auto-generated)."),
     skip_stages: str | None = typer.Option(None, "--skip-stages", help="Comma-separated stages whose stored outputs are reused instead of re-run: embed, classify, tag, insights (or 'all' for every one)."),
     precedent_source: str | None = typer.Option(None, "--precedent-source", help="Historical-precedent retrieval for the sentiment panel: 'article', 'insights', 'distilled-first', 'distilled-second', 'insights-hybrid' / 'distilled-hybrid' (article-level prefilter then insight-box ANN within that subset). Default: config (SENTIMENT_PRECEDENT_SOURCE)."),
+    verdict_model: str | None = typer.Option(None, "--verdict-model", help="Gemini verdict model: 'lite' (gemini-2.5-flash-lite) | 'flash' (gemini-2.5-flash), or a full model id. Default: config (SENTIMENT_VERDICT_MODEL)."),
+    classify_model: str | None = typer.Option(None, "--classify-model", help="Gemini fine-grained classifier model: 'lite' | 'flash', or a full model id. Only applies when 'classify' is re-run (not in --skip-stages). Default: production flash-lite."),
     concurrency: int = typer.Option(4, "--concurrency", min=1, help="Max articles processed concurrently. Each item fans out ~7 LLM calls; the Gemini rate limiter is the real ceiling."),
 ) -> None:
     """Re-run articles E2E through the pipeline; score verdicts against actual price moves."""
@@ -602,10 +604,17 @@ def eval_pipeline(
         )
     if not id_list and not dataset:
         raise typer.BadParameter("provide --ids/--ids-file, or --dataset with existing items")
+    if verdict_model is not None or classify_model is not None:
+        from ticker_news.classification.variants import MODEL_CHOICES
+        if verdict_model is not None:
+            verdict_model = MODEL_CHOICES.get(verdict_model, verdict_model)
+        if classify_model is not None:
+            classify_model = MODEL_CHOICES.get(classify_model, classify_model)
     try:
         result = pipeline_eval.run_eval(
             id_list, dataset_name=dataset, dsn=dsn, run_name=run_name,
             skip_stages=skip, precedent_source=precedent_source,
+            verdict_model=verdict_model, classify_model=classify_model,
             concurrency=concurrency,
         )
     except SystemExit as exc:

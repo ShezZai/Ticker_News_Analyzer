@@ -1,14 +1,20 @@
 """E2E pipeline eval: re-run articles through the real stage chain against the
-shared DB, then score the verdict against the actual price move as a Langfuse
-experiment.
+shared DB, then score two independent things as a Langfuse experiment.
 
-Scoring is directional agreement: buy+up = 1, sell+down = 1, wrong direction
-= 0; hold / no-verdict / no-price-data are excluded (value None) with an
-explanatory comment. The raw published->close move is recorded as a second
-score. The realized move is read from the dataset item's
-``expected_output.gain_pct`` (prefetched when the dataset was seeded from
-langfuse_datasets/400-e2e.filled.csv) - no Massive call at eval time. Local
-``--ids`` runs carry no expected_output, so they get no price-based scores.
+1. **Act/No-Act classification** (all items) - did the classifier's ``is_act``
+   gate match the price-derived ground truth? Truth is taken from the dataset
+   item's ``expected_output.acceptable_verdicts``: a purely directional move
+   (``hold`` NOT acceptable) is a "should-act" item; a near-flat move (``hold``
+   acceptable) is a "no-act ok" item. Reported as accuracy / precision / recall
+   / F1 for the act class (``act_accuracy`` etc.).
+2. **Verdict direction** (is_act=true items only) - given the pipeline decided
+   to act, was the buy/sell/hold direction in ``acceptable_verdicts``? No-act
+   items are excluded entirely (``avg_verdict_score``).
+
+The realized move / acceptable set is read from ``expected_output`` (prefetched
+when the dataset was seeded from langfuse_datasets/400-e2e.filled.csv) - no
+Massive call at eval time. Local ``--ids`` runs carry no expected_output, so
+they get categorical skip scores instead.
 
 Design: docs/superpowers/specs/2026-06-11-e2e-pipeline-eval-design.md
 """
@@ -71,52 +77,29 @@ def parse_ids_file(path: str | Path) -> list[int]:
     return ids
 
 
-def score_directional(
-    action: str | None, gain_pct: float | None, *, skip_reason: str | None = None
-) -> tuple[float | None, str]:
-    """Directional-agreement score for one verdict vs the realized move.
-
-    Returns (value, comment) where value is 1.0 / 0.0, or None when the item
-    cannot be scored (hold, no verdict, no price data) — None scores are
-    excluded from Langfuse aggregates by the run evaluator.
-    """
-    if action is None:
-        return None, f"no verdict ({skip_reason or 'sentiment skipped'})"
-    if action == "hold":
-        return None, "hold verdict - no direction to verify"
-    if action not in ("buy", "sell"):
-        return None, f"unknown action '{action}'"
-    if gain_pct is None:
-        return None, f"no price data ({skip_reason or 'unknown'})"
-    correct = gain_pct > 0 if action == "buy" else gain_pct < 0
-    verdict = "agree" if correct else "disagree"
-    return (1.0 if correct else 0.0), f"{action} with {gain_pct:+.2f}% by close -> {verdict}"
-
-
-def score_acceptable(
+def score_decision(
     action: str | None,
     acceptable: list[str] | None,
     *,
     skip_reason: str | None = None,
 ) -> tuple[float | None, str]:
-    """Set-membership score for one verdict vs the acceptable-verdict set.
+    """Score the full trade decision (ACT/NO-ACT + direction) against the
+    ±0.3% deadband acceptable-verdict set.
 
-    `acceptable` is the dataset item's expected list under the +-0.3% deadband
-    rule (e.g. ["buy", "hold"] for a small up-move, ["sell"] for a clear drop).
-    A verdict is correct iff it is in that set, so both the gain-direction call
-    AND hold count inside the deadband while the opposite-direction call does
-    not. Returns (value, comment): 1.0 / 0.0, or None when the item cannot be
-    scored — no verdict was produced, or there is no expected set (local --ids
-    runs carry no expected_output). None scores are excluded from aggregates.
+    NO-ACT (action=None) is treated as 'hold' — deciding not to trade is
+    equivalent to holding. So a NO-ACT on a flat article scores 1.0 (correct
+    pass), while a NO-ACT on a big mover scores 0.0 (missed trade).
+
+    Returns (value, comment): 1.0 / 0.0, or None when the item cannot be
+    scored (no acceptable_verdicts on local --ids runs).
     """
     if not acceptable:
         return None, "no acceptable_verdicts (local run or missing expected output)"
-    if action is None:
-        return None, f"no verdict ({skip_reason or 'sentiment skipped'})"
-    a = action.lower()
-    ok = a in acceptable
+    effective = "hold" if action is None else action.lower()
+    label = f"no-act→hold ({skip_reason})" if action is None else f"verdict '{effective}'"
+    ok = effective in acceptable
     return (1.0 if ok else 0.0), (
-        f"verdict '{a}' vs acceptable {acceptable} -> {'acceptable' if ok else 'wrong'}"
+        f"{label} vs acceptable {acceptable} -> {'correct' if ok else 'wrong'}"
     )
 
 
@@ -261,25 +244,96 @@ def reset_article(
 _NO_GAIN_PCT = "no prefetched gain_pct (local --ids run or unseeded dataset item)"
 
 
-def directional_agreement_evaluator(
-    *, input, output, expected_output=None, **kwargs
-) -> Evaluation:
-    """Langfuse item evaluator (input/output names fixed by its contract).
+def truth_act(acceptable: list[str] | None) -> bool | None:
+    """Price-derived ground truth for actionability.
 
-    The realized move is read from ``expected_output.gain_pct`` (prefetched at
-    dataset-seed time) — no Massive call. Langfuse rejects value=None scores, so
-    excluded items (hold, no verdict, no prefetched price) are recorded as a
-    categorical sibling score instead — visible and filterable rather than
-    silently absent.
+    A purely directional acceptable set (``hold`` NOT in it) means the article
+    moved enough that one *should* have acted. A set containing ``hold`` (the
+    near-flat band) means not acting was fine. Returns None when the item is
+    unscorable (no acceptable set - e.g. a local --ids run).
+    """
+    if not acceptable:
+        return None
+    return "hold" not in {a.lower() for a in acceptable}
+
+
+def score_act(
+    predicted_act: bool, acceptable: list[str] | None
+) -> tuple[str | None, str]:
+    """Confusion cell for the ``is_act`` classifier vs the price-derived truth.
+
+    Returns (cell, comment) with cell in {TP, FP, FN, TN}: the act class is
+    positive, so TP = correctly flagged a real mover, FP = acted on a near-flat
+    article, FN = missed a real mover, TN = correctly skipped a flat one. cell
+    is None when the item cannot be scored (no acceptable set).
+    """
+    truth = truth_act(acceptable)
+    if truth is None:
+        return None, "no acceptable_verdicts (local run or missing expected output)"
+    cell = (
+        "TP" if predicted_act and truth
+        else "FP" if predicted_act and not truth
+        else "FN" if not predicted_act and truth
+        else "TN"
+    )
+    return cell, (
+        f"pred_act={predicted_act} truth_act={truth} -> {cell} (acceptable {acceptable})"
+    )
+
+
+def act_decision_evaluator(
+    *, input, output, expected_output=None, **kwargs
+) -> Evaluation | list[Evaluation]:
+    """Langfuse item evaluator: did the ``is_act`` gate match the price truth?
+
+    Emits a numeric ``act_correct`` (1.0 when the act/no-act call is right) plus
+    a categorical ``act_confusion`` (TP/FP/FN/TN) for per-item inspection; the
+    run-level ``act_metrics`` aggregates precision/recall/F1. Unscorable items
+    (local --ids runs with no expected_output) become a single skip score.
     """
     out = output or {}
-    action = out.get("action")
-    gain_pct = (expected_output or {}).get("gain_pct")
-    skip_reason = out.get("skip_reason") or (None if gain_pct is not None else _NO_GAIN_PCT)
-    value, comment = score_directional(action, gain_pct, skip_reason=skip_reason)
-    if value is None:
-        return Evaluation(name="directional_agreement_skip", value=comment)
-    return Evaluation(name="directional_agreement", value=value, comment=comment)
+    acceptable = (expected_output or {}).get("acceptable_verdicts")
+    cell, comment = score_act(bool(out.get("is_act")), acceptable)
+    if cell is None:
+        return Evaluation(name="act_decision_skip", value=comment)
+    return [
+        Evaluation(
+            name="act_correct",
+            value=1.0 if cell in ("TP", "TN") else 0.0,
+            comment=comment,
+        ),
+        Evaluation(name="act_confusion", value=cell, comment=comment),
+    ]
+
+
+def verdict_evaluator(
+    *, input, output, expected_output=None, **kwargs
+) -> Evaluation:
+    """Langfuse item evaluator: for actionable items, was the verdict direction
+    acceptable?
+
+    Only ``is_act``=true items are scored (the pipeline decided to act); no-act
+    items are excluded with a categorical ``verdict_excluded`` marker so they do
+    not dilute the verdict accuracy. A verdict of 'hold' on an actionable item
+    scores correct iff 'hold' is in ``acceptable_verdicts``. Local --ids runs
+    (no expected_output) become a skip score.
+    """
+    out = output or {}
+    acceptable = (expected_output or {}).get("acceptable_verdicts")
+    if not acceptable:
+        return Evaluation(
+            name="verdict_score_skip",
+            value="no acceptable_verdicts (local run or missing expected output)",
+        )
+    if not out.get("is_act"):
+        return Evaluation(
+            name="verdict_excluded",
+            value="no-act (is_act=false); excluded from verdict scoring",
+        )
+    value, comment = score_decision(
+        out.get("action"), acceptable, skip_reason=out.get("skip_reason")
+    )
+    return Evaluation(name="verdict_score", value=value, comment=comment)
 
 
 def price_move_evaluator(*, input, output, expected_output=None, **kwargs) -> Evaluation:
@@ -298,61 +352,71 @@ def price_move_evaluator(*, input, output, expected_output=None, **kwargs) -> Ev
     )
 
 
-def verdict_acceptable_evaluator(
-    *, input, output, expected_output=None, **kwargs
-) -> Evaluation:
-    """Langfuse item evaluator: is the produced verdict in the dataset item's
-    acceptable-verdict set (the +-0.3% deadband rule)?
+def _item_output_expected(r) -> tuple[dict, dict]:
+    """(output, expected_output) for a run-level item result, robust to both
+    dataset items (``r.item`` is an object) and local items (``r.item`` is a
+    dict)."""
+    out = getattr(r, "output", None) or {}
+    item = getattr(r, "item", None)
+    if isinstance(item, dict):
+        expected = item.get("expected_output")
+    else:
+        expected = getattr(item, "expected_output", None)
+    return out, (expected or {})
 
-    Reads ``expected_output.acceptable_verdicts``, which is present only on
-    dataset runs (e.g. `400-articles-sentiment-verdict`); local --ids runs have
-    no expected output and are skipped. Langfuse rejects value=None, so
-    unscorable items become a categorical sibling score, matching
-    directional_agreement_evaluator.
-    """
-    out = output or {}
-    acceptable = (expected_output or {}).get("acceptable_verdicts")
-    value, comment = score_acceptable(
-        out.get("action"), acceptable, skip_reason=out.get("skip_reason")
+
+def _act_confusion(item_results) -> dict[str, int]:
+    """Tally TP/FP/FN/TN for the act/no-act classifier across all items."""
+    counts = {"TP": 0, "FP": 0, "FN": 0, "TN": 0}
+    for r in item_results:
+        out, expected = _item_output_expected(r)
+        cell, _ = score_act(bool(out.get("is_act")), expected.get("acceptable_verdicts"))
+        if cell is not None:
+            counts[cell] += 1
+    return counts
+
+
+def act_metrics(*, item_results, **kwargs) -> Evaluation | list[Evaluation]:
+    """Run-level act/no-act classification metrics (accuracy, precision, recall,
+    F1) computed from the price-derived ground truth. The act class is positive,
+    so precision answers 'when the pipeline acted, did the article really move?'
+    and recall answers 'of the real movers, how many did it act on?'."""
+    c = _act_confusion(item_results)
+    tp, fp, fn, tn = c["TP"], c["FP"], c["FN"], c["TN"]
+    n = tp + fp + fn + tn
+    if n == 0:
+        return Evaluation(name="act_metrics_skip", value="no scorable items")
+    acc = (tp + tn) / n
+    prec = tp / (tp + fp) if (tp + fp) else 0.0
+    rec = tp / (tp + fn) if (tp + fn) else 0.0
+    f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) else 0.0
+    comment = (
+        f"n={n} TP={tp} FP={fp} FN={fn} TN={tn}; "
+        f"acc={acc:.2f} prec={prec:.2f} rec={rec:.2f} f1={f1:.2f}"
     )
-    if value is None:
-        return Evaluation(name="verdict_acceptable_skip", value=comment)
-    return Evaluation(name="verdict_acceptable", value=value, comment=comment)
+    return [
+        Evaluation(name="act_accuracy", value=acc, comment=comment),
+        Evaluation(name="act_precision", value=prec, comment=comment),
+        Evaluation(name="act_recall", value=rec, comment=comment),
+        Evaluation(name="act_f1", value=f1, comment=comment),
+    ]
 
 
-def avg_directional_agreement(*, item_results, **kwargs) -> Evaluation:
+def avg_verdict_score(*, item_results, **kwargs) -> Evaluation:
+    """Run-level verdict-direction accuracy over the actionable (is_act=true)
+    subset only - no-act items never produced a scorable verdict."""
     values = [
         e.value
         for r in item_results
         for e in r.evaluations
-        if e.name == "directional_agreement" and e.value is not None
+        if e.name == "verdict_score" and e.value is not None
     ]
     if not values:
-        return Evaluation(
-            name="avg_directional_agreement_skip", value="no scorable items"
-        )
+        return Evaluation(name="avg_verdict_score_skip", value="no actionable items scored")
     avg = sum(values) / len(values)
     return Evaluation(
-        name="avg_directional_agreement", value=avg,
-        comment=f"scored {len(values)}/{len(item_results)} items, avg {avg:.2f}",
-    )
-
-
-def avg_verdict_acceptable(*, item_results, **kwargs) -> Evaluation:
-    """Run-level accuracy under the deadband rule: fraction of scorable items
-    whose verdict was in the acceptable set."""
-    values = [
-        e.value
-        for r in item_results
-        for e in r.evaluations
-        if e.name == "verdict_acceptable" and e.value is not None
-    ]
-    if not values:
-        return Evaluation(name="avg_verdict_acceptable_skip", value="no scorable items")
-    avg = sum(values) / len(values)
-    return Evaluation(
-        name="avg_verdict_acceptable", value=avg,
-        comment=f"scored {len(values)}/{len(item_results)} items, avg {avg:.2f}",
+        name="avg_verdict_score", value=avg,
+        comment=f"verdict accuracy on {len(values)} actionable items, avg {avg:.2f}",
     )
 
 
@@ -380,6 +444,8 @@ def make_task(
     dsn: str | None,
     skip_stages: frozenset[str] = frozenset(),
     precedent_source: str | None = None,
+    verdict_model: str | None = None,
+    classify_model: str | None = None,
 ):
     """Experiment task: reset the article, run the real stage chain, return the verdict.
 
@@ -418,7 +484,9 @@ def make_task(
                 with obs.stage_span("embed"):
                     stages.embed_stage(conn, url)
                 with obs.stage_span("classify"):
-                    category = stages.classify_stage(conn, url)
+                    category = stages.classify_stage(
+                        conn, url, classify_model=classify_model
+                    )
                 if category is None:
                     # classify no-ops when category is already set (e.g. the stage
                     # was kept via --skip-stages); report the stored value.
@@ -433,7 +501,8 @@ def make_task(
                     stages.insights_stage(conn, url, tag_ctx)
                 with obs.stage_span("sentiment"):
                     verdict = stages.sentiment_stage(
-                        conn, url, precedent_source=precedent_source
+                        conn, url, precedent_source=precedent_source,
+                        verdict_model=verdict_model,
                     )
                 if verdict is None:
                     row = conn.execute(
@@ -449,10 +518,11 @@ def make_task(
                         else "sentiment skipped"
                     )
                     return {"action": None, "confidence": None, "category": category,
-                            "ticker": ticker, "skip_reason": reason}
+                            "ticker": ticker, "skip_reason": reason,
+                            "is_act": bool(actionable)}
                 return {"action": verdict["action"], "confidence": verdict["confidence"],
                         "category": category, "ticker": verdict["ticker"],
-                        "skip_reason": None}
+                        "skip_reason": None, "is_act": True}
             finally:
                 conn.close()
 
@@ -477,6 +547,8 @@ def run_eval(
     run_name: str | None = None,
     skip_stages: frozenset[str] = frozenset(),
     precedent_source: str | None = None,
+    verdict_model: str | None = None,
+    classify_model: str | None = None,
     concurrency: int = 4,
 ):
     """Run the E2E pipeline experiment; returns the langfuse ExperimentResult.
@@ -520,17 +592,20 @@ def run_eval(
     if skip_stages:
         metadata["skipped_stages"] = sorted(skip_stages)
     metadata["precedent_source"] = precedent_source or s.precedent_source
+    metadata["verdict_model"] = verdict_model or s.sentiment_verdict_model
+    if classify_model:
+        metadata["classify_model"] = classify_model
     common = dict(
         name=EXPERIMENT_NAME,
         run_name=run_name,
         description=_DESCRIPTION,
-        task=make_task(dsn, skip_stages, precedent_source),
+        task=make_task(dsn, skip_stages, precedent_source, verdict_model, classify_model),
         evaluators=[
-            directional_agreement_evaluator,
+            act_decision_evaluator,
+            verdict_evaluator,
             price_move_evaluator,
-            verdict_acceptable_evaluator,
         ],
-        run_evaluators=[avg_directional_agreement, avg_verdict_acceptable],
+        run_evaluators=[act_metrics, avg_verdict_score],
         # The async task offloads each item's stage chain to a thread, so this
         # genuinely caps concurrent items. Kept modest by default - every item
         # fans out ~7 LLM calls and hits the shared DB, so the real ceiling is

@@ -146,11 +146,14 @@ def embed_stage(conn: psycopg.Connection, url: str) -> None:
     conn.commit()
 
 
-def classify_stage(conn: psycopg.Connection, url: str) -> str | None:
+def classify_stage(
+    conn: psycopg.Connection, url: str, classify_model: str | None = None
+) -> str | None:
     """Single-pass fine-grained classify; stores category + reason + is_act.
 
     Returns the assigned fine-grained category, or None when the article was
-    skipped (already classified, or no content).
+    skipped (already classified, or no content). ``classify_model`` overrides
+    the configured classifier model.
     """
     row = conn.execute(
         "SELECT id, title, content, category FROM public.articles WHERE url = %s",
@@ -166,7 +169,7 @@ def classify_stage(conn: psycopg.Connection, url: str) -> str | None:
         conn.rollback()
         return None
     category, reason, is_act = classify_article_finegrained(
-        title, content or "", config=obs.chain_config() or None
+        title, content or "", config=obs.chain_config() or None, model=classify_model
     )
     conn.execute(
         "UPDATE public.articles SET category = %s, category_reason = %s, is_act = %s "
@@ -671,7 +674,8 @@ def own_article_insights(
 
 
 def sentiment_stage(
-    conn: psycopg.Connection, url: str, precedent_source: str | None = None
+    conn: psycopg.Connection, url: str, precedent_source: str | None = None,
+    verdict_model: str | None = None,
 ) -> dict | None:
     """Judge buy/sell/hold for the article's primary ticker.
 
@@ -680,7 +684,8 @@ def sentiment_stage(
     fine-grained ACT/no-ACT collapse), falling back to the legacy
     category == 'real news' for rows classified before the fine-grained switch.
     Returns a verdict summary dict, or None when the article was skipped.
-    `precedent_source` overrides the configured precedent-retrieval flow.
+    `precedent_source` overrides the configured precedent-retrieval flow;
+    `verdict_model` overrides the configured Gemini verdict model.
     """
     row = conn.execute(
         "SELECT id, title, content, category, is_act, primary_ticker, published_utc, "
@@ -742,9 +747,10 @@ def sentiment_stage(
         "precedent_labelled": bool(src and src.label_col),
     }
     conn.rollback()  # release the read transaction; LLM calls can take minutes
-    verdict, analyses = judge_article(article, config=obs.chain_config() or None)
-    sentiment_store.save_verdict(
-        conn, aid, ticker, verdict, analyses, settings.sentiment_verdict_model
+    model = verdict_model or settings.sentiment_verdict_model
+    verdict, analyses = judge_article(
+        article, config=obs.chain_config() or None, model=verdict_model
     )
+    sentiment_store.save_verdict(conn, aid, ticker, verdict, analyses, model)
     return {"ticker": ticker, "action": verdict.action,
             "confidence": verdict.confidence}

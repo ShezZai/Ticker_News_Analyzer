@@ -10,102 +10,86 @@ import pytest
 from ticker_news.evals import pipeline_eval
 from ticker_news.evals.pipeline_eval import (
     SKIPPABLE_STAGES,
-    avg_directional_agreement,
-    avg_verdict_acceptable,
+    act_decision_evaluator,
+    act_metrics,
+    avg_verdict_score,
     build_items,
-    directional_agreement_evaluator,
     parse_ids_file,
     parse_skip_stages,
     price_move_evaluator,
     reset_article,
-    score_acceptable,
-    score_directional,
+    score_act,
+    score_decision,
+    truth_act,
     upsert_dataset_items,
-    verdict_acceptable_evaluator,
+    verdict_evaluator,
 )
 
 
-class TestScoreDirectional:
-    def test_buy_and_price_up_agrees(self):
-        value, comment = score_directional("buy", 2.5)
+class TestTruthAct:
+    def test_pure_directional_is_should_act(self):
+        assert truth_act(["buy"]) is True
+        assert truth_act(["sell"]) is True
+
+    def test_hold_in_set_is_no_act_ok(self):
+        assert truth_act(["buy", "hold"]) is False
+        assert truth_act(["sell", "hold"]) is False
+
+    def test_case_insensitive(self):
+        assert truth_act(["BUY", "HOLD"]) is False
+
+    def test_missing_set_is_unscorable(self):
+        assert truth_act(None) is None
+        assert truth_act([]) is None
+
+
+class TestScoreAct:
+    def test_act_on_mover_is_tp(self):
+        cell, comment = score_act(True, ["buy"])
+        assert cell == "TP"
+        assert "TP" in comment
+
+    def test_act_on_flat_is_fp(self):
+        cell, _ = score_act(True, ["sell", "hold"])
+        assert cell == "FP"
+
+    def test_skip_on_mover_is_fn(self):
+        cell, _ = score_act(False, ["sell"])
+        assert cell == "FN"
+
+    def test_skip_on_flat_is_tn(self):
+        cell, _ = score_act(False, ["buy", "hold"])
+        assert cell == "TN"
+
+    def test_unscorable_when_no_acceptable_set(self):
+        cell, comment = score_act(True, None)
+        assert cell is None
+        assert "acceptable_verdicts" in comment
+
+
+class TestScoreDecision:
+    def test_direction_in_set_scores_one(self):
+        value, comment = score_decision("buy", ["buy", "hold"])
         assert value == 1.0
-        assert "agree" in comment
+        assert "correct" in comment
 
-    def test_buy_and_price_down_disagrees(self):
-        value, comment = score_directional("buy", -1.2)
-        assert value == 0.0
-        assert "disagree" in comment
-
-    def test_buy_and_flat_price_disagrees(self):
-        value, _ = score_directional("buy", 0.0)
-        assert value == 0.0
-
-    def test_sell_and_price_down_agrees(self):
-        value, _ = score_directional("sell", -3.0)
-        assert value == 1.0
-
-    def test_sell_and_price_up_disagrees(self):
-        value, _ = score_directional("sell", 1.7)
-        assert value == 0.0
-
-    def test_sell_and_flat_price_disagrees(self):
-        value, _ = score_directional("sell", 0.0)
-        assert value == 0.0
-
-    def test_hold_is_excluded(self):
-        value, comment = score_directional("hold", 2.0)
-        assert value is None
-        assert "hold" in comment
-
-    def test_no_verdict_is_excluded_with_reason(self):
-        value, comment = score_directional(None, None, skip_reason="category=recap/review")
-        assert value is None
-        assert "category=recap/review" in comment
-
-    def test_missing_price_data_is_excluded(self):
-        value, comment = score_directional("buy", None, skip_reason="no tradeable entry/exit bar")
-        assert value is None
-        assert "no price data" in comment
-
-    def test_unknown_action_is_excluded(self):
-        value, comment = score_directional("strong-buy", 1.0)
-        assert value is None
-        assert "strong-buy" in comment
-
-
-class TestScoreAcceptable:
-    def test_direction_call_inside_set_scores_one(self):
-        value, comment = score_acceptable("buy", ["buy", "hold"])
-        assert value == 1.0
-        assert "acceptable" in comment
-
-    def test_hold_inside_set_scores_one(self):
-        value, _ = score_acceptable("hold", ["sell", "hold"])
+    def test_hold_in_set_scores_one(self):
+        value, _ = score_decision("hold", ["sell", "hold"])
         assert value == 1.0
 
-    def test_opposite_direction_scores_zero(self):
-        value, comment = score_acceptable("buy", ["sell", "hold"])
+    def test_wrong_direction_scores_zero(self):
+        value, comment = score_decision("buy", ["sell"])
         assert value == 0.0
         assert "wrong" in comment
 
-    def test_hold_when_only_a_direction_is_acceptable_scores_zero(self):
-        value, _ = score_acceptable("hold", ["buy"])
-        assert value == 0.0
+    def test_none_action_treated_as_hold(self):
+        value, _ = score_decision(None, ["buy"], skip_reason="no insights")
+        assert value == 0.0  # hold not acceptable on a directional mover
 
-    def test_case_insensitive(self):
-        value, _ = score_acceptable("BUY", ["buy"])
-        assert value == 1.0
-
-    def test_no_acceptable_set_is_excluded(self):
-        # local --ids runs carry no expected_output
-        value, comment = score_acceptable("buy", None)
+    def test_no_acceptable_set_is_unscorable(self):
+        value, comment = score_decision("buy", None)
         assert value is None
         assert "acceptable_verdicts" in comment
-
-    def test_no_verdict_is_excluded_with_reason(self):
-        value, comment = score_acceptable(None, ["buy"], skip_reason="category=recap/review")
-        assert value is None
-        assert "category=recap/review" in comment
 
 
 class FakeCursor:
@@ -200,49 +184,98 @@ ITEM_INPUT = {
 }
 
 
-class TestItemEvaluators:
-    def test_buy_with_rising_price_scores_one(self):
-        ev = directional_agreement_evaluator(
+class TestActDecisionEvaluator:
+    def test_act_on_mover_emits_correct_and_tp(self):
+        evs = act_decision_evaluator(
             input=ITEM_INPUT,
-            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
-            expected_output={"gain_pct": 2.5},
+            output={"action": "buy", "is_act": True, "skip_reason": None},
+            expected_output={"acceptable_verdicts": ["buy"], "gain_pct": 2.5},
         )
-        assert ev.name == "directional_agreement"
-        assert ev.value == 1.0
+        by_name = {e.name: e.value for e in evs}
+        assert by_name["act_correct"] == 1.0
+        assert by_name["act_confusion"] == "TP"
 
-    def test_no_verdict_becomes_categorical_skip_score(self):
-        ev = directional_agreement_evaluator(
+    def test_skip_on_mover_is_wrong_and_fn(self):
+        evs = act_decision_evaluator(
             input=ITEM_INPUT,
-            output={"action": None, "ticker": None, "skip_reason": "no primary ticker"},
-            expected_output={"gain_pct": 2.5},
+            output={"action": None, "is_act": False, "skip_reason": "not actionable"},
+            expected_output={"acceptable_verdicts": ["sell"], "gain_pct": -2.0},
         )
-        # Langfuse rejects value=None; exclusions become a categorical sibling score
-        assert ev.name == "directional_agreement_skip"
-        assert "no primary ticker" in ev.value
+        by_name = {e.name: e.value for e in evs}
+        assert by_name["act_correct"] == 0.0
+        assert by_name["act_confusion"] == "FN"
 
-    def test_hold_becomes_categorical_skip_score(self):
-        ev = directional_agreement_evaluator(
+    def test_act_on_flat_is_wrong_and_fp(self):
+        evs = act_decision_evaluator(
             input=ITEM_INPUT,
-            output={"action": "hold", "ticker": "MRVL", "skip_reason": None},
-            expected_output={"gain_pct": 2.5},
+            output={"action": "buy", "is_act": True, "skip_reason": None},
+            expected_output={"acceptable_verdicts": ["buy", "hold"], "gain_pct": 0.1},
         )
-        assert ev.name == "directional_agreement_skip"
-        assert "hold" in ev.value
+        by_name = {e.name: e.value for e in evs}
+        assert by_name["act_correct"] == 0.0
+        assert by_name["act_confusion"] == "FP"
 
-    def test_no_prefetched_gain_becomes_skip_score(self):
-        # local --ids run: no expected_output, so no realized move to score against
-        ev = directional_agreement_evaluator(
+    def test_skip_on_flat_is_correct_and_tn(self):
+        evs = act_decision_evaluator(
             input=ITEM_INPUT,
-            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
+            output={"action": None, "is_act": False, "skip_reason": "not actionable"},
+            expected_output={"acceptable_verdicts": ["sell", "hold"], "gain_pct": -0.1},
+        )
+        by_name = {e.name: e.value for e in evs}
+        assert by_name["act_correct"] == 1.0
+        assert by_name["act_confusion"] == "TN"
+
+    def test_no_expected_output_becomes_single_skip_score(self):
+        ev = act_decision_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "buy", "is_act": True, "skip_reason": None},
             expected_output=None,
         )
-        assert ev.name == "directional_agreement_skip"
-        assert "gain_pct" in ev.value
+        assert ev.name == "act_decision_skip"
+        assert "acceptable_verdicts" in ev.value
 
+
+class TestVerdictEvaluator:
+    def test_actionable_acceptable_direction_scores_one(self):
+        ev = verdict_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "hold", "is_act": True, "skip_reason": None},
+            expected_output={"acceptable_verdicts": ["sell", "hold"], "gain_pct": -0.1},
+        )
+        assert ev.name == "verdict_score"
+        assert ev.value == 1.0
+
+    def test_actionable_wrong_direction_scores_zero(self):
+        ev = verdict_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "buy", "is_act": True, "skip_reason": None},
+            expected_output={"acceptable_verdicts": ["sell"], "gain_pct": -2.0},
+        )
+        assert ev.name == "verdict_score"
+        assert ev.value == 0.0
+
+    def test_no_act_item_is_excluded(self):
+        ev = verdict_evaluator(
+            input=ITEM_INPUT,
+            output={"action": None, "is_act": False, "skip_reason": "not actionable"},
+            expected_output={"acceptable_verdicts": ["buy"]},
+        )
+        assert ev.name == "verdict_excluded"
+
+    def test_missing_expected_output_becomes_skip_score(self):
+        ev = verdict_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "buy", "is_act": True, "skip_reason": None},
+            expected_output=None,
+        )
+        assert ev.name == "verdict_score_skip"
+
+
+class TestPriceMoveEvaluator:
     def test_price_move_recorded_even_for_hold(self):
         ev = price_move_evaluator(
             input=ITEM_INPUT,
-            output={"action": "hold", "ticker": "MRVL", "skip_reason": None},
+            output={"action": "hold", "is_act": True, "skip_reason": None},
             expected_output={"gain_pct": -1.3},
         )
         assert ev.name == "price_move_pct"
@@ -251,91 +284,70 @@ class TestItemEvaluators:
     def test_price_move_skip_score_when_no_prefetched_gain(self):
         ev = price_move_evaluator(
             input=ITEM_INPUT,
-            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
+            output={"action": "buy", "is_act": True, "skip_reason": None},
             expected_output=None,
         )
         assert ev.name == "price_move_pct_skip"
         assert "gain_pct" in ev.value
 
 
-class TestVerdictAcceptableEvaluator:
-    def test_acceptable_verdict_scores_one(self):
-        ev = verdict_acceptable_evaluator(
-            input=ITEM_INPUT,
-            output={"action": "hold", "ticker": "MRVL", "skip_reason": None},
-            expected_output={"acceptable_verdicts": ["sell", "hold"], "gain_pct": -0.1},
-        )
-        assert ev.name == "verdict_acceptable"
-        assert ev.value == 1.0
-
-    def test_wrong_verdict_scores_zero(self):
-        ev = verdict_acceptable_evaluator(
-            input=ITEM_INPUT,
-            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
-            expected_output={"acceptable_verdicts": ["sell"], "gain_pct": -2.0},
-        )
-        assert ev.name == "verdict_acceptable"
-        assert ev.value == 0.0
-
-    def test_no_verdict_becomes_categorical_skip_score(self):
-        ev = verdict_acceptable_evaluator(
-            input=ITEM_INPUT,
-            output={"action": None, "ticker": None, "skip_reason": "no primary ticker"},
-            expected_output={"acceptable_verdicts": ["buy"]},
-        )
-        assert ev.name == "verdict_acceptable_skip"
-        assert "no primary ticker" in ev.value
-
-    def test_missing_expected_output_becomes_skip_score(self):
-        # local --ids mode: items have no expected_output
-        ev = verdict_acceptable_evaluator(
-            input=ITEM_INPUT,
-            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
-            expected_output=None,
-        )
-        assert ev.name == "verdict_acceptable_skip"
+def _result(*evals, output=None, expected_output=None):
+    return SimpleNamespace(
+        evaluations=list(evals),
+        output=output,
+        item=SimpleNamespace(expected_output=expected_output),
+    )
 
 
-def _result(*evals):
-    return SimpleNamespace(evaluations=list(evals))
-
-
-class TestRunEvaluator:
-    def test_averages_only_scored_items(self):
+class TestActMetrics:
+    def test_computes_accuracy_precision_recall_f1(self):
+        # 1 TP, 1 FP, 1 FN, 1 TN -> acc .5, prec .5, rec .5, f1 .5
         results = [
-            _result(SimpleNamespace(name="directional_agreement", value=1.0)),
-            _result(SimpleNamespace(name="directional_agreement", value=0.0)),
-            _result(SimpleNamespace(name="directional_agreement", value=None)),
-            _result(SimpleNamespace(name="price_move_pct", value=5.0)),
+            _result(output={"is_act": True}, expected_output={"acceptable_verdicts": ["buy"]}),       # TP
+            _result(output={"is_act": True}, expected_output={"acceptable_verdicts": ["buy", "hold"]}),  # FP
+            _result(output={"is_act": False}, expected_output={"acceptable_verdicts": ["sell"]}),      # FN
+            _result(output={"is_act": False}, expected_output={"acceptable_verdicts": ["sell", "hold"]}),  # TN
         ]
-        ev = avg_directional_agreement(item_results=results)
-        assert ev.name == "avg_directional_agreement"
-        assert ev.value == 0.5
-        assert "2/4" in ev.comment
+        evs = act_metrics(item_results=results)
+        by_name = {e.name: e.value for e in evs}
+        assert by_name["act_accuracy"] == pytest.approx(0.5)
+        assert by_name["act_precision"] == pytest.approx(0.5)
+        assert by_name["act_recall"] == pytest.approx(0.5)
+        assert by_name["act_f1"] == pytest.approx(0.5)
+
+    def test_unscorable_items_are_ignored(self):
+        results = [
+            _result(output={"is_act": True}, expected_output={"acceptable_verdicts": ["buy"]}),  # TP
+            _result(output={"is_act": True}, expected_output=None),  # local item, ignored
+        ]
+        evs = act_metrics(item_results=results)
+        by_name = {e.name: e.value for e in evs}
+        assert by_name["act_accuracy"] == 1.0
+        assert "n=1" in evs[0].comment
 
     def test_no_scorable_items(self):
-        ev = avg_directional_agreement(item_results=[])
-        assert ev.name == "avg_directional_agreement_skip"
-        assert ev.value == "no scorable items"
+        ev = act_metrics(item_results=[
+            _result(output={"is_act": True}, expected_output=None),
+        ])
+        assert ev.name == "act_metrics_skip"
 
 
-class TestAvgVerdictAcceptable:
-    def test_averages_only_scored_items(self):
+class TestAvgVerdictScore:
+    def test_averages_only_actionable_scored_items(self):
         results = [
-            _result(SimpleNamespace(name="verdict_acceptable", value=1.0)),
-            _result(SimpleNamespace(name="verdict_acceptable", value=1.0)),
-            _result(SimpleNamespace(name="verdict_acceptable", value=0.0)),
-            _result(SimpleNamespace(name="verdict_acceptable_skip", value="no verdict")),
+            SimpleNamespace(evaluations=[SimpleNamespace(name="verdict_score", value=1.0)]),
+            SimpleNamespace(evaluations=[SimpleNamespace(name="verdict_score", value=1.0)]),
+            SimpleNamespace(evaluations=[SimpleNamespace(name="verdict_score", value=0.0)]),
+            SimpleNamespace(evaluations=[SimpleNamespace(name="verdict_excluded", value="no-act")]),
         ]
-        ev = avg_verdict_acceptable(item_results=results)
-        assert ev.name == "avg_verdict_acceptable"
+        ev = avg_verdict_score(item_results=results)
+        assert ev.name == "avg_verdict_score"
         assert ev.value == pytest.approx(2 / 3)
-        assert "3/4" in ev.comment
+        assert "3 actionable" in ev.comment
 
     def test_no_scorable_items(self):
-        ev = avg_verdict_acceptable(item_results=[])
-        assert ev.name == "avg_verdict_acceptable_skip"
-        assert ev.value == "no scorable items"
+        ev = avg_verdict_score(item_results=[])
+        assert ev.name == "avg_verdict_score_skip"
 
 
 class TestResetArticleKeep:
@@ -408,12 +420,12 @@ class TestRunPipelineTaskCategoryBackfill:
                             lambda c, aid, keep=frozenset(): None)
         monkeypatch.setattr(stages.TagContext, "load", classmethod(lambda cls, c: None))
         monkeypatch.setattr(stages, "embed_stage", lambda c, u: None)
-        monkeypatch.setattr(stages, "classify_stage", lambda c, u: None)  # no-op: kept
+        monkeypatch.setattr(stages, "classify_stage", lambda c, u, classify_model=None: None)  # no-op: kept
         monkeypatch.setattr(stages, "tag_stage", lambda c, u, t: None)
         monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
         monkeypatch.setattr(
             stages, "sentiment_stage",
-            lambda c, u, precedent_source=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
+            lambda c, u, precedent_source=None, verdict_model=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None, skip_stages=frozenset({"classify"}))
         out = asyncio.run(task(item={"input": {"article_id": 20512, "url": "https://x/20512"}}))
@@ -431,18 +443,43 @@ class TestRunPipelineTaskCategoryBackfill:
                             lambda c, aid, keep=frozenset(): None)
         monkeypatch.setattr(stages.TagContext, "load", classmethod(lambda cls, c: None))
         monkeypatch.setattr(stages, "embed_stage", lambda c, u: None)
-        monkeypatch.setattr(stages, "classify_stage", lambda c, u: "real news")
+        monkeypatch.setattr(stages, "classify_stage", lambda c, u, classify_model=None: "real news")
         monkeypatch.setattr(stages, "tag_stage", lambda c, u, t: None)
         monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
         seen = {}
         monkeypatch.setattr(
             stages, "sentiment_stage",
-            lambda c, u, precedent_source=None: seen.update(src=precedent_source)
+            lambda c, u, precedent_source=None, verdict_model=None: seen.update(src=precedent_source, model=verdict_model)
             or {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None, precedent_source="insights")
         asyncio.run(task(item={"input": {"article_id": 20512, "url": "https://x/20512"}}))
         assert seen["src"] == "insights"
+
+    def test_task_threads_verdict_model_into_sentiment(self, monkeypatch):
+        from ticker_news.evals import pipeline_eval
+        from ticker_news.service import stages
+
+        conn = FakeConn(rows=[("real news",)])
+        conn.close = lambda: None
+        monkeypatch.setattr(pipeline_eval, "connect_eval", lambda dsn: conn)
+        monkeypatch.setattr(pipeline_eval, "reset_article",
+                            lambda c, aid, keep=frozenset(): None)
+        monkeypatch.setattr(stages.TagContext, "load", classmethod(lambda cls, c: None))
+        monkeypatch.setattr(stages, "embed_stage", lambda c, u: None)
+        monkeypatch.setattr(stages, "classify_stage", lambda c, u, classify_model=None: "real news")
+        monkeypatch.setattr(stages, "tag_stage", lambda c, u, t: None)
+        monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
+        seen = {}
+        monkeypatch.setattr(
+            stages, "sentiment_stage",
+            lambda c, u, precedent_source=None, verdict_model=None:
+                seen.update(model=verdict_model)
+                or {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
+        )
+        task = pipeline_eval.make_task(dsn=None, verdict_model="gemini-2.5-flash")
+        asyncio.run(task(item={"input": {"article_id": 20512, "url": "https://x/20512"}}))
+        assert seen["model"] == "gemini-2.5-flash"
 
     def test_task_names_the_trace_after_experiment_and_article(self, monkeypatch):
         import langfuse
@@ -465,12 +502,12 @@ class TestRunPipelineTaskCategoryBackfill:
                             lambda c, aid, keep=frozenset(): None)
         monkeypatch.setattr(stages.TagContext, "load", classmethod(lambda cls, c: None))
         monkeypatch.setattr(stages, "embed_stage", lambda c, u: None)
-        monkeypatch.setattr(stages, "classify_stage", lambda c, u: "real news")
+        monkeypatch.setattr(stages, "classify_stage", lambda c, u, classify_model=None: "real news")
         monkeypatch.setattr(stages, "tag_stage", lambda c, u, t: None)
         monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
         monkeypatch.setattr(
             stages, "sentiment_stage",
-            lambda c, u, precedent_source=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
+            lambda c, u, precedent_source=None, verdict_model=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None)
         asyncio.run(task(item={"input": {"article_id": 20512, "url": "https://x/20512"}}))
@@ -517,6 +554,7 @@ class TestRunEvalMetadata:
         google_api_key = "gak"
         openai_api_key = "oak"
         precedent_source = "article"  # the settings default
+        sentiment_verdict_model = "gemini-2.5-flash-lite"
 
     class _FakeLFClient:
         def __init__(self):
