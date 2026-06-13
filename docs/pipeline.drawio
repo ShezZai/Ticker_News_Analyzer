@@ -1,0 +1,254 @@
+<mxfile host="app.diagrams.net" agent="claude-code">
+  <diagram id="ticker-news-pipeline" name="Ticker News Pipeline">
+    <mxGraphModel dx="1084" dy="693" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="massive_api" parent="1" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" value="Massive REST API&#xa;(news metadata, candles)" vertex="1">
+          <mxGeometry height="80" width="180" x="60" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="news_csv" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="News CSV&#xa;(ticker-news fetch-news)" vertex="1">
+          <mxGeometry height="60" width="160" x="320" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ingestion_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=none;strokeColor=#9673a6;dashed=0;fontSize=11;fontStyle=1;" value="ingestion/ — NewsFeedSource port (feed.py: stream() → AsyncIterator[FeedItem])" vertex="1">
+          <mxGeometry height="120" width="480" x="40" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="massive_source" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="MassiveRestSource&#xa;(live polling)" vertex="1">
+          <mxGeometry height="55" width="200" x="70" y="195" as="geometry" />
+        </mxCell>
+        <mxCell id="csv_source" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="CsvBackfillSource&#xa;(drain mode)" vertex="1">
+          <mxGeometry height="55" width="200" x="310" y="195" as="geometry" />
+        </mxCell>
+        <mxCell id="service_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=none;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" value="service/worker.serve() — ticker-news serve | backfill" vertex="1">
+          <mxGeometry height="130" width="500" x="40" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="feed_task" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="Feed task&#xa;(enqueue articles)" vertex="1">
+          <mxGeometry height="60" width="200" x="70" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="worker_pool" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="Async worker pool&#xa;(one conn + Store per worker)" vertex="1">
+          <mxGeometry height="60" width="200" x="310" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="jobs_queue" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" value="pipeline_jobs&#xa;FOR UPDATE SKIP LOCKED&#xa;retry backoff 30s→1h, 5 attempts" vertex="1">
+          <mxGeometry height="110" width="190" x="610" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="batch_clis" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="Per-stage batch CLIs (resumable)&#xa;ticker-news scrape | embed | classify |&#xa;tag | insights | sentiment" vertex="1">
+          <mxGeometry height="80" width="280" x="870" y="345" as="geometry" />
+        </mxCell>
+        <mxCell id="stage_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=none;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" value="Stage chain — service/jobs.py STAGES (stage column advances after each step; crash resumes mid-article)" vertex="1">
+          <mxGeometry height="130" width="1110" x="40" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="st_scrape" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="scrape&#xa;(httpx → Playwright)" vertex="1">
+          <mxGeometry height="55" width="145" x="70" y="555" as="geometry" />
+        </mxCell>
+        <mxCell id="st_embed" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="embed&#xa;(text-embedding-3-small)" vertex="1">
+          <mxGeometry height="55" width="145" x="250" y="555" as="geometry" />
+        </mxCell>
+        <mxCell id="st_classify" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="classify&#xa;(two-pass Gemini)" vertex="1">
+          <mxGeometry height="55" width="145" x="430" y="555" as="geometry" />
+        </mxCell>
+        <mxCell id="st_tag" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="tag&#xa;(tickers + segments)" vertex="1">
+          <mxGeometry height="55" width="145" x="610" y="555" as="geometry" />
+        </mxCell>
+        <mxCell id="st_insights" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="insights&#xa;(extract + embed boxes)" vertex="1">
+          <mxGeometry height="55" width="145" x="790" y="555" as="geometry" />
+        </mxCell>
+        <mxCell id="st_sentiment" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="sentiment&#xa;(analyst panel)" vertex="1">
+          <mxGeometry height="55" width="145" x="970" y="555" as="geometry" />
+        </mxCell>
+        <mxCell id="sent_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=none;strokeColor=#d6b656;fontSize=11;fontStyle=1;" value="sentiment/graph.py — LangGraph analyst panel (Send API fan-out, parallel)" vertex="1">
+          <mxGeometry height="290" width="590" x="610" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="fan_out" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="fan-out&#xa;(Send)" vertex="1">
+          <mxGeometry height="70" width="100" x="635" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="an_fund" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" value="analyst: fundamentals&#xa;(gemini-2.5-flash-lite)" vertex="1">
+          <mxGeometry height="45" width="190" x="780" y="765" as="geometry" />
+        </mxCell>
+        <mxCell id="Srn4ybAkCOF6gIEaPkK5-1" edge="1" parent="1" source="an_market" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="fan_out" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Srn4ybAkCOF6gIEaPkK5-2" edge="1" parent="1" source="an_market" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" target="sent_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="an_market" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" value="analyst: market_context&#xa;(gemini-2.5-flash-lite)" vertex="1">
+          <mxGeometry height="45" width="190" x="820" y="820" as="geometry" />
+        </mxCell>
+        <mxCell id="an_hist" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" value="analyst: historical_precedent&#xa;(gemini-2.5-flash-lite)" vertex="1">
+          <mxGeometry height="45" width="190" x="780" y="939" as="geometry" />
+        </mxCell>
+        <mxCell id="synthesize" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" value="synthesize judge&#xa;(gemini-2.5-flash, structured output)&#xa;→ Verdict: buy / sell / hold" vertex="1">
+          <mxGeometry height="70" width="170" x="1115" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="pg_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=none;strokeColor=#82b366;fontSize=11;fontStyle=1;" value="Postgres &quot;news&quot; (pgvector/pgvector:pg16) — DATABASE_URL" vertex="1">
+          <mxGeometry height="290" width="480" x="40" y="710" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_articles" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" value="articles&#xa;text + embedding vector(1536)&#xa;HNSW index" vertex="1">
+          <mxGeometry height="80" width="200" x="70" y="780" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_insights" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" value="article_insights&#xa;(embedded insight boxes)" vertex="1">
+          <mxGeometry height="80" width="200" x="295" y="780" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_sentiment" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" value="article_sentiment&#xa;PK (article_id, ticker)" vertex="1">
+          <mxGeometry height="80" width="200" x="70" y="884" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_universe" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" value="ticker_data / ticker_overview&#xa;(load-universe / load-overviews)" vertex="1">
+          <mxGeometry height="80" width="200" x="295" y="884" as="geometry" />
+        </mxCell>
+        <mxCell id="openai" parent="1" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" value="OpenAI&#xa;embeddings" vertex="1">
+          <mxGeometry height="80" width="160" x="1680" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="gemini" parent="1" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" value="Google Gemini&#xa;classify / insights / sentiment" vertex="1">
+          <mxGeometry height="80" width="160" x="1470" y="939" as="geometry" />
+        </mxCell>
+        <mxCell id="langfuse" parent="1" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" value="Langfuse&#xa;1 trace per article&#xa;(deterministic id from URL)" vertex="1">
+          <mxGeometry height="90" width="160" x="1740" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="research" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" value="research/ — ticker-news research chart | scan-ranges | backtest ... + search / search-insights&#xa;(read-only: never writes pipeline tables)" vertex="1">
+          <mxGeometry height="50" width="480" x="40" y="1030" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="massive_api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="massive_source">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="news_csv" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="csv_source">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="massive_source" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;" target="feed_task" value="stream()">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="csv_source" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;" target="feed_task" value="stream()">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="feed_task" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.3;" target="jobs_queue" value="enqueue + NOTIFY">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="580" y="300" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="jobs_queue" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;" target="worker_pool" value="claim (SKIP LOCKED)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="worker_pool" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;exitX=0.5;exitY=1;" target="st_scrape" value="drive stages">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="batch_clis" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;dashed=1;" target="stage_box" value="corpus-wide&#xa;pending rows">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s1" edge="1" parent="1" source="st_scrape" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="st_embed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" edge="1" parent="1" source="st_embed" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="st_classify">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" edge="1" parent="1" source="st_classify" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="st_tag">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s4" edge="1" parent="1" source="st_tag" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="st_insights">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s5" edge="1" parent="1" source="st_insights" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="st_sentiment">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="w1" edge="1" parent="1" source="st_scrape" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=9;exitX=0.25;exitY=1;entryX=0.25;entryY=0;" target="tbl_articles" value="text">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="w2" edge="1" parent="1" source="st_embed" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=9;exitX=0.5;exitY=1;entryX=0.6;entryY=0;" target="tbl_articles" value="embedding">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="w3" edge="1" parent="1" source="st_classify" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=9;exitX=0.5;exitY=1;entryX=0.9;entryY=0;" target="tbl_articles" value="category,&#xa;tickers/segments">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="502" y="690" />
+              <mxPoint x="250" y="690" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="w4" edge="1" parent="1" source="st_insights" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=9;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" target="tbl_insights">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="826" y="675" />
+              <mxPoint x="395" y="675" />
+            </Array>
+            <mxPoint x="395" y="745" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="w5" edge="1" parent="1" source="st_tag" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=9;dashed=1;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" target="tbl_universe" value="reads ticker_data">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="719" y="690" />
+              <mxPoint x="530" y="690" />
+              <mxPoint x="530" y="730" />
+              <mxPoint x="395" y="730" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="g1" edge="1" parent="1" source="st_sentiment" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" target="fan_out">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1006" y="680" />
+              <mxPoint x="635" y="680" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="g2" edge="1" parent="1" source="fan_out" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="an_fund">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g3" edge="1" parent="1" source="fan_out" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="an_market">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g4" edge="1" parent="1" source="fan_out" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="an_hist">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g5" edge="1" parent="1" source="an_fund" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="synthesize">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g6" edge="1" parent="1" source="an_market" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="synthesize">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g7" edge="1" parent="1" source="an_hist" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="synthesize">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g8" edge="1" parent="1" source="synthesize" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" target="tbl_sentiment" value="verdict">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1050" y="1015" />
+              <mxPoint x="170" y="1015" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="x1" edge="1" parent="1" source="st_embed" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;exitX=0.5;exitY=0;entryX=0;entryY=0.5;" target="openai">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="322" y="490" />
+              <mxPoint x="1170" y="490" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="x2" edge="1" parent="1" source="st_sentiment" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="gemini">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1170" y="583" />
+              <mxPoint x="1170" y="650" />
+              <mxPoint x="1710" y="650" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="x3" edge="1" parent="1" source="synthesize" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;exitX=1;exitY=0.5;entryX=0.1;entryY=0.9;" target="gemini">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="x4" edge="1" parent="1" source="stage_box" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;fontSize=9;exitX=1;exitY=0.75;entryX=0;entryY=0.5;" target="langfuse" value="traces (stable observation names:&#xa;process-article, scrape…synthesize)">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1170" y="608" />
+              <mxPoint x="1170" y="580" />
+              <mxPoint x="1740" y="580" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r1" edge="1" parent="1" source="research" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;fontSize=9;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="pg_box" value="read-only (ANN search, scans, backtests)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
