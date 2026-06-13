@@ -47,6 +47,12 @@ class AppSettings(BaseSettings):
     # "insights":         per-insight-box neighbors over public.article_insights.
     # "distilled-first":  same over distilled_article_insights, tagged by first_label.
     # "distilled-second": same, tagged by second_label, with DROP-labelled excluded.
+    # "insights-hybrid":  article-level ANN prefilter, then insight-box ANN within
+    #                     that subset (public.article_insights).
+    # "distilled-hybrid": same hybrid funnel over the distilled corpus, two-pass
+    #                     (second_label, DROP-labelled boxes excluded).
+    # "distilled-hybrid-one-pass": hybrid over the distilled corpus, first pass only
+    #                     (first_label, no DROP filtering).
     precedent_source: str = Field(
         default="article", validation_alias="SENTIMENT_PRECEDENT_SOURCE"
     )
@@ -66,6 +72,16 @@ class AppSettings(BaseSettings):
     # so recap/analysis/etc. articles are eligible precedents too.
     precedent_real_news_only: bool = Field(
         default=False, validation_alias="SENTIMENT_PRECEDENT_REAL_NEWS_ONLY"
+    )
+    # Similarity floors for the '-hybrid' modes. The two stages use different
+    # floors because article-body embeddings sit on a lower cosine scale than
+    # focused insight-box embeddings: the coarse article-level ANN prefilter uses
+    # `..._ARTICLE_THRESHOLD`, the insight-box ANN within the subset uses `..._BOX_THRESHOLD`.
+    precedent_hybrid_article_threshold: float = Field(
+        default=0.4, validation_alias="SENTIMENT_PRECEDENT_HYBRID_ARTICLE_THRESHOLD"
+    )
+    precedent_hybrid_box_threshold: float = Field(
+        default=0.65, validation_alias="SENTIMENT_PRECEDENT_HYBRID_BOX_THRESHOLD"
     )
 
     # Gemini model that generates the buy/sell/hold verdict (the single

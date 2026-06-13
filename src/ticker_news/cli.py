@@ -573,7 +573,7 @@ def eval_pipeline(
     dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
     run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: auto-generated)."),
     skip_stages: str | None = typer.Option(None, "--skip-stages", help="Comma-separated stages whose stored outputs are reused instead of re-run: embed, classify, tag, insights (or 'all' for every one)."),
-    precedent_source: str | None = typer.Option(None, "--precedent-source", help="Historical-precedent retrieval for the sentiment panel: 'article' (top-k similar articles), 'insights' (per-insight-box neighbors), 'distilled-first' (distilled boxes tagged by first_label), or 'distilled-second' (by second_label, DROP excluded). Default: config (SENTIMENT_PRECEDENT_SOURCE)."),
+    precedent_source: str | None = typer.Option(None, "--precedent-source", help="Historical-precedent retrieval for the sentiment panel: 'article', 'insights', 'distilled-first', 'distilled-second', 'insights-hybrid' / 'distilled-hybrid' (article-level prefilter then insight-box ANN within that subset). Default: config (SENTIMENT_PRECEDENT_SOURCE)."),
     concurrency: int = typer.Option(4, "--concurrency", min=1, help="Max articles processed concurrently. Each item fans out ~7 LLM calls; the Gemini rate limiter is the real ceiling."),
 ) -> None:
     """Re-run articles E2E through the pipeline; score verdicts against actual price moves."""
@@ -593,11 +593,12 @@ def eval_pipeline(
     except ValueError as exc:
         raise typer.BadParameter(f"--skip-stages: {exc}")
     if precedent_source is not None and precedent_source not in (
-        "article", "insights", "distilled-first", "distilled-second"
+        "article", "insights", "distilled-first", "distilled-second",
+        "insights-hybrid", "distilled-hybrid", "distilled-hybrid-one-pass",
     ):
         raise typer.BadParameter(
-            "--precedent-source must be 'article', 'insights', 'distilled-first', "
-            "or 'distilled-second'"
+            "--precedent-source must be one of: article, insights, distilled-first, "
+            "distilled-second, insights-hybrid, distilled-hybrid, distilled-hybrid-one-pass"
         )
     if not id_list and not dataset:
         raise typer.BadParameter("provide --ids/--ids-file, or --dataset with existing items")
@@ -656,15 +657,19 @@ def eval_clusters(
     csv: str = typer.Option("docs/article_clusters.csv", "--csv", help="Labelled article-cluster table."),
     out: str | None = typer.Option("docs/cluster_retrieval_eval.md", "--out", help="Markdown report path ('' to skip writing)."),
     dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
-    threshold: float = typer.Option(0.7, "--threshold", help="Cosine similarity floor for retrieval."),
+    threshold: float = typer.Option(0.7, "--threshold", help="Cosine floor for the similarity (non-hybrid) methods."),
+    hybrid_article_threshold: float = typer.Option(0.4, "--hybrid-article-threshold", help="Cosine floor for the hybrid article-level prefilter."),
+    hybrid_box_threshold: float = typer.Option(0.65, "--hybrid-box-threshold", help="Cosine floor for the hybrid insight-box step."),
     limit: int = typer.Option(60, "--limit", min=1, help="Max insight boxes per query."),
     lookback_plus: int = typer.Option(1, "--lookback-plus", help="Days added to each cluster's lookback column."),
 ) -> None:
-    """Retrieval precision/recall over the cluster table: article_insights vs distilled corpora."""
+    """Retrieval precision/recall over the cluster table: article_insights vs distilled vs hybrid."""
     from ticker_news.evals import cluster_eval
 
     try:
-        cluster_eval.run(csv, out or None, dsn, threshold=threshold, limit=limit,
+        cluster_eval.run(csv, out or None, dsn, threshold=threshold,
+                         hybrid_article_threshold=hybrid_article_threshold,
+                         hybrid_box_threshold=hybrid_box_threshold, limit=limit,
                          lookback_plus=lookback_plus)
     except (SystemExit, FileNotFoundError) as exc:
         typer.echo(str(exc), err=True)

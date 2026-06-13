@@ -37,10 +37,15 @@ from dataclasses import dataclass
 from ticker_news.service import stages
 
 # (display name, INSIGHT_SOURCES key, expected member column: "insights"|"distilled")
+# Hybrid methods (source key ending in '-hybrid') run an article-level ANN
+# prefilter at `hybrid_threshold`, then the insight-box ANN within that subset.
 METHODS: list[tuple[str, str, str]] = [
     ("insight_orig", "insights", "insights"),
     ("insights_distilled_two_pass", "distilled-first", "distilled"),
     ("insights_distilled_two_pass_drop_filtered", "distilled-second", "distilled"),
+    ("insights_hybrid", "insights-hybrid", "insights"),
+    ("distilled_hybrid", "distilled-hybrid", "distilled"),
+    ("distilled_hybrid_one_pass", "distilled-hybrid-one-pass", "distilled"),
 ]
 
 # CSV header fragments (en-dash, matching the table) -> our keys.
@@ -92,13 +97,19 @@ def load_clusters(csv_path: str) -> list[Cluster]:
 
 
 def retrieved_article_ids(conn, seed: int, source_key: str, *, threshold: float,
+                          hybrid_article_threshold: float, hybrid_box_threshold: float,
                           limit: int, lookback_days: int) -> set[int]:
-    """Distinct article ids retrieved from the seed under `source_key` (>=1 box)."""
+    """Distinct article ids retrieved from the seed under `source_key` (>=1 box).
+
+    Hybrid sources use `hybrid_article_threshold` for the article-level prefilter
+    and `hybrid_box_threshold` for the insight-box step; others use `threshold`.
+    """
     src = stages.INSIGHT_SOURCES[source_key]
-    ranked = stages._ranked_insight_hits(
-        conn, seed, table=src.table, label_col=src.label_col,
-        filter_drop=src.filter_drop, threshold=threshold, limit=limit,
-        lookback_days=lookback_days, real_news_only=False,
+    box_thr = hybrid_box_threshold if src.hybrid else threshold
+    art_thr = hybrid_article_threshold if src.hybrid else None
+    ranked = stages.ranked_precedent_hits(
+        conn, seed, src, threshold=box_thr, limit=limit, lookback_days=lookback_days,
+        real_news_only=False, article_threshold=art_thr,
     )
     return {aid for _sim, aid, *_ in ranked}
 
@@ -114,15 +125,19 @@ def _metrics(expected: set[int], retrieved: set[int]) -> dict:
                 prec=P, rec=R, f1=F)
 
 
-def evaluate(conn, clusters: list[Cluster], *, threshold: float, limit: int,
-             lookback_plus: int) -> list[dict]:
+def evaluate(conn, clusters: list[Cluster], *, threshold: float,
+             hybrid_article_threshold: float, hybrid_box_threshold: float,
+             limit: int, lookback_plus: int) -> list[dict]:
     """Per-cluster metrics for every method, scored vs own column and vs overlap."""
     results = []
     for c in clusters:
         lb = c.lookback_days + lookback_plus
         retrieved = {
-            name: retrieved_article_ids(conn, c.seed, key, threshold=threshold,
-                                        limit=limit, lookback_days=lb)
+            name: retrieved_article_ids(
+                conn, c.seed, key, threshold=threshold,
+                hybrid_article_threshold=hybrid_article_threshold,
+                hybrid_box_threshold=hybrid_box_threshold,
+                limit=limit, lookback_days=lb)
             for name, key, _kind in METHODS
         }
         own = {name: _metrics(c.expected(kind), retrieved[name])
@@ -146,15 +161,18 @@ def _agg(results: list[dict], key: str, name: str) -> dict:
                 TP=TP, FP=FP, FN=FN)
 
 
-def format_report(results: list[dict], *, threshold: float, limit: int,
-                  lookback_plus: int) -> str:
+def format_report(results: list[dict], *, threshold: float,
+                  hybrid_article_threshold: float, hybrid_box_threshold: float,
+                  limit: int, lookback_plus: int) -> str:
     L = ["# Cluster retrieval evaluation\n",
          f"Seed = each cluster's `later act` real-news article. lookback = cluster column "
-         f"**+{lookback_plus}d**. threshold {threshold}, limit {limit}, all categories.",
-         "Retrieval core = `stages._ranked_insight_hits`; article-level hits (a target is hit "
-         "if ≥1 of its boxes is retrieved).",
-         "`insight_orig` scored vs the article-insights column; distilled variants vs the "
-         "distilled column.\n"]
+         f"**+{lookback_plus}d**. threshold {threshold} (hybrid: article {hybrid_article_threshold} "
+         f"→ box {hybrid_box_threshold}), limit {limit}, all categories.",
+         "Retrieval core = `stages.ranked_precedent_hits`; article-level hits (a target is hit "
+         "if ≥1 of its boxes is retrieved). `*_hybrid` methods prefilter to an article-level "
+         "ANN candidate subset, then run the insight-box ANN within it.",
+         "`insight_orig` / `insights_hybrid` scored vs the article-insights column; distilled "
+         "variants vs the distilled column.\n"]
 
     def section(title: str, key: str) -> None:
         L.append(f"\n# {title}\n")
@@ -193,8 +211,9 @@ def format_report(results: list[dict], *, threshold: float, limit: int,
 
 def run(csv_path: str = "docs/article_clusters.csv",
         out_path: str | None = "docs/cluster_retrieval_eval.md",
-        dsn: str | None = None, *, threshold: float = 0.7, limit: int = 60,
-        lookback_plus: int = 1) -> str:
+        dsn: str | None = None, *, threshold: float = 0.7,
+        hybrid_article_threshold: float = 0.4, hybrid_box_threshold: float = 0.65,
+        limit: int = 60, lookback_plus: int = 1) -> str:
     """Evaluate, write the report (if out_path), print a summary; return the report."""
     from ticker_news.evals.pipeline_eval import connect_eval
 
@@ -203,12 +222,16 @@ def run(csv_path: str = "docs/article_clusters.csv",
         raise SystemExit(f"no usable clusters in {csv_path}")
     conn = connect_eval(dsn)
     try:
-        results = evaluate(conn, clusters, threshold=threshold, limit=limit,
+        results = evaluate(conn, clusters, threshold=threshold,
+                           hybrid_article_threshold=hybrid_article_threshold,
+                           hybrid_box_threshold=hybrid_box_threshold, limit=limit,
                            lookback_plus=lookback_plus)
     finally:
         conn.rollback()
         conn.close()
-    report = format_report(results, threshold=threshold, limit=limit,
+    report = format_report(results, threshold=threshold,
+                           hybrid_article_threshold=hybrid_article_threshold,
+                           hybrid_box_threshold=hybrid_box_threshold, limit=limit,
                            lookback_plus=lookback_plus)
     if out_path:
         with open(out_path, "w", encoding="utf-8") as fh:
