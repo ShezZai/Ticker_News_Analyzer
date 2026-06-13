@@ -108,6 +108,45 @@ def _default_confirm():
     return build_classifier(GEMINI_FLASH)
 
 
+@lru_cache(maxsize=1)
+def _default_finegrained():
+    """The production single-pass fine-grained classifier (flash-lite).
+
+    lru_cached like the two-pass defaults, so Langfuse prompt edits to
+    'classify-finegrained' take effect only after a process restart.
+    """
+    from ticker_news.classification.variants import build_finegrained_classifier
+
+    return build_finegrained_classifier(GEMINI_FLASH_LITE)
+
+
+def classify_article_finegrained(
+    title: Optional[str],
+    content: str,
+    *,
+    chain=None,
+    config=None,
+) -> Tuple[str, Optional[str], bool]:
+    """Single-pass fine-grained classification for the production pipeline.
+
+    Returns ``(category, reason, is_act)``: the fine-grained taxonomy label,
+    its one-clause reason, and the ACT/no-ACT collapse (``is_act_finegrained``
+    — True iff the category is one of the actionable NEWS subtypes). Exactly one
+    Gemini call per article — no confirmation pass.
+    """
+    from ticker_news.classification.variants import is_act_finegrained
+
+    chain = chain if chain is not None else _default_finegrained()
+    inputs = {
+        "title": (title or "").strip()[:300],
+        "body": (content or "")[:MAX_ARTICLE_CHARS],
+    }
+    verdict = chain.invoke(
+        inputs, config={**(config or {}), "run_name": "classify:finegrained"}
+    )
+    return verdict.category, (verdict.reason or None), is_act_finegrained(verdict.category)
+
+
 def classify_article(
     title: Optional[str],
     content: str,

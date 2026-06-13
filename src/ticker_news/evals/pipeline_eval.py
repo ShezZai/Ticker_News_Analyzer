@@ -4,7 +4,11 @@ experiment.
 
 Scoring is directional agreement: buy+up = 1, sell+down = 1, wrong direction
 = 0; hold / no-verdict / no-price-data are excluded (value None) with an
-explanatory comment. The raw entry->close move is recorded as a second score.
+explanatory comment. The raw published->close move is recorded as a second
+score. The realized move is read from the dataset item's
+``expected_output.gain_pct`` (prefetched when the dataset was seeded from
+langfuse_datasets/400-e2e.filled.csv) - no Massive call at eval time. Local
+``--ids`` runs carry no expected_output, so they get no price-based scores.
 
 Design: docs/superpowers/specs/2026-06-11-e2e-pipeline-eval-design.md
 """
@@ -12,8 +16,7 @@ Design: docs/superpowers/specs/2026-06-11-e2e-pipeline-eval-design.md
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
-from functools import lru_cache
+from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg
@@ -26,7 +29,7 @@ SKIPPABLE_STAGES = ("embed", "classify", "tag", "insights")
 # stage -> articles columns nulled when the stage is NOT kept.
 _STAGE_COLUMNS = {
     "embed": ("embedding",),
-    "classify": ("category", "category_reason"),
+    "classify": ("category", "category_reason", "is_act"),
     "tag": ("primary_ticker", "primary_segment", "more_tickers", "more_segments"),
     "insights": ("insights_extracted_at",),
 }
@@ -90,6 +93,33 @@ def score_directional(
     return (1.0 if correct else 0.0), f"{action} with {gain_pct:+.2f}% by close -> {verdict}"
 
 
+def score_acceptable(
+    action: str | None,
+    acceptable: list[str] | None,
+    *,
+    skip_reason: str | None = None,
+) -> tuple[float | None, str]:
+    """Set-membership score for one verdict vs the acceptable-verdict set.
+
+    `acceptable` is the dataset item's expected list under the +-0.3% deadband
+    rule (e.g. ["buy", "hold"] for a small up-move, ["sell"] for a clear drop).
+    A verdict is correct iff it is in that set, so both the gain-direction call
+    AND hold count inside the deadband while the opposite-direction call does
+    not. Returns (value, comment): 1.0 / 0.0, or None when the item cannot be
+    scored — no verdict was produced, or there is no expected set (local --ids
+    runs carry no expected_output). None scores are excluded from aggregates.
+    """
+    if not acceptable:
+        return None, "no acceptable_verdicts (local run or missing expected output)"
+    if action is None:
+        return None, f"no verdict ({skip_reason or 'sentiment skipped'})"
+    a = action.lower()
+    ok = a in acceptable
+    return (1.0 if ok else 0.0), (
+        f"verdict '{a}' vs acceptable {acceptable} -> {'acceptable' if ok else 'wrong'}"
+    )
+
+
 def upsert_dataset_items(client, dataset_name: str, items: list[dict]) -> None:
     """Idempotently seed dataset items keyed on input.article_id.
 
@@ -151,7 +181,11 @@ def ensure_eval_schema(conn: psycopg.Connection) -> None:
             "WHERE table_schema = 'public' AND table_name = 'articles'"
         ).fetchall()
     }
-    wanted = {"insights_extracted_at": "timestamptz", "provider_sentiments": "jsonb"}
+    wanted = {
+        "insights_extracted_at": "timestamptz",
+        "provider_sentiments": "jsonb",
+        "is_act": "boolean",
+    }
     for column, pg_type in wanted.items():
         if column not in existing:
             conn.execute(
@@ -224,69 +258,66 @@ def reset_article(
     conn.commit()
 
 
-def realized_move(ticker: str, published_utc: datetime) -> tuple[float | None, str | None]:
-    """Entry->close move per the backtest rule. Returns (gain_pct, error).
-
-    Entry = first tradeable minute bar at/after publication; exit = that day's
-    regular close, or the next session's close for extended-hours entries
-    (include_after_hours=True so evening articles still get scored).
-    """
-    from ticker_news.research import ticker_scan as ts
-
-    pub_et = published_utc.astimezone(ts.MARKET_TZ)
-    frm = (pub_et.date() - timedelta(days=1)).isoformat()
-    to = (pub_et.date() + timedelta(days=7)).isoformat()
-    try:
-        prices = ts.fetch_prices(ticker, frm, to)
-    except RuntimeError as exc:  # covers ScanError; missing MASSIVE_API_KEY etc.
-        return None, str(exc)
-    sim = ts.simulate(
-        {"id": 0, "ticker": ticker, "published_et": pub_et}, prices,
-        include_after_hours=True,
-    )
-    if sim is None:
-        return None, "no tradeable entry/exit bar"
-    return sim["gain_pct"], None
+_NO_GAIN_PCT = "no prefetched gain_pct (local --ids run or unseeded dataset item)"
 
 
-@lru_cache(maxsize=256)
-def _cached_move(ticker: str, published_iso: str) -> tuple[float | None, str | None]:
-    """Both item evaluators need the move; fetch Massive bars only once."""
-    return realized_move(ticker, datetime.fromisoformat(published_iso))
-
-
-def directional_agreement_evaluator(*, input, output, **kwargs) -> Evaluation:
+def directional_agreement_evaluator(
+    *, input, output, expected_output=None, **kwargs
+) -> Evaluation:
     """Langfuse item evaluator (input/output names fixed by its contract).
 
-    Langfuse rejects value=None scores, so excluded items (hold, no verdict,
-    no price data) are recorded as a categorical sibling score instead —
-    visible and filterable rather than silently absent.
+    The realized move is read from ``expected_output.gain_pct`` (prefetched at
+    dataset-seed time) — no Massive call. Langfuse rejects value=None scores, so
+    excluded items (hold, no verdict, no prefetched price) are recorded as a
+    categorical sibling score instead — visible and filterable rather than
+    silently absent.
     """
     out = output or {}
-    action, ticker = out.get("action"), out.get("ticker")
-    gain_pct, price_err = None, "no primary ticker"
-    if ticker:
-        gain_pct, price_err = _cached_move(ticker, input["published_utc"])
-    value, comment = score_directional(
-        action, gain_pct, skip_reason=out.get("skip_reason") or price_err
-    )
+    action = out.get("action")
+    gain_pct = (expected_output or {}).get("gain_pct")
+    skip_reason = out.get("skip_reason") or (None if gain_pct is not None else _NO_GAIN_PCT)
+    value, comment = score_directional(action, gain_pct, skip_reason=skip_reason)
     if value is None:
         return Evaluation(name="directional_agreement_skip", value=comment)
     return Evaluation(name="directional_agreement", value=value, comment=comment)
 
 
-def price_move_evaluator(*, input, output, **kwargs) -> Evaluation:
-    """Langfuse item evaluator: raw entry->close move, recorded even when unscored."""
-    ticker = (output or {}).get("ticker")
-    if not ticker:
-        return Evaluation(name="price_move_pct_skip", value="no primary ticker")
-    gain_pct, price_err = _cached_move(ticker, input["published_utc"])
+def price_move_evaluator(*, input, output, expected_output=None, **kwargs) -> Evaluation:
+    """Langfuse item evaluator: raw published->close move from the dataset item.
+
+    Read straight from ``expected_output.gain_pct``; recorded even for items
+    whose verdict is unscored (hold etc.). Local --ids runs have no expected
+    output and become a categorical skip score.
+    """
+    gain_pct = (expected_output or {}).get("gain_pct")
     if gain_pct is None:
-        return Evaluation(name="price_move_pct_skip", value=price_err or "unknown")
+        return Evaluation(name="price_move_pct_skip", value=_NO_GAIN_PCT)
     return Evaluation(
         name="price_move_pct", value=gain_pct,
-        comment=f"entry->close move {gain_pct:+.2f}%",
+        comment=f"published->close move {gain_pct:+.2f}%",
     )
+
+
+def verdict_acceptable_evaluator(
+    *, input, output, expected_output=None, **kwargs
+) -> Evaluation:
+    """Langfuse item evaluator: is the produced verdict in the dataset item's
+    acceptable-verdict set (the +-0.3% deadband rule)?
+
+    Reads ``expected_output.acceptable_verdicts``, which is present only on
+    dataset runs (e.g. `400-articles-sentiment-verdict`); local --ids runs have
+    no expected output and are skipped. Langfuse rejects value=None, so
+    unscorable items become a categorical sibling score, matching
+    directional_agreement_evaluator.
+    """
+    out = output or {}
+    acceptable = (expected_output or {}).get("acceptable_verdicts")
+    value, comment = score_acceptable(
+        out.get("action"), acceptable, skip_reason=out.get("skip_reason")
+    )
+    if value is None:
+        return Evaluation(name="verdict_acceptable_skip", value=comment)
+    return Evaluation(name="verdict_acceptable", value=value, comment=comment)
 
 
 def avg_directional_agreement(*, item_results, **kwargs) -> Evaluation:
@@ -303,6 +334,24 @@ def avg_directional_agreement(*, item_results, **kwargs) -> Evaluation:
     avg = sum(values) / len(values)
     return Evaluation(
         name="avg_directional_agreement", value=avg,
+        comment=f"scored {len(values)}/{len(item_results)} items, avg {avg:.2f}",
+    )
+
+
+def avg_verdict_acceptable(*, item_results, **kwargs) -> Evaluation:
+    """Run-level accuracy under the deadband rule: fraction of scorable items
+    whose verdict was in the acceptable set."""
+    values = [
+        e.value
+        for r in item_results
+        for e in r.evaluations
+        if e.name == "verdict_acceptable" and e.value is not None
+    ]
+    if not values:
+        return Evaluation(name="avg_verdict_acceptable_skip", value="no scorable items")
+    avg = sum(values) / len(values)
+    return Evaluation(
+        name="avg_verdict_acceptable", value=avg,
         comment=f"scored {len(values)}/{len(item_results)} items, avg {avg:.2f}",
     )
 
@@ -388,12 +437,14 @@ def make_task(
                     )
                 if verdict is None:
                     row = conn.execute(
-                        "SELECT primary_ticker FROM public.articles WHERE id = %s",
+                        "SELECT primary_ticker, is_act FROM public.articles WHERE id = %s",
                         (article_id,),
                     ).fetchone()
                     ticker = row[0] if row else None
+                    is_act = row[1] if row else None
+                    actionable = bool(is_act) if is_act is not None else category == "real news"
                     reason = (
-                        f"category={category}" if category != "real news"
+                        f"not actionable (category={category})" if not actionable
                         else "no primary ticker" if not ticker
                         else "sentiment skipped"
                     )
@@ -447,7 +498,6 @@ def run_eval(
     missing = [
         name
         for name, val in (
-            ("MASSIVE_API_KEY", s.massive_api_key),
             ("GOOGLE_API_KEY", s.google_api_key),
             ("OPENAI_API_KEY", s.openai_api_key),
         )
@@ -475,8 +525,12 @@ def run_eval(
         run_name=run_name,
         description=_DESCRIPTION,
         task=make_task(dsn, skip_stages, precedent_source),
-        evaluators=[directional_agreement_evaluator, price_move_evaluator],
-        run_evaluators=[avg_directional_agreement],
+        evaluators=[
+            directional_agreement_evaluator,
+            price_move_evaluator,
+            verdict_acceptable_evaluator,
+        ],
+        run_evaluators=[avg_directional_agreement, avg_verdict_acceptable],
         # The async task offloads each item's stage chain to a thread, so this
         # genuinely caps concurrent items. Kept modest by default - every item
         # fans out ~7 LLM calls and hits the shared DB, so the real ceiling is

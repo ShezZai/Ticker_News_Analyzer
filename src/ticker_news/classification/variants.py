@@ -1,8 +1,13 @@
-"""Experimental classification prompt variants: binary and fine-grained.
+"""Classification prompt variants: binary and fine-grained.
 
-Single-pass eval classifiers evaluated by `ticker-news eval classify` against
-the hand-labeled ground-truth set (spec: docs/superpowers/specs/2026-06-12-classify-single-pass-experiments-design.md).
-Not wired into the pipeline; promoting a winner stays a human decision.
+Single-pass classifiers evaluated by `ticker-news eval classify` against the
+hand-labeled ground-truth set (spec: docs/superpowers/specs/2026-06-12-classify-single-pass-experiments-design.md).
+
+The fine-grained classifier (`build_finegrained_classifier` + `is_act_finegrained`)
+is now the PRODUCTION classifier: `classification.chain.classify_article_finegrained`
+wraps it as the pipeline's single-pass classify stage, storing the fine-grained
+`category` and the ACT/no-ACT collapse (`is_act`). The binary variant remains
+eval-only.
 """
 
 from __future__ import annotations

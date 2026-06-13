@@ -16,19 +16,26 @@ try:  # optional progress bar
 except ImportError:  # pragma: no cover
     tqdm = None
 
-from ticker_news.classification.chain import classify_article
-from ticker_news.classification.schemas import CATEGORIES
+from ticker_news.classification.chain import classify_article_finegrained
+from ticker_news.classification.variants import FINEGRAINED_CATEGORIES
 from ticker_news.shared import observability as obs
 from ticker_news.shared.db import connect
 
 
 def ensure_schema(conn: psycopg.Connection) -> None:
-    """Add the category columns + a filter index if they don't already exist."""
+    """Add the category columns + a filter index if they don't already exist.
+
+    `is_act` is the ACT/no-ACT collapse of the fine-grained category written by
+    the production classifier; it is NULL for rows classified before the
+    fine-grained switch, which downstream gates handle via
+    COALESCE(is_act, category = 'real news').
+    """
     with conn.cursor() as cur:
         cur.execute(
             "ALTER TABLE public.articles "
             "ADD COLUMN IF NOT EXISTS category        text, "
-            "ADD COLUMN IF NOT EXISTS category_reason text"
+            "ADD COLUMN IF NOT EXISTS category_reason text, "
+            "ADD COLUMN IF NOT EXISTS is_act          boolean"
         )
         cur.execute(
             "CREATE INDEX IF NOT EXISTS articles_category_idx "
@@ -86,19 +93,20 @@ def classify_all(
             return 0
 
         print(f"Classifying {len(rows)} article(s) with {workers} worker(s) "
-              f"(lite first-pass; flash confirmation for real news) …")
+              f"(single-pass fine-grained; ACT/no-ACT collapse) …")
 
         done = 0
         n_failed = 0
-        counts = {c: 0 for c in CATEGORIES}
-        pending: List[tuple] = []  # (category, reason, id) awaiting UPDATE
+        counts = {c: 0 for c in FINEGRAINED_CATEGORIES}
+        pending: List[tuple] = []  # (category, reason, is_act, id) awaiting UPDATE
 
         def flush() -> None:
             if not pending:
                 return
             with conn.cursor() as cur:
                 cur.executemany(
-                    "UPDATE public.articles SET category = %s, category_reason = %s "
+                    "UPDATE public.articles "
+                    "SET category = %s, category_reason = %s, is_act = %s "
                     "WHERE id = %s",
                     pending,
                 )
@@ -106,7 +114,9 @@ def classify_all(
             pending.clear()
 
         def _classify_with_cfg(title, content):
-            return classify_article(title, content, config=obs.chain_config() or None)
+            return classify_article_finegrained(
+                title, content, config=obs.chain_config() or None
+            )
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
@@ -119,14 +129,14 @@ def classify_all(
             for fut in pbar:
                 aid, _title = futures[fut]
                 try:
-                    verdict, _confirmed = fut.result()
+                    category, reason, is_act = fut.result()
                 except Exception as exc:  # exhausted retries on a single article
                     n_failed += 1
                     print(f"  article {aid}: {exc}")
                     continue
-                counts[verdict.category] += 1
+                counts[category] += 1
                 done += 1
-                pending.append((verdict.category, verdict.reason or None, aid))
+                pending.append((category, reason, is_act, aid))
                 if len(pending) >= batch_size:
                     flush()
                 if tqdm and hasattr(pbar, "set_postfix_str"):
@@ -134,8 +144,8 @@ def classify_all(
             flush()
 
         print(f"Classified {done} article(s); {n_failed} failed.")
-        for c in CATEGORIES:
-            print(f"  {c:<20} {counts[c]}")
+        for c in FINEGRAINED_CATEGORIES:
+            print(f"  {c:<28} {counts[c]}")
         return done
     finally:
         obs.flush()

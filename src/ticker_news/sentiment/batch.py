@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ticker_news.sentiment import store
-from ticker_news.service.stages import sentiment_stage
+from ticker_news.service.stages import _actionable_sql, sentiment_stage
 from ticker_news.shared import observability as obs
 from ticker_news.shared.db import connect
 
@@ -24,7 +24,7 @@ def run_batch(*, limit: int | None = None, reprocess: bool = False) -> int:
         lim = f"LIMIT {int(limit)}" if limit else ""
         rows = conn.execute(
             f"SELECT a.url, a.primary_ticker FROM public.articles a "
-            f"WHERE a.category = 'real news' AND a.primary_ticker IS NOT NULL "
+            f"WHERE {_actionable_sql('a')} AND a.primary_ticker IS NOT NULL "
             f"AND a.content IS NOT NULL AND a.content <> '' {not_done} ORDER BY a.published_utc {lim}"
         ).fetchall()
         urls = [url for url, _ticker in rows]

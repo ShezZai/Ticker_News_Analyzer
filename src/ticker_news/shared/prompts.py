@@ -6,9 +6,9 @@ down or disabled.
 
 NOTE: chains that call get_prompt() are lru_cached — prompt updates in
 Langfuse require a process restart before the new text takes effect in those
-chains. Renderers that call get_prompt() directly (e.g. analysts.render_analyst,
-analysts.render_synthesis) do fetch per call, but Langfuse's client-side prompt
-cache (TTL-based, default ~60s) absorbs the overhead.
+chains. Renderers that call get_prompt() directly (e.g. analysts.render_verdict)
+do fetch per call, but Langfuse's client-side prompt cache (TTL-based, default
+~60s) absorbs the overhead.
 """
 
 from __future__ import annotations
@@ -74,18 +74,15 @@ def registry() -> dict[str, str]:
         FINEGRAINED_PROMPT_TEMPLATE,
     )
     from ticker_news.enrichment.insights import PROMPT_TEMPLATE as insights_prompt
-    from ticker_news.sentiment.analysts import ANALYST_PROMPTS, SYNTHESIS_PROMPT
+    from ticker_news.sentiment.analysts import SENTIMENT_VERDICT_PROMPT
 
-    reg = {
+    return {
         "classify-article": classify_prompt,
         "classify-binary": BINARY_PROMPT_TEMPLATE,
         "classify-finegrained": FINEGRAINED_PROMPT_TEMPLATE,
         "extract-insights": insights_prompt,
-        "synthesize-verdict": SYNTHESIS_PROMPT,
+        "sentiment-verdict": SENTIMENT_VERDICT_PROMPT,
     }
-    for role, prompt in ANALYST_PROMPTS.items():
-        reg[f"analyst-{role}"] = prompt
-    return reg
 
 
 def push_all() -> int:

@@ -16,6 +16,7 @@ from typing import Awaitable, Callable, Mapping, Union
 
 import psycopg
 
+from ticker_news.classification import pipeline as classify_pipeline
 from ticker_news.ingestion.feed import NewsFeedSource
 from ticker_news.service import jobs, stages
 from ticker_news.service.jobs import DONE, Job, NOTIFY_CHANNEL
@@ -154,6 +155,7 @@ async def serve(
     setup_conn = db.connect()
     jobs.ensure_schema(setup_conn)
     sentiment_store.ensure_schema(setup_conn)
+    classify_pipeline.ensure_schema(setup_conn)  # category + category_reason + is_act
     recovered = jobs.recover_orphans(setup_conn)
     if recovered:
         logger.info("recovered %d orphaned running job(s)", recovered)
