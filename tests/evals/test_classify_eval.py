@@ -468,12 +468,35 @@ class TestMakeTask:
 
 class TestExperimentSpecs:
     def test_spec_table(self):
-        assert set(EXPERIMENTS) == {"binary", "finegrained"}
+        assert set(EXPERIMENTS) == {"binary", "finegrained", "finegrained-act"}
         b, f = EXPERIMENTS["binary"], EXPERIMENTS["finegrained"]
         assert b.dataset == "140-articles-act-no-act"
         assert b.experiment_name == "classify-binary"
         assert f.dataset == "140-articles-categories"
         assert f.experiment_name == "classify-finegrained"
+
+    def test_finegrained_act_scores_against_the_binary_dataset(self):
+        # finegrained classifier, collapsed to ACT, judged against the SAME
+        # human YES/NO ground truth as the binary classifier -> comparable
+        # precision/recall/F1.
+        fa = EXPERIMENTS["finegrained-act"]
+        assert fa.dataset == "140-articles-act-no-act"
+        assert fa.experiment_name == "classify-finegrained-act"
+
+    def test_finegrained_act_uses_binary_confusion_metrics(self):
+        from ticker_news.evals.classify_eval import (
+            binary_confusion_run_evaluator,
+            derived_act_run_evaluator,
+            finegrained_confusion_run_evaluator,
+            label_accuracy_run_evaluator,
+        )
+
+        fa = EXPERIMENTS["finegrained-act"]
+        assert binary_confusion_run_evaluator in fa.run_evaluators
+        assert label_accuracy_run_evaluator in fa.run_evaluators
+        # category-space evaluators make no sense once collapsed to YES/NO
+        assert derived_act_run_evaluator not in fa.run_evaluators
+        assert finegrained_confusion_run_evaluator not in fa.run_evaluators
 
     def test_binary_has_confusion_finegrained_has_derived_act(self):
         from ticker_news.evals.classify_eval import (
@@ -496,6 +519,82 @@ class TestExperimentSpecs:
                 in EXPERIMENTS["finegrained"].run_evaluators)
         assert (finegrained_confusion_run_evaluator
                 not in EXPERIMENTS["binary"].run_evaluators)
+
+
+class TestMakeClassifierFinegrainedAct:
+    """The finegrained-act variant reuses the finegrained chain but emits the
+    binary YES/NO label space via the category->ACT mapping (is_act_finegrained)."""
+
+    def _clf(self, monkeypatch):
+        from ticker_news.classification import variants
+
+        monkeypatch.setattr(variants, "build_finegrained_classifier",
+                            lambda model_name: "FINEGRAINED_CHAIN")
+        return variants.make_classifier("finegrained-act", "gemini-2.5-flash-lite")
+
+    def test_reuses_the_finegrained_chain(self, monkeypatch):
+        clf = self._clf(monkeypatch)
+        assert clf.variant == "finegrained-act"
+        assert clf.chain == "FINEGRAINED_CHAIN"
+
+    def test_label_of_keeps_the_raw_category(self, monkeypatch):
+        from ticker_news.classification.variants import FinegrainedClassification
+
+        clf = self._clf(monkeypatch)
+        v = FinegrainedClassification(category="earnings-reporting")
+        assert clf.label_of(v) == "earnings-reporting"
+
+    def test_news_category_maps_to_yes(self, monkeypatch):
+        from ticker_news.classification.variants import FinegrainedClassification
+
+        clf = self._clf(monkeypatch)
+        for cat in ("earnings-reporting", "merger/investment/funding", "news-report"):
+            assert clf.dataset_label_of(FinegrainedClassification(category=cat)) == "YES"
+
+    def test_not_news_category_maps_to_no(self, monkeypatch):
+        from ticker_news.classification.variants import FinegrainedClassification
+
+        clf = self._clf(monkeypatch)
+        for cat in ("recap/review", "legal-call", "other"):
+            assert clf.dataset_label_of(FinegrainedClassification(category=cat)) == "NO"
+
+    def test_unknown_variant_still_rejected(self):
+        from ticker_news.classification.variants import make_classifier
+
+        with pytest.raises(ValueError, match="unknown variant"):
+            make_classifier("nonsense", "gemini-2.5-flash-lite")
+
+
+class TestActMappingMatchesCsv:
+    """The code mapping (NEWS_SUBTYPES / is_act_finegrained) is the source of
+    truth; this pins it to the committed mapping CSV so the two never drift."""
+
+    def _mapping(self):
+        import csv
+        import pathlib
+
+        path = pathlib.Path(__file__).parent / "data" / "categories-act-no-act-mapping.csv"
+        with path.open(newline="", encoding="utf-8") as fh:
+            return list(csv.DictReader(fh))
+
+    def test_news_subtypes_equal_csv_yes_categories(self):
+        from ticker_news.classification.variants import NEWS_SUBTYPES
+
+        yes = {r["category"] for r in self._mapping() if r["act"].strip().upper() == "YES"}
+        assert yes == set(NEWS_SUBTYPES)
+
+    def test_every_mapped_category_is_a_known_finegrained_category(self):
+        from ticker_news.classification.variants import FINEGRAINED_CATEGORIES
+
+        mapped = {r["category"] for r in self._mapping()}
+        assert mapped <= set(FINEGRAINED_CATEGORIES)
+
+    def test_is_act_finegrained_agrees_with_the_csv_for_every_row(self):
+        from ticker_news.classification.variants import is_act_finegrained
+
+        for row in self._mapping():
+            expected = row["act"].strip().upper() == "YES"
+            assert is_act_finegrained(row["category"]) is expected, row["category"]
 
 
 class TestWarnFailedItems:

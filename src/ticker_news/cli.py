@@ -613,7 +613,7 @@ def eval_pipeline(
 
 @eval_app.command("classify")
 def eval_classify(
-    variant: str = typer.Option("both", "--variant", help="both | binary | finegrained."),
+    variant: str = typer.Option("both", "--variant", help="both | binary | finegrained | finegrained-act (finegrained classifier mapped to ACT, scored vs the binary dataset)."),
     model: str = typer.Option("lite", "--model", help="lite (gemini-2.5-flash-lite) | flash (gemini-2.5-flash)."),
     dataset: str | None = typer.Option(None, "--dataset", help="Dataset override (single --variant only; default: the variant's own dataset)."),
     ids: str | None = typer.Option(None, "--ids", help="Comma-separated article ids: run only this dataset subset (fast prompt iteration)."),
@@ -622,11 +622,11 @@ def eval_classify(
     concurrency: int = typer.Option(16, "--concurrency", min=1, help="Max concurrent dataset items."),
 ) -> None:
     """Single-pass classifier experiments: binary vs ACT labels, finegrained vs categories."""
-    from ticker_news.classification.variants import MODEL_CHOICES, VARIANTS
+    from ticker_news.classification.variants import EVAL_VARIANTS, MODEL_CHOICES, VARIANTS
     from ticker_news.evals import classify_eval
 
-    if variant not in ("both", *VARIANTS):
-        raise typer.BadParameter(f"--variant must be one of: both, {', '.join(VARIANTS)}")
+    if variant not in ("both", *EVAL_VARIANTS):
+        raise typer.BadParameter(f"--variant must be one of: both, {', '.join(EVAL_VARIANTS)}")
     if model not in MODEL_CHOICES:
         raise typer.BadParameter(f"--model must be one of: {', '.join(MODEL_CHOICES)}")
     try:

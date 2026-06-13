@@ -20,6 +20,11 @@ GEMINI_TIMEOUT_S = 60.0
 RETRIES = 4
 
 VARIANTS = ("binary", "finegrained")
+# Eval-only experiments. "finegrained-act" reuses the finegrained classifier
+# but collapses its category to the binary YES/NO label space (via the
+# category->ACT mapping) and is scored against 140-articles-act-no-act, so its
+# precision/recall/F1 are directly comparable to the "binary" variant.
+EVAL_VARIANTS = (*VARIANTS, "finegrained-act")
 
 # ---------------------------------------------------------------------------
 # Schemas, category constants, helpers
@@ -302,16 +307,24 @@ class Classifier:
 
 
 def make_classifier(variant: str, model_name: str) -> Classifier:
-    """Build the single-pass classifier for a variant (fresh — no lru_cache)."""
-    if variant not in VARIANTS:
-        raise ValueError(f"unknown variant {variant!r} (expected one of {VARIANTS})")
+    """Build the single-pass classifier for a variant (fresh — no lru_cache).
+
+    "finegrained-act" reuses the finegrained chain but maps its category down
+    to YES/NO (the binary label space) so it can be scored against the
+    act-no-act dataset alongside the binary classifier."""
+    if variant not in EVAL_VARIANTS:
+        raise ValueError(f"unknown variant {variant!r} (expected one of {EVAL_VARIANTS})")
     if variant == "binary":
         chain = build_binary_classifier(model_name)
         label_of = lambda v: v.label  # noqa: E731
         dataset_label_of = lambda v: "YES" if is_act_binary(v.label) else "NO"  # noqa: E731
-    else:
+    else:  # finegrained, finegrained-act -> same fine-grained chain
         chain = build_finegrained_classifier(model_name)
         label_of = lambda v: v.category  # noqa: E731
-        dataset_label_of = label_of
+        if variant == "finegrained-act":
+            dataset_label_of = (  # noqa: E731
+                lambda v: "YES" if is_act_finegrained(v.category) else "NO")
+        else:
+            dataset_label_of = label_of
     return Classifier(chain=chain, variant=variant, model=model_name,
                       label_of=label_of, dataset_label_of=dataset_label_of)

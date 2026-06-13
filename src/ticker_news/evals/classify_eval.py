@@ -351,6 +351,16 @@ EXPERIMENTS: dict[str, ExperimentSpec] = {
         run_evaluators=(label_accuracy_run_evaluator, derived_act_run_evaluator,
                         finegrained_confusion_run_evaluator),
     ),
+    # Fine-grained classifier, category collapsed to ACT, judged against the
+    # SAME human YES/NO ground truth as "binary" -> YES-class precision/recall/F1
+    # are directly comparable (does routing through the taxonomy lift the
+    # binary classifier's weak recall?).
+    "finegrained-act": ExperimentSpec(
+        dataset="140-articles-act-no-act",
+        experiment_name="classify-finegrained-act",
+        evaluators=SHARED_EVALUATORS,
+        run_evaluators=(label_accuracy_run_evaluator, binary_confusion_run_evaluator),
+    ),
 }
 
 _DESCRIPTION = (
