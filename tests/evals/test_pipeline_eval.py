@@ -1,5 +1,6 @@
 """Offline unit tests for the E2E pipeline eval. No DB, no network."""
 
+import asyncio
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -316,7 +317,7 @@ class TestRunPipelineTaskCategoryBackfill:
             lambda c, u, precedent_source=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None, skip_stages=frozenset({"classify"}))
-        out = task(item={"input": {"article_id": 20512, "url": "https://x/20512"}})
+        out = asyncio.run(task(item={"input": {"article_id": 20512, "url": "https://x/20512"}}))
         assert out["category"] == "real news"
         assert out["action"] == "buy"
 
@@ -341,7 +342,7 @@ class TestRunPipelineTaskCategoryBackfill:
             or {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None, precedent_source="insights")
-        task(item={"input": {"article_id": 20512, "url": "https://x/20512"}})
+        asyncio.run(task(item={"input": {"article_id": 20512, "url": "https://x/20512"}}))
         assert seen["src"] == "insights"
 
     def test_task_names_the_trace_after_experiment_and_article(self, monkeypatch):
@@ -373,7 +374,7 @@ class TestRunPipelineTaskCategoryBackfill:
             lambda c, u, precedent_source=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None)
-        task(item={"input": {"article_id": 20512, "url": "https://x/20512"}})
+        asyncio.run(task(item={"input": {"article_id": 20512, "url": "https://x/20512"}}))
         assert seen["trace_name"] == "pipeline-e2e:article-20512"
 
 

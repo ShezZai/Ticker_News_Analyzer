@@ -11,6 +11,7 @@ Design: docs/superpowers/specs/2026-06-11-e2e-pipeline-eval-design.md
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -336,9 +337,16 @@ def make_task(
     A fresh connection per invocation — sync psycopg connections must not be
     shared across the runner's concurrent task calls (same rule as the worker).
     `precedent_source` selects the sentiment precedent flow for this run.
+
+    The task is async so langfuse's runner parallelises items (a sync task body
+    blocks the event loop and runs serially regardless of max_concurrency). The
+    blocking stage chain is offloaded to a worker thread via ``asyncio.to_thread``,
+    which copies the OTEL context; ``propagate_attributes`` is set inside the
+    thread so each item builds its own trace, and the per-call psycopg connection
+    keeps the worker's "never share a sync connection" rule intact.
     """
 
-    def run_pipeline_task(*, item, **kwargs) -> dict:
+    def _run_one(item) -> dict:
         from langfuse import propagate_attributes
 
         from ticker_news.service import stages
@@ -397,6 +405,9 @@ def make_task(
             finally:
                 conn.close()
 
+    async def run_pipeline_task(*, item, **kwargs) -> dict:
+        return await asyncio.to_thread(_run_one, item)
+
     return run_pipeline_task
 
 
@@ -415,6 +426,7 @@ def run_eval(
     run_name: str | None = None,
     skip_stages: frozenset[str] = frozenset(),
     precedent_source: str | None = None,
+    concurrency: int = 4,
 ):
     """Run the E2E pipeline experiment; returns the langfuse ExperimentResult.
 
@@ -465,10 +477,11 @@ def run_eval(
         task=make_task(dsn, skip_stages, precedent_source),
         evaluators=[directional_agreement_evaluator, price_move_evaluator],
         run_evaluators=[avg_directional_agreement],
-        # Sync tasks run serially in langfuse 4.7.1 (no to_thread); this only
-        # caps the async evaluators. Kept low deliberately - each item already
-        # fans out ~7 LLM calls inside the stages.
-        max_concurrency=2,
+        # The async task offloads each item's stage chain to a thread, so this
+        # genuinely caps concurrent items. Kept modest by default - every item
+        # fans out ~7 LLM calls and hits the shared DB, so the real ceiling is
+        # the Gemini rate limiter, not this number.
+        max_concurrency=concurrency,
         metadata=metadata,
     )
     try:

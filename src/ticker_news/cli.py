@@ -574,6 +574,7 @@ def eval_pipeline(
     run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: auto-generated)."),
     skip_stages: str | None = typer.Option(None, "--skip-stages", help="Comma-separated stages whose stored outputs are reused instead of re-run: embed, classify, tag, insights (or 'all' for every one)."),
     precedent_source: str | None = typer.Option(None, "--precedent-source", help="Historical-precedent retrieval for the sentiment panel: 'article' (top-k similar articles), 'insights' (per-insight-box neighbors), 'distilled-first' (distilled boxes tagged by first_label), or 'distilled-second' (by second_label, DROP excluded). Default: config (SENTIMENT_PRECEDENT_SOURCE)."),
+    concurrency: int = typer.Option(4, "--concurrency", min=1, help="Max articles processed concurrently. Each item fans out ~7 LLM calls; the Gemini rate limiter is the real ceiling."),
 ) -> None:
     """Re-run articles E2E through the pipeline; score verdicts against actual price moves."""
     from ticker_news.evals import pipeline_eval
@@ -604,6 +605,7 @@ def eval_pipeline(
         result = pipeline_eval.run_eval(
             id_list, dataset_name=dataset, dsn=dsn, run_name=run_name,
             skip_stages=skip, precedent_source=precedent_source,
+            concurrency=concurrency,
         )
     except SystemExit as exc:
         typer.echo(str(exc), err=True)
