@@ -223,7 +223,54 @@ async def test_sentiment_judges_real_news(monkeypatch):
     assert result == {"ticker": "NVDA", "action": "hold", "confidence": 0.5}
 
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+
+def test_lookback_clause_unbounded_and_bounded():
+    pub = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    assert stages._lookback_clause(pub, None) == ("", [])
+    assert stages._lookback_clause(pub, 0) == ("", [])
+    assert stages._lookback_clause(pub, -5) == ("", [])
+    sql, params = stages._lookback_clause(pub, 90)
+    assert "{col} >= %s" in sql
+    assert params == [pub - timedelta(days=90)]
+
+
+def test_article_similarity_applies_lookback():
+    pub = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    captured = {}
+
+    class _Cap:
+        calls = 0
+
+        def execute(self, sql, params=None):
+            self.calls += 1
+            if self.calls == 1:
+                return _Row(([0.1], pub))           # target embedding, published
+            captured["sql"], captured["params"] = sql, params
+            return _Row([])
+
+    stages.article_similarity(_Cap(), 1, k=5, lookback_days=90)
+    assert "published_utc >= %s" in captured["sql"]
+    assert (pub - timedelta(days=90)) in captured["params"]
+
+
+def test_article_similarity_no_lookback_clause_when_unbounded():
+    pub = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    captured = {}
+
+    class _Cap:
+        calls = 0
+
+        def execute(self, sql, params=None):
+            self.calls += 1
+            if self.calls == 1:
+                return _Row(([0.1], pub))
+            captured["sql"], captured["params"] = sql, params
+            return _Row([])
+
+    stages.article_similarity(_Cap(), 1, k=5, lookback_days=None)
+    assert "published_utc >= %s" not in captured["sql"]
 
 
 class _InsightsCursor:
@@ -345,17 +392,19 @@ def test_gather_precedents_dispatches_on_config(monkeypatch):
     monkeypatch.setattr(stages, "insights_similarity",
                         lambda c, a, **kw: seen.update(kw) or ["insight-line"])
     monkeypatch.setattr(stages, "article_similarity",
-                        lambda c, a, k=5: ["article-line"])
+                        lambda c, a, **kw: seen.update(kw) or ["article-line"])
 
     class _S:
         precedent_source = "insights"
         precedent_insights_threshold = 0.7
         precedent_insights_limit = 40
+        precedent_lookback_days = 90
 
     monkeypatch.setattr(stages, "get_settings", lambda: _S())
     assert stages.gather_precedents(None, 1) == ["insight-line"]
     assert (seen["table"], seen["label_col"], seen["filter_drop"]) == (
         "public.article_insights", None, False)
+    assert seen["lookback_days"] == 90
     _S.precedent_source = "distilled-first"
     assert stages.gather_precedents(None, 1) == ["insight-line"]
     assert (seen["table"], seen["label_col"], seen["filter_drop"]) == (
@@ -366,6 +415,7 @@ def test_gather_precedents_dispatches_on_config(monkeypatch):
         "public.distilled_article_insights", "second_label", True)
     _S.precedent_source = "article"
     assert stages.gather_precedents(None, 1) == ["article-line"]
+    assert seen["lookback_days"] == 90
 
 
 # ---------------------------------------------------------------------------

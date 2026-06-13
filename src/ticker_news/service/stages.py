@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Callable, Optional
 
 import psycopg
@@ -223,14 +224,32 @@ def insights_stage(conn: psycopg.Connection, url: str, tag_ctx: TagContext) -> N
     conn.commit()
 
 
-def article_similarity(conn: psycopg.Connection, article_id: int, k: int = 5) -> list[str]:
+def _lookback_clause(published, lookback_days: int | None) -> tuple[str, list]:
+    """SQL fragment + params for the precedent lower time bound.
+
+    Returns ("", []) when unbounded (lookback_days None or <= 0); otherwise a
+    "published_utc >= %s" clause cutting off `lookback_days` before the target.
+    Column-unqualified so it suits both the article and joined-insight queries
+    (the latter aliases articles as `a`, so callers prefix as needed).
+    """
+    if not lookback_days or lookback_days <= 0:
+        return "", []
+    return " AND {col} >= %s", [published - timedelta(days=lookback_days)]
+
+
+def article_similarity(
+    conn: psycopg.Connection,
+    article_id: int,
+    k: int = 5,
+    lookback_days: int | None = None,
+) -> list[str]:
     """Cosine-nearest earlier real-news articles, using the stored embedding.
 
     Two-step on purpose: fetching the target embedding first lets the planner
     drive the second query through the HNSW index (a join-embedded ORDER BY
     <=> falls back to a sequential scan). Returns display lines for the
     historical-precedent analyst; empty when the target has no embedding or
-    no published_utc.
+    no published_utc. `lookback_days` bounds how far back precedents may be.
     """
     target = conn.execute(
         "SELECT embedding, published_utc FROM public.articles "
@@ -241,13 +260,15 @@ def article_similarity(conn: psycopg.Connection, article_id: int, k: int = 5) ->
         logger.debug("no embedding/published_utc for article %s; skipping precedents", article_id)
         return []
     embedding, published = target
+    lb_sql, lb_params = _lookback_clause(published, lookback_days)
     rows = conn.execute(
         "SELECT to_char(published_utc, 'YYYY-MM-DD'), primary_ticker, title "
         "FROM public.articles "
         "WHERE id != %s AND embedding IS NOT NULL "
-        "  AND category = 'real news' AND published_utc < %s "
-        "ORDER BY embedding <=> %s LIMIT %s",
-        (article_id, published, embedding, k),
+        "  AND category = 'real news' AND published_utc < %s"
+        + lb_sql.format(col="published_utc")
+        + " ORDER BY embedding <=> %s LIMIT %s",
+        (article_id, published, *lb_params, embedding, k),
     ).fetchall()
     return [f"{d} [{t or '?'}] {title}" for d, t, title in rows]
 
@@ -312,6 +333,7 @@ def insights_similarity(
     filter_drop: bool = False,
     threshold: float = 0.7,
     limit: int = 40,
+    lookback_days: int | None = None,
 ) -> list[str]:
     """Earlier real-news articles whose *insight boxes* echo this article's.
 
@@ -356,6 +378,8 @@ def insights_similarity(
     drop_sql = (
         f" AND ai.{label_col} IS DISTINCT FROM 'DROP'" if filter_drop and label_col else ""
     )
+    lb_tmpl, lb_params = _lookback_clause(published, lookback_days)
+    lb_sql = lb_tmpl.format(col="a.published_utc")
     # insight_id -> (sim, source_article_id, date, ticker, headline, excerpt)
     best: dict[int, tuple[float, int, str, str | None, str | None, str]] = {}
     with conn.cursor() as cur:
@@ -373,11 +397,12 @@ def insights_similarity(
                 f"FROM {table} ai "
                 "JOIN public.articles a ON a.id = ai.article_id "
                 "WHERE ai.article_id != %s AND ai.embedding IS NOT NULL "
-                "  AND a.category = 'real news' AND a.published_utc < %s "
+                "  AND a.category = 'real news' AND a.published_utc < %s"
+                f"{lb_sql}"
                 f"  AND (ai.embedding <=> %s) < %s{drop_sql} "
                 "ORDER BY ai.embedding <=> %s LIMIT %s",
-                (box_embedding, article_id, published, box_embedding, max_distance,
-                 box_embedding, limit),
+                (box_embedding, article_id, published, *lb_params, box_embedding,
+                 max_distance, box_embedding, limit),
             )
             for iid, aid, d, ticker, title, insight, topic, label, sim in cur.fetchall():
                 sim = float(sim)
@@ -429,6 +454,7 @@ def gather_precedents(
     modes are the same flow over a corpus, differing only in labelling/filtering.
     """
     s = get_settings()
+    lookback = s.precedent_lookback_days
     src = INSIGHT_SOURCES.get(source or s.precedent_source)
     if src:
         return insights_similarity(
@@ -436,8 +462,9 @@ def gather_precedents(
             filter_drop=src.filter_drop,
             threshold=s.precedent_insights_threshold,
             limit=s.precedent_insights_limit,
+            lookback_days=lookback,
         )
-    return article_similarity(conn, article_id)
+    return article_similarity(conn, article_id, lookback_days=lookback)
 
 
 def own_article_insights(

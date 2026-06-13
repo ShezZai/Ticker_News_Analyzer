@@ -11,10 +11,14 @@ retrieved is selectable via the `precedent_source` setting.
   `article_similarity()` / `insights_similarity()` do the retrieval;
   `own_article_insights()` supplies the target's own insights.
 
-All modes share the same **precedent discipline**: only earlier-published
-(`published_utc < target`) `category = 'real news'` sources, and the target's own
-rows are excluded — no look-ahead leakage, since the verdict is later scored
-against the realized price move.
+All modes share the same **precedent discipline**: sources must be earlier-published
+(`published_utc < target`) and within the lookback window (`published_utc >= target
+- precedent_lookback_days`), `category = 'real news'`, and the target's own rows are
+excluded — no look-ahead leakage, since the verdict is later scored against the
+realized price move.
+
+The lookback window applies to **all** modes and is controlled by
+`SENTIMENT_PRECEDENT_LOOKBACK_DAYS` (default `90`; `<= 0` means unlimited).
 
 ---
 
@@ -29,7 +33,9 @@ against the realized price move.
 
 Knobs shared by the three insight modes (`shared/config.py`):
 `SENTIMENT_PRECEDENT_INSIGHTS_THRESHOLD` (similarity floor, default `0.7`) and
-`SENTIMENT_PRECEDENT_INSIGHTS_LIMIT` (max boxes, default `40`).
+`SENTIMENT_PRECEDENT_INSIGHTS_LIMIT` (max boxes, default `40`). The lookback
+window `SENTIMENT_PRECEDENT_LOOKBACK_DAYS` (default `90`) applies to all four
+modes including `article`.
 
 ---
 

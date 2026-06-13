@@ -56,6 +56,11 @@ class AppSettings(BaseSettings):
     precedent_insights_limit: int = Field(
         default=40, validation_alias="SENTIMENT_PRECEDENT_INSIGHTS_LIMIT"
     )
+    # Lower time bound on the precedent search (all modes): only consider sources
+    # published within this many days BEFORE the target. <= 0 means unlimited.
+    precedent_lookback_days: int = Field(
+        default=90, validation_alias="SENTIMENT_PRECEDENT_LOOKBACK_DAYS"
+    )
 
 
 @lru_cache(maxsize=1)
