@@ -13,12 +13,18 @@ retrieved is selectable via the `precedent_source` setting.
 
 All modes share the same **precedent discipline**: sources must be earlier-published
 (`published_utc < target`) and within the lookback window (`published_utc >= target
-- precedent_lookback_days`), `category = 'real news'`, and the target's own rows are
-excluded — no look-ahead leakage, since the verdict is later scored against the
-realized price move.
+- precedent_lookback_days`), and the target's own rows are excluded — no look-ahead
+leakage, since the verdict is later scored against the realized price move. The
+`category = 'real news'` restriction is **optional** (off by default; see
+`precedent_real_news_only` below).
 
 The lookback window applies to **all** modes and is controlled by
 `SENTIMENT_PRECEDENT_LOOKBACK_DAYS` (default `90`; `<= 0` means unlimited).
+
+By default, precedents are **not** restricted by category — an insight is an
+insight regardless of its source article's category, so recap/analysis/etc.
+articles are eligible. Set `SENTIMENT_PRECEDENT_REAL_NEWS_ONLY=true` to restrict
+candidates to `category = 'real news'` (the older, stricter behavior).
 
 ---
 
@@ -26,16 +32,17 @@ The lookback window applies to **all** modes and is controlled by
 
 | Option | Corpus searched | Query vector(s) | Result shape | Labels | DROP filter | "Own insights" section |
 |---|---|---|---|---|---|---|
-| `article` | `articles.embedding` | target article body embedding | top-5 nearest **articles** (headlines) | — | — | no |
-| `insights` | `article_insights` | each of the target's insight boxes | top-40 boxes, grouped by source article | — | — | yes (untagged) |
-| `distilled-first` | `distilled_article_insights` | each of the target's distilled boxes | top-40 boxes, grouped by source article | `first_label` | no | yes (tagged) |
-| `distilled-second` | `distilled_article_insights` | each of the target's distilled boxes | top-40 boxes, grouped by source article | `second_label` | excludes `DROP` | yes (tagged) |
+| `article` | `articles.embedding` | target article body embedding | top-`k` nearest **articles** (headlines, `k=5`) | — | — | no |
+| `insights` | `article_insights` | each of the target's insight boxes | top-`limit` boxes, grouped by source article | — | — | yes (untagged) |
+| `distilled-first` | `distilled_article_insights` | each of the target's distilled boxes | top-`limit` boxes, grouped by source article | `first_label` | no | yes (tagged) |
+| `distilled-second` | `distilled_article_insights` | each of the target's distilled boxes | top-`limit` boxes, grouped by source article | `second_label` | excludes `DROP` | yes (tagged) |
 
 Knobs shared by the three insight modes (`shared/config.py`):
 `SENTIMENT_PRECEDENT_INSIGHTS_THRESHOLD` (similarity floor, default `0.7`) and
-`SENTIMENT_PRECEDENT_INSIGHTS_LIMIT` (max boxes, default `40`). The lookback
-window `SENTIMENT_PRECEDENT_LOOKBACK_DAYS` (default `90`) applies to all four
-modes including `article`.
+`SENTIMENT_PRECEDENT_INSIGHTS_LIMIT` (max boxes, default `60`). Two more apply to
+**all four** modes (incl. `article`): `SENTIMENT_PRECEDENT_LOOKBACK_DAYS`
+(default `90`) and `SENTIMENT_PRECEDENT_REAL_NEWS_ONLY` (default `false` — all
+categories eligible).
 
 ---
 
@@ -134,16 +141,34 @@ Set the default for the live service via `.env`:
 
 ```
 SENTIMENT_PRECEDENT_SOURCE=distilled-second
+SENTIMENT_PRECEDENT_REAL_NEWS_ONLY=false
+SENTIMENT_PRECEDENT_LOOKBACK_DAYS=90
+SENTIMENT_PRECEDENT_INSIGHTS_LIMIT=60
 ```
 
 A worked example of the four rendered prompts for one article lives at
 `docs/retreival_way_four_prompts_example.txt`.
 
+### Checking retrieval quality
+
+`ticker_news.evals.cluster_eval` measures recall against a labelled cluster CSV
+(`docs/article_clusters_revisited.csv`): it queries backward from each cluster's
+`later` article and reports how many earlier cluster members each mode surfaces.
+
+```bash
+python -m ticker_news.evals.cluster_eval docs/article_clusters_revisited.csv
+```
+
+It honors `real_news_only`; with it off, all clusters are testable (the expected
+set is each cluster's any-category members within the window).
+
 ## Caveats
 
 - **Distilled coverage:** `distilled_article_insights` covers ~15.8k articles. An
   article with no distilled boxes yields empty precedents under the distilled
-  modes (graceful — the analyst is told "(none found)").
+  modes (graceful — the analyst is told "(none found)"), and — importantly — a
+  *query* article with no distilled boxes retrieves nothing in distilled mode
+  (the cluster check's DeepSeek miss is this, not a ranking failure).
 - **Prompt publishing:** the in-repo prompt template is the source of truth; the
   Langfuse `production` copy is used at runtime only after `ticker-news prompts
   push` (and a process restart, since prompt chains are `lru_cache`d).

@@ -273,6 +273,26 @@ def test_article_similarity_no_lookback_clause_when_unbounded():
     assert "published_utc >= %s" not in captured["sql"]
 
 
+def test_article_similarity_category_filter_toggles():
+    pub = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    captured = {}
+
+    class _Cap:
+        calls = 0
+
+        def execute(self, sql, params=None):
+            self.calls += 1
+            if self.calls == 1:
+                return _Row(([0.1], pub))
+            captured["sql"] = sql
+            return _Row([])
+
+    stages.article_similarity(_Cap(), 1, real_news_only=False)   # default: all categories
+    assert "category = 'real news'" not in captured["sql"]
+    stages.article_similarity(_Cap(), 1, real_news_only=True)
+    assert "category = 'real news'" in captured["sql"]
+
+
 class _InsightsCursor:
     """Cursor stub: no-ops GUC/savepoint statements, pops a result list per SELECT."""
 
@@ -399,6 +419,7 @@ def test_gather_precedents_dispatches_on_config(monkeypatch):
         precedent_insights_threshold = 0.7
         precedent_insights_limit = 40
         precedent_lookback_days = 90
+        precedent_real_news_only = False
 
     monkeypatch.setattr(stages, "get_settings", lambda: _S())
     assert stages.gather_precedents(None, 1) == ["insight-line"]

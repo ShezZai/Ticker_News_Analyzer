@@ -242,14 +242,16 @@ def article_similarity(
     article_id: int,
     k: int = 5,
     lookback_days: int | None = None,
+    real_news_only: bool = False,
 ) -> list[str]:
-    """Cosine-nearest earlier real-news articles, using the stored embedding.
+    """Cosine-nearest earlier articles, using the stored embedding.
 
     Two-step on purpose: fetching the target embedding first lets the planner
     drive the second query through the HNSW index (a join-embedded ORDER BY
     <=> falls back to a sequential scan). Returns display lines for the
     historical-precedent analyst; empty when the target has no embedding or
-    no published_utc. `lookback_days` bounds how far back precedents may be.
+    no published_utc. `lookback_days` bounds how far back precedents may be;
+    `real_news_only` restricts candidates to category='real news'.
     """
     target = conn.execute(
         "SELECT embedding, published_utc FROM public.articles "
@@ -261,11 +263,12 @@ def article_similarity(
         return []
     embedding, published = target
     lb_sql, lb_params = _lookback_clause(published, lookback_days)
+    cat_sql = " AND category = 'real news'" if real_news_only else ""
     rows = conn.execute(
         "SELECT to_char(published_utc, 'YYYY-MM-DD'), primary_ticker, title "
         "FROM public.articles "
-        "WHERE id != %s AND embedding IS NOT NULL "
-        "  AND category = 'real news' AND published_utc < %s"
+        "WHERE id != %s AND embedding IS NOT NULL AND published_utc < %s"
+        + cat_sql
         + lb_sql.format(col="published_utc")
         + " ORDER BY embedding <=> %s LIMIT %s",
         (article_id, published, *lb_params, embedding, k),
@@ -324,30 +327,26 @@ def _label_tag(label: str | None) -> str:
     return f"[{label}] " if label else ""
 
 
-def insights_similarity(
+def _ranked_insight_hits(
     conn: psycopg.Connection,
     article_id: int,
     *,
-    table: str = "public.article_insights",
-    label_col: str | None = None,
-    filter_drop: bool = False,
-    threshold: float = 0.7,
-    limit: int = 40,
-    lookback_days: int | None = None,
-) -> list[str]:
-    """Earlier real-news articles whose *insight boxes* echo this article's.
+    table: str,
+    label_col: str | None,
+    filter_drop: bool,
+    threshold: float,
+    limit: int,
+    lookback_days: int | None,
+    real_news_only: bool = False,
+) -> list[tuple[float, int, str, str | None, str | None, str]]:
+    """The deduped, similarity-ranked insight-box precedents for one article.
 
-    For each embedded insight box of the target article, find earlier real-news
-    insight boxes whose cosine similarity exceeds `threshold`; union the hits
-    across all boxes (dedup on insight id, keeping the highest similarity), take
-    the top `limit` boxes overall, then GROUP them by source article. Each
-    returned element is one prior article: a `date [ticker] headline` line, with
-    the matching insight excerpt(s) listed beneath when there is more than one
-    (inlined after an em dash when there is exactly one). Same precedent
-    discipline as article_similarity: only earlier-published 'real news'
-    sources, and the target's own boxes are excluded.
-
-    Empty when the target has no embedded boxes or no published_utc.
+    Shared core of `insights_similarity` (display) and the cluster eval (recall):
+    for each embedded box of the target, ANN-search the corpus under the full
+    precedent discipline, union across boxes (dedup on insight id, max similarity
+    wins), and return the top `limit` as (sim, article_id, date, ticker, headline,
+    excerpt) tuples, ordered by descending similarity. Empty when the target has
+    no embedded boxes or no published_utc.
     """
     target = conn.execute(
         "SELECT published_utc FROM public.articles WHERE id = %s", (article_id,)
@@ -380,6 +379,7 @@ def insights_similarity(
     )
     lb_tmpl, lb_params = _lookback_clause(published, lookback_days)
     lb_sql = lb_tmpl.format(col="a.published_utc")
+    cat_sql = " AND a.category = 'real news'" if real_news_only else ""
     # insight_id -> (sim, source_article_id, date, ticker, headline, excerpt)
     best: dict[int, tuple[float, int, str, str | None, str | None, str]] = {}
     with conn.cursor() as cur:
@@ -397,8 +397,8 @@ def insights_similarity(
                 f"FROM {table} ai "
                 "JOIN public.articles a ON a.id = ai.article_id "
                 "WHERE ai.article_id != %s AND ai.embedding IS NOT NULL "
-                "  AND a.category = 'real news' AND a.published_utc < %s"
-                f"{lb_sql}"
+                "  AND a.published_utc < %s"
+                f"{cat_sql}{lb_sql}"
                 f"  AND (ai.embedding <=> %s) < %s{drop_sql} "
                 "ORDER BY ai.embedding <=> %s LIMIT %s",
                 (box_embedding, article_id, published, *lb_params, box_embedding,
@@ -414,7 +414,40 @@ def insights_similarity(
                     excerpt = (_label_tag(label) + body) if body else ""
                     best[iid] = (sim, aid, d, ticker, title, excerpt)
 
-    ranked = sorted(best.values(), key=lambda r: r[0], reverse=True)[:limit]
+    return sorted(best.values(), key=lambda r: r[0], reverse=True)[:limit]
+
+
+def insights_similarity(
+    conn: psycopg.Connection,
+    article_id: int,
+    *,
+    table: str = "public.article_insights",
+    label_col: str | None = None,
+    filter_drop: bool = False,
+    threshold: float = 0.7,
+    limit: int = 40,
+    lookback_days: int | None = None,
+    real_news_only: bool = False,
+) -> list[str]:
+    """Earlier articles whose *insight boxes* echo this article's.
+
+    For each embedded insight box of the target article, find earlier real-news
+    insight boxes whose cosine similarity exceeds `threshold`; union the hits
+    across all boxes (dedup on insight id, keeping the highest similarity), take
+    the top `limit` boxes overall, then GROUP them by source article. Each
+    returned element is one prior article: a `date [ticker] headline` line, with
+    the matching insight excerpt(s) listed beneath when there is more than one
+    (inlined after an em dash when there is exactly one). Same precedent
+    discipline as article_similarity: only earlier-published 'real news'
+    sources, and the target's own boxes are excluded.
+
+    Empty when the target has no embedded boxes or no published_utc.
+    """
+    ranked = _ranked_insight_hits(
+        conn, article_id, table=table, label_col=label_col, filter_drop=filter_drop,
+        threshold=threshold, limit=limit, lookback_days=lookback_days,
+        real_news_only=real_news_only,
+    )
 
     # Group the top excerpts by source article, preserving similarity order so an
     # article ranks by its strongest matching insight and its excerpts read best
@@ -455,6 +488,7 @@ def gather_precedents(
     """
     s = get_settings()
     lookback = s.precedent_lookback_days
+    real_news_only = s.precedent_real_news_only
     src = INSIGHT_SOURCES.get(source or s.precedent_source)
     if src:
         return insights_similarity(
@@ -463,8 +497,11 @@ def gather_precedents(
             threshold=s.precedent_insights_threshold,
             limit=s.precedent_insights_limit,
             lookback_days=lookback,
+            real_news_only=real_news_only,
         )
-    return article_similarity(conn, article_id, lookback_days=lookback)
+    return article_similarity(
+        conn, article_id, lookback_days=lookback, real_news_only=real_news_only
+    )
 
 
 def own_article_insights(
