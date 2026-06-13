@@ -397,3 +397,103 @@ async def test_classify_skip_paths_return_none(monkeypatch):
     empty = _StubConn([(1, "T", "   ", None)])
     assert stages.classify_stage(empty, "https://example.com/a") is None
     assert empty.rolled_back == 1
+
+
+# ---------------------------------------------------------------------------
+# sentiment_stage: precedents span observability tests
+# ---------------------------------------------------------------------------
+
+
+from contextlib import contextmanager
+
+
+def _fake_stage_span(record):
+    """Return a stage_span replacement that records the span name and update kwargs."""
+
+    @contextmanager
+    def stage_span(name):
+        record["span_name"] = name
+
+        class Span:
+            def update(self, **kw):
+                record.update(kw)
+
+        yield Span()
+
+    return stage_span
+
+
+def _stub_sentiment_conn():
+    """Minimal _StubConn for the judging path: real news + NVDA ticker."""
+    return _StubConn([
+        (1, "T", "body", "real news", "NVDA", None, None),
+    ])
+
+
+def _patch_sentiment_deps(monkeypatch, precedents, own_insights, mode):
+    """Wire gather_precedents and own_article_insights stubs; patch has_verdict/judge."""
+    from ticker_news.sentiment.schemas import Verdict
+
+    monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: False)
+    monkeypatch.setattr(
+        stages, "gather_precedents",
+        lambda c, a, source=None: precedents,
+    )
+    monkeypatch.setattr(
+        stages, "own_article_insights",
+        lambda c, a, **kw: own_insights,
+    )
+
+    class _S:
+        precedent_source = mode
+        precedent_insights_threshold = 0.75
+        precedent_insights_limit = 20
+
+    monkeypatch.setattr(stages, "get_settings", lambda: _S())
+    monkeypatch.setattr(
+        stages, "judge_article",
+        lambda article, config=None: (
+            Verdict(action="buy", confidence=0.8, reasoning=""), []
+        ),
+    )
+    monkeypatch.setattr(
+        stages.sentiment_store, "save_verdict",
+        lambda *a, **kw: None,
+    )
+
+
+def test_sentiment_span_records_explicit_precedent_source(monkeypatch):
+    """An explicit precedent_source override beats the settings default."""
+    record = {}
+    monkeypatch.setattr(stages.obs, "stage_span", _fake_stage_span(record))
+    # settings default deliberately differs from the override so a regression
+    # that ignores the explicit argument cannot pass this test
+    _patch_sentiment_deps(monkeypatch, ["p1", "p2"], ["oi1"], "article")
+    conn = _stub_sentiment_conn()
+    stages.sentiment_stage(conn, "https://example.com/a", precedent_source="distilled-second")
+    assert record["span_name"] == "precedents"
+    assert record["metadata"]["precedent_source"] == "distilled-second"
+    assert record["output"] == {"n_precedents": 2, "n_own_insights": 1}
+
+
+def test_sentiment_span_records_default_config_mode(monkeypatch):
+    """When no explicit override, span metadata uses the settings default ('article')."""
+    record = {}
+    monkeypatch.setattr(stages.obs, "stage_span", _fake_stage_span(record))
+    _patch_sentiment_deps(monkeypatch, [], [], "article")
+    conn = _stub_sentiment_conn()
+    stages.sentiment_stage(conn, "https://example.com/a")  # no precedent_source arg
+    assert record["span_name"] == "precedents"
+    assert record["metadata"]["precedent_source"] == "article"
+    assert record["output"] == {"n_precedents": 0, "n_own_insights": 0}
+
+
+def test_sentiment_span_records_threshold_and_limit(monkeypatch):
+    """Span metadata carries threshold and limit from settings."""
+    record = {}
+    monkeypatch.setattr(stages.obs, "stage_span", _fake_stage_span(record))
+    _patch_sentiment_deps(monkeypatch, ["p1"], [], "insights")
+    conn = _stub_sentiment_conn()
+    stages.sentiment_stage(conn, "https://example.com/a", precedent_source="insights")
+    assert record["metadata"]["threshold"] == 0.75
+    assert record["metadata"]["limit"] == 20

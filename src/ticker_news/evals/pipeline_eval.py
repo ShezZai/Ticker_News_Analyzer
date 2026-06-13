@@ -457,8 +457,7 @@ def run_eval(
     metadata = {"entrypoint": "eval"}
     if skip_stages:
         metadata["skipped_stages"] = sorted(skip_stages)
-    if precedent_source:
-        metadata["precedent_source"] = precedent_source
+    metadata["precedent_source"] = precedent_source or s.precedent_source
     common = dict(
         name=EXPERIMENT_NAME,
         run_name=run_name,

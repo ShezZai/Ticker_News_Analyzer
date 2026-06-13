@@ -409,6 +409,91 @@ class FakeLangfuseClient:
         self.created.append(kwargs)
 
 
+class TestRunEvalMetadata:
+    """run_eval always records effective precedent_source, even when not passed."""
+
+    class _FakeSettings:
+        massive_api_key = "mak"
+        google_api_key = "gak"
+        openai_api_key = "oak"
+        precedent_source = "article"  # the settings default
+
+    class _FakeLFClient:
+        def __init__(self):
+            self.experiments: list[dict] = []
+
+        def run_experiment(self, **kwargs):
+            self.experiments.append(kwargs)
+            return SimpleNamespace(item_results=[])
+
+        def flush(self):
+            pass
+
+    def _patch_infra(self, monkeypatch, fake_client):
+        """Wire the minimal fakes run_eval needs before the metadata block."""
+        from ticker_news.shared import observability as obs
+
+        # Wrap the fake as a callable with cache_clear so the autouse teardown
+        # fixture (which calls observability.client.cache_clear()) doesn't break.
+        def _client():
+            return fake_client
+        _client.cache_clear = lambda: None  # satisfy conftest teardown
+
+        monkeypatch.setattr(obs, "client", _client)
+        monkeypatch.setattr(
+            pipeline_eval, "connect_eval", lambda dsn: SimpleNamespace(close=lambda: None)
+        )
+        monkeypatch.setattr(pipeline_eval, "ensure_eval_schema", lambda conn: None)
+        monkeypatch.setattr(pipeline_eval, "build_items", lambda conn, ids: [
+            {"input": {"article_id": ids[0], "url": "https://x/1",
+                       "published_utc": "2026-05-28T11:10:00+00:00", "title": "T"}}
+        ])
+        monkeypatch.setattr(pipeline_eval, "make_task", lambda *a, **kw: lambda **kw2: {})
+        monkeypatch.setattr(obs, "flush", lambda: None)
+
+    def _patch_settings(self, monkeypatch):
+        """Replace the lru_cache'd get_settings with one returning _FakeSettings.
+
+        run_eval imports get_settings locally, so we must patch the canonical
+        location in ticker_news.shared.config and clear the cache first.
+        The replacement carries a no-op cache_clear so the conftest teardown
+        fixture (which calls get_settings.cache_clear()) doesn't break.
+        """
+        import ticker_news.shared.config as cfg_mod
+
+        fake = self._FakeSettings()
+
+        def _get_settings():
+            return fake
+        _get_settings.cache_clear = lambda: None  # satisfy conftest teardown
+
+        monkeypatch.setattr(cfg_mod, "get_settings", _get_settings)
+
+    def test_no_precedent_source_records_settings_default(self, monkeypatch):
+        """When precedent_source=None, metadata carries the settings default."""
+        from ticker_news.evals import pipeline_eval as pe
+
+        fake_client = self._FakeLFClient()
+        self._patch_infra(monkeypatch, fake_client)
+        self._patch_settings(monkeypatch)
+        # Call with no precedent_source; settings default is "article"
+        pe.run_eval([1], dsn=None, precedent_source=None)
+        assert fake_client.experiments, "run_experiment was not called"
+        metadata = fake_client.experiments[0]["metadata"]
+        assert metadata["precedent_source"] == "article"
+
+    def test_explicit_precedent_source_is_preserved(self, monkeypatch):
+        """When precedent_source is passed explicitly, it overrides the default."""
+        from ticker_news.evals import pipeline_eval as pe
+
+        fake_client = self._FakeLFClient()
+        self._patch_infra(monkeypatch, fake_client)
+        self._patch_settings(monkeypatch)
+        pe.run_eval([1], dsn=None, precedent_source="distilled-second")
+        metadata = fake_client.experiments[0]["metadata"]
+        assert metadata["precedent_source"] == "distilled-second"
+
+
 class TestUpsertDatasetItems:
     def test_new_items_get_dataset_scoped_ids(self):
         client = FakeLangfuseClient()

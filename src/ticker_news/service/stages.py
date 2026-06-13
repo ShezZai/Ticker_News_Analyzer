@@ -499,17 +499,28 @@ def sentiment_stage(
         return None
     settings = get_settings()
     mode = precedent_source or settings.precedent_source
-    precedents = gather_precedents(conn, aid, source=mode)
-    # Under an insight mode, also surface the target's OWN insights (from the same
-    # corpus, same labelling/filtering) so the analyst can judge overlap.
-    src = INSIGHT_SOURCES.get(mode)
-    own_insights = (
-        own_article_insights(
-            conn, aid, table=src.table, label_col=src.label_col,
-            filter_drop=src.filter_drop, limit=settings.precedent_insights_limit,
+    with obs.stage_span("precedents") as span:
+        precedents = gather_precedents(conn, aid, source=mode)
+        # Under an insight mode, also surface the target's OWN insights (from the same
+        # corpus, same labelling/filtering) so the analyst can judge overlap.
+        src = INSIGHT_SOURCES.get(mode)
+        own_insights = (
+            own_article_insights(
+                conn, aid, table=src.table, label_col=src.label_col,
+                filter_drop=src.filter_drop, limit=settings.precedent_insights_limit,
+            )
+            if src else []
         )
-        if src else []
-    )
+        if span is not None:
+            span.update(
+                output={"n_precedents": len(precedents),
+                        "n_own_insights": len(own_insights)},
+                metadata={
+                    "precedent_source": mode,
+                    "threshold": settings.precedent_insights_threshold,
+                    "limit": settings.precedent_insights_limit,
+                },
+            )
     provider_sentiment = ""
     if provider and isinstance(provider, dict):
         entry = provider.get(ticker) or {}
