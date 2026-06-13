@@ -206,6 +206,17 @@ async def test_sentiment_skips_existing_verdict(monkeypatch):
     assert conn.rolled_back == 1
 
 
+async def test_sentiment_skips_no_insights(monkeypatch):
+    # actionable + tagged + has content, but the insights stage extracted no
+    # boxes -> skip the verdict, ending the pipeline for the item.
+    conn = _StubConn([(1, "T", "body", "real news", None, "NVDA", None, None)])
+    monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: False)
+    monkeypatch.setattr(stages, "_has_insights", lambda c, a: False)
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
+    assert stages.sentiment_stage(conn, "https://example.com/a") is None
+    assert conn.rolled_back == 1
+
+
 async def test_sentiment_judges_act_finegrained(monkeypatch):
     # is_act=True on a finegrained category drives judging (new path)
     from ticker_news.sentiment.schemas import Verdict
@@ -215,6 +226,7 @@ async def test_sentiment_judges_act_finegrained(monkeypatch):
     ])
     seen = {}
     monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: False)
+    monkeypatch.setattr(stages, "_has_insights", lambda c, a: True)
     monkeypatch.setattr(stages, "gather_precedents", lambda c, a, source=None: ["p1"])
     monkeypatch.setattr(
         stages, "judge_article",
@@ -458,6 +470,7 @@ def _patch_sentiment_deps(monkeypatch, precedents, own_insights, mode):
     from ticker_news.sentiment.schemas import Verdict
 
     monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: False)
+    monkeypatch.setattr(stages, "_has_insights", lambda c, a: True)
     monkeypatch.setattr(
         stages, "gather_precedents",
         lambda c, a, source=None: precedents,

@@ -56,6 +56,20 @@ def _is_actionable(is_act: bool | None, category: str | None) -> bool:
     return bool(is_act) if is_act is not None else category == "real news"
 
 
+def _has_insights(conn: psycopg.Connection, article_id: int) -> bool:
+    """True if the insights stage extracted at least one box for this article.
+
+    Articles we couldn't distil any insight from aren't substantive enough to
+    judge: sentiment skips them (no verdict), and since insights is the last
+    stage before sentiment, that effectively ends the pipeline for the item.
+    """
+    row = conn.execute(
+        "SELECT 1 FROM public.article_insights WHERE article_id = %s LIMIT 1",
+        (article_id,),
+    ).fetchone()
+    return row is not None
+
+
 class PermanentStageError(StageError):
     """A failure that will never succeed on retry — park the job immediately."""
 
@@ -679,6 +693,12 @@ def sentiment_stage(
         conn.rollback()
         return None
     if sentiment_store.has_verdict(conn, aid, ticker):
+        conn.rollback()
+        return None
+    # No insights extracted -> nothing distinctive enough to judge. Skip the
+    # verdict; the pipeline ends here for this article (insights is the last
+    # stage before sentiment).
+    if not _has_insights(conn, aid):
         conn.rollback()
         return None
     settings = get_settings()
