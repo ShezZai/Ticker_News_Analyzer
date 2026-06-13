@@ -306,11 +306,16 @@ class _InsightSource:
     table: str
     label_col: str | None = None
     filter_drop: bool = False
+    # When True, an article-level ANN prefilter selects a candidate article subset
+    # first, and the insight-box ANN runs only within that subset (two-stage funnel).
+    hybrid: bool = False
 
 
 # precedent_source value -> its corpus + labelling. The two distilled modes read
 # the SAME table but tag/filter by a different classification pass: first_label
-# (no DROP in the data) vs second_label (DROP filtered out).
+# (no DROP in the data) vs second_label (DROP filtered out). The '-hybrid' modes
+# add an article-level prefilter (see `ranked_precedent_hits`); distilled-hybrid
+# uses the two-pass distilled corpus without DROP filtering.
 INSIGHT_SOURCES = {
     "insights": _InsightSource("public.article_insights"),
     "distilled-first": _InsightSource(
@@ -319,7 +324,52 @@ INSIGHT_SOURCES = {
     "distilled-second": _InsightSource(
         "public.distilled_article_insights", "second_label", filter_drop=True
     ),
+    "insights-hybrid": _InsightSource("public.article_insights", hybrid=True),
+    # distilled-hybrid = two-pass: second_label with DROP-labelled boxes excluded.
+    "distilled-hybrid": _InsightSource(
+        "public.distilled_article_insights", "second_label", filter_drop=True, hybrid=True
+    ),
+    # distilled-hybrid-one-pass = first pass only: first_label, no DROP filtering.
+    "distilled-hybrid-one-pass": _InsightSource(
+        "public.distilled_article_insights", "first_label", hybrid=True
+    ),
 }
+
+
+def _article_neighbors(
+    conn: psycopg.Connection,
+    article_id: int,
+    *,
+    threshold: float,
+    lookback_days: int | None,
+    real_news_only: bool,
+) -> set[int]:
+    """Article-level ANN prefilter for hybrid retrieval.
+
+    Returns the article ids whose stored embedding is within `threshold` cosine
+    similarity of the target's, under the precedent discipline (earlier-published,
+    lookback window, optional real-news, self excluded). Exact distance filter (no
+    LIMIT) over the windowed rows, so the candidate subset is complete.
+    """
+    target = conn.execute(
+        "SELECT embedding, published_utc FROM public.articles "
+        "WHERE id = %s AND embedding IS NOT NULL",
+        (article_id,),
+    ).fetchone()
+    if target is None or target[1] is None:
+        return set()
+    embedding, published = target
+    lb_tmpl, lb_params = _lookback_clause(published, lookback_days)
+    cat_sql = " AND category = 'real news'" if real_news_only else ""
+    rows = conn.execute(
+        "SELECT id FROM public.articles "
+        "WHERE id != %s AND embedding IS NOT NULL AND published_utc < %s"
+        + cat_sql
+        + lb_tmpl.format(col="published_utc")
+        + " AND (embedding <=> %s) < %s",
+        (article_id, published, *lb_params, embedding, 1.0 - threshold),
+    ).fetchall()
+    return {r[0] for r in rows}
 
 
 def _label_tag(label: str | None) -> str:
@@ -338,6 +388,7 @@ def _ranked_insight_hits(
     limit: int,
     lookback_days: int | None,
     real_news_only: bool = False,
+    restrict_articles: set[int] | None = None,
 ) -> list[tuple[float, int, str, str | None, str | None, str]]:
     """The deduped, similarity-ranked insight-box precedents for one article.
 
@@ -380,6 +431,9 @@ def _ranked_insight_hits(
     lb_tmpl, lb_params = _lookback_clause(published, lookback_days)
     lb_sql = lb_tmpl.format(col="a.published_utc")
     cat_sql = " AND a.category = 'real news'" if real_news_only else ""
+    # Hybrid prefilter: restrict candidate boxes to the given article subset.
+    restrict_sql = " AND ai.article_id = ANY(%s)" if restrict_articles is not None else ""
+    restrict_param = [list(restrict_articles)] if restrict_articles is not None else []
     # insight_id -> (sim, source_article_id, date, ticker, headline, excerpt)
     best: dict[int, tuple[float, int, str, str | None, str | None, str]] = {}
     with conn.cursor() as cur:
@@ -396,13 +450,13 @@ def _ranked_insight_hits(
                 "       1 - (ai.embedding <=> %s) AS similarity "
                 f"FROM {table} ai "
                 "JOIN public.articles a ON a.id = ai.article_id "
-                "WHERE ai.article_id != %s AND ai.embedding IS NOT NULL "
+                f"WHERE ai.article_id != %s{restrict_sql} AND ai.embedding IS NOT NULL "
                 "  AND a.published_utc < %s"
                 f"{cat_sql}{lb_sql}"
                 f"  AND (ai.embedding <=> %s) < %s{drop_sql} "
                 "ORDER BY ai.embedding <=> %s LIMIT %s",
-                (box_embedding, article_id, published, *lb_params, box_embedding,
-                 max_distance, box_embedding, limit),
+                [box_embedding, article_id, *restrict_param, published, *lb_params,
+                 box_embedding, max_distance, box_embedding, limit],
             )
             for iid, aid, d, ticker, title, insight, topic, label, sim in cur.fetchall():
                 sim = float(sim)
@@ -417,6 +471,39 @@ def _ranked_insight_hits(
     return sorted(best.values(), key=lambda r: r[0], reverse=True)[:limit]
 
 
+def ranked_precedent_hits(
+    conn: psycopg.Connection,
+    article_id: int,
+    src: _InsightSource,
+    *,
+    threshold: float,
+    limit: int,
+    lookback_days: int | None,
+    real_news_only: bool = False,
+    article_threshold: float | None = None,
+) -> list[tuple[float, int, str, str | None, str | None, str]]:
+    """Ranked insight-box precedents for an `_InsightSource`, applying the hybrid
+    article-level prefilter when `src.hybrid` (article ANN >= `article_threshold`,
+    defaulting to `threshold`, selects the candidate subset). Single entry point
+    shared by the production path and the cluster eval.
+    """
+    restrict = None
+    if src.hybrid:
+        restrict = _article_neighbors(
+            conn, article_id,
+            threshold=article_threshold if article_threshold is not None else threshold,
+            lookback_days=lookback_days, real_news_only=real_news_only,
+        )
+        if not restrict:
+            return []
+    return _ranked_insight_hits(
+        conn, article_id, table=src.table, label_col=src.label_col,
+        filter_drop=src.filter_drop, threshold=threshold, limit=limit,
+        lookback_days=lookback_days, real_news_only=real_news_only,
+        restrict_articles=restrict,
+    )
+
+
 def insights_similarity(
     conn: psycopg.Connection,
     article_id: int,
@@ -428,6 +515,7 @@ def insights_similarity(
     limit: int = 40,
     lookback_days: int | None = None,
     real_news_only: bool = False,
+    restrict_articles: set[int] | None = None,
 ) -> list[str]:
     """Earlier articles whose *insight boxes* echo this article's.
 
@@ -446,7 +534,7 @@ def insights_similarity(
     ranked = _ranked_insight_hits(
         conn, article_id, table=table, label_col=label_col, filter_drop=filter_drop,
         threshold=threshold, limit=limit, lookback_days=lookback_days,
-        real_news_only=real_news_only,
+        real_news_only=real_news_only, restrict_articles=restrict_articles,
     )
 
     # Group the top excerpts by source article, preserving similarity order so an
@@ -491,13 +579,25 @@ def gather_precedents(
     real_news_only = s.precedent_real_news_only
     src = INSIGHT_SOURCES.get(source or s.precedent_source)
     if src:
+        restrict = None
+        if src.hybrid:
+            threshold = s.precedent_hybrid_box_threshold
+            restrict = _article_neighbors(
+                conn, article_id, threshold=s.precedent_hybrid_article_threshold,
+                lookback_days=lookback, real_news_only=real_news_only,
+            )
+            if not restrict:
+                return []
+        else:
+            threshold = s.precedent_insights_threshold
         return insights_similarity(
             conn, article_id, table=src.table, label_col=src.label_col,
             filter_drop=src.filter_drop,
-            threshold=s.precedent_insights_threshold,
+            threshold=threshold,
             limit=s.precedent_insights_limit,
             lookback_days=lookback,
             real_news_only=real_news_only,
+            restrict_articles=restrict,
         )
     return article_similarity(conn, article_id, lookback_days=lookback, real_news_only=real_news_only)
 
