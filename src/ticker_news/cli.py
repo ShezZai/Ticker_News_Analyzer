@@ -572,7 +572,8 @@ def eval_pipeline(
     dataset: str | None = typer.Option(None, "--dataset", help="Langfuse dataset name: upsert --ids as items, then run over the whole dataset."),
     dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
     run_name: str | None = typer.Option(None, "--run-name", help="Experiment run name (default: auto-generated)."),
-    skip_stages: str | None = typer.Option(None, "--skip-stages", help="Comma-separated stages whose stored outputs are reused instead of re-run: embed, classify, tag, insights."),
+    skip_stages: str | None = typer.Option(None, "--skip-stages", help="Comma-separated stages whose stored outputs are reused instead of re-run: embed, classify, tag, insights (or 'all' for every one)."),
+    precedent_source: str | None = typer.Option(None, "--precedent-source", help="Historical-precedent retrieval for the sentiment panel: 'article' (top-k similar articles), 'insights' (per-insight-box neighbors), 'distilled-first' (distilled boxes tagged by first_label), or 'distilled-second' (by second_label, DROP excluded). Default: config (SENTIMENT_PRECEDENT_SOURCE)."),
 ) -> None:
     """Re-run articles E2E through the pipeline; score verdicts against actual price moves."""
     from ticker_news.evals import pipeline_eval
@@ -590,12 +591,19 @@ def eval_pipeline(
         skip = pipeline_eval.parse_skip_stages(skip_stages)
     except ValueError as exc:
         raise typer.BadParameter(f"--skip-stages: {exc}")
+    if precedent_source is not None and precedent_source not in (
+        "article", "insights", "distilled-first", "distilled-second"
+    ):
+        raise typer.BadParameter(
+            "--precedent-source must be 'article', 'insights', 'distilled-first', "
+            "or 'distilled-second'"
+        )
     if not id_list and not dataset:
         raise typer.BadParameter("provide --ids/--ids-file, or --dataset with existing items")
     try:
         result = pipeline_eval.run_eval(
             id_list, dataset_name=dataset, dsn=dsn, run_name=run_name,
-            skip_stages=skip,
+            skip_stages=skip, precedent_source=precedent_source,
         )
     except SystemExit as exc:
         typer.echo(str(exc), err=True)

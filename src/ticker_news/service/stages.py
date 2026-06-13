@@ -32,6 +32,7 @@ from ticker_news.sentiment import store as sentiment_store
 from ticker_news.sentiment.graph import judge_article
 from ticker_news.service.jobs import Job
 from ticker_news.shared import observability as obs
+from ticker_news.shared.config import get_settings
 from ticker_news.shared.llm import GEMINI_FLASH
 
 logger = logging.getLogger(__name__)
@@ -222,7 +223,7 @@ def insights_stage(conn: psycopg.Connection, url: str, tag_ctx: TagContext) -> N
     conn.commit()
 
 
-def similar_past_articles(conn: psycopg.Connection, article_id: int, k: int = 5) -> list[str]:
+def article_similarity(conn: psycopg.Connection, article_id: int, k: int = 5) -> list[str]:
     """Cosine-nearest earlier real-news articles, using the stored embedding.
 
     Two-step on purpose: fetching the target embedding first lets the planner
@@ -251,12 +252,237 @@ def similar_past_articles(conn: psycopg.Connection, article_id: int, k: int = 5)
     return [f"{d} [{t or '?'}] {title}" for d, t, title in rows]
 
 
-def sentiment_stage(conn: psycopg.Connection, url: str) -> dict | None:
+def _apply_hnsw_gucs(cur, ef_search: int) -> None:
+    """Per-transaction HNSW tuning so selective WHERE filters still return rows.
+
+    SET LOCAL via set_config(..., true): scoped to the current transaction, never
+    interpolated into SQL, never leaks onto the reused worker connection. The
+    iterative_scan statement is savepoint-guarded so an older pgvector that lacks
+    the GUC leaves the caller's transaction intact.
+    """
+    cur.execute("SELECT set_config('hnsw.ef_search', %s, true)", (str(ef_search),))
+    cur.execute("SAVEPOINT hnsw_guc")
+    try:
+        cur.execute("SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true)")
+    except Exception:  # noqa: BLE001 - pgvector < 0.8.0 has no such GUC
+        cur.execute("ROLLBACK TO SAVEPOINT hnsw_guc")
+    else:
+        cur.execute("RELEASE SAVEPOINT hnsw_guc")
+
+
+@dataclass(frozen=True)
+class _InsightSource:
+    """How a precedent_source reads + labels an insight-box corpus.
+
+    `table` and `label_col` are a fixed allowlist (below), so both are safe to
+    interpolate into SQL. `label_col` None means the corpus is unlabelled (no
+    tag). `filter_drop` excludes insights this column tags 'DROP'.
+    """
+
+    table: str
+    label_col: str | None = None
+    filter_drop: bool = False
+
+
+# precedent_source value -> its corpus + labelling. The two distilled modes read
+# the SAME table but tag/filter by a different classification pass: first_label
+# (no DROP in the data) vs second_label (DROP filtered out).
+INSIGHT_SOURCES = {
+    "insights": _InsightSource("public.article_insights"),
+    "distilled-first": _InsightSource(
+        "public.distilled_article_insights", "first_label"
+    ),
+    "distilled-second": _InsightSource(
+        "public.distilled_article_insights", "second_label", filter_drop=True
+    ),
+}
+
+
+def _label_tag(label: str | None) -> str:
+    """Compact, prompt-ready tag for an insight's classification label."""
+    return f"[{label}] " if label else ""
+
+
+def insights_similarity(
+    conn: psycopg.Connection,
+    article_id: int,
+    *,
+    table: str = "public.article_insights",
+    label_col: str | None = None,
+    filter_drop: bool = False,
+    threshold: float = 0.7,
+    limit: int = 40,
+) -> list[str]:
+    """Earlier real-news articles whose *insight boxes* echo this article's.
+
+    For each embedded insight box of the target article, find earlier real-news
+    insight boxes whose cosine similarity exceeds `threshold`; union the hits
+    across all boxes (dedup on insight id, keeping the highest similarity), take
+    the top `limit` boxes overall, then GROUP them by source article. Each
+    returned element is one prior article: a `date [ticker] headline` line, with
+    the matching insight excerpt(s) listed beneath when there is more than one
+    (inlined after an em dash when there is exactly one). Same precedent
+    discipline as article_similarity: only earlier-published 'real news'
+    sources, and the target's own boxes are excluded.
+
+    Empty when the target has no embedded boxes or no published_utc.
+    """
+    target = conn.execute(
+        "SELECT published_utc FROM public.articles WHERE id = %s", (article_id,)
+    ).fetchone()
+    if target is None or target[0] is None:
+        logger.debug("no published_utc for article %s; skipping insight precedents", article_id)
+        return []
+    published = target[0]
+    box_rows = conn.execute(
+        f"SELECT embedding FROM {table} "
+        "WHERE article_id = %s AND embedding IS NOT NULL",
+        (article_id,),
+    ).fetchall()
+    if not box_rows:
+        logger.debug("no embedded insight boxes for article %s; skipping precedents", article_id)
+        return []
+
+    # Cosine distance bound is the algebraic mirror of the similarity floor
+    # (similarity = 1 - distance), applied in SQL so the per-box scan returns
+    # only matches we'd keep. One ANN query per target box.
+    max_distance = 1.0 - threshold
+    # The label column exists only on labelled corpora; select NULL elsewhere so
+    # the row shape (and unpack) stays fixed. label_col comes from the allowlisted
+    # _InsightSource, so it is safe to interpolate.
+    label_sql = f"ai.{label_col}" if label_col else "NULL::text"
+    # filter_drop excludes candidates this column tags 'DROP'; IS DISTINCT FROM
+    # keeps NULL/unlabelled rows (a plain != would drop them).
+    drop_sql = (
+        f" AND ai.{label_col} IS DISTINCT FROM 'DROP'" if filter_drop and label_col else ""
+    )
+    # insight_id -> (sim, source_article_id, date, ticker, headline, excerpt)
+    best: dict[int, tuple[float, int, str, str | None, str | None, str]] = {}
+    with conn.cursor() as cur:
+        # The category + date + self filters are selective: HNSW returns ~ef_search
+        # candidates BEFORE the WHERE applies, so without iterative_scan the post-
+        # filtered yield falls well short of `limit`. GUCs are SET LOCAL (scoped to
+        # this transaction), so they never leak onto the shared worker connection.
+        _apply_hnsw_gucs(cur, ef_search=max(40, limit))
+        for (box_embedding,) in box_rows:
+            cur.execute(
+                "SELECT ai.id, ai.article_id, to_char(a.published_utc, 'YYYY-MM-DD'), "
+                "       a.primary_ticker, a.title, ai.insight, ai.topic, "
+                f"      {label_sql}, "
+                "       1 - (ai.embedding <=> %s) AS similarity "
+                f"FROM {table} ai "
+                "JOIN public.articles a ON a.id = ai.article_id "
+                "WHERE ai.article_id != %s AND ai.embedding IS NOT NULL "
+                "  AND a.category = 'real news' AND a.published_utc < %s "
+                f"  AND (ai.embedding <=> %s) < %s{drop_sql} "
+                "ORDER BY ai.embedding <=> %s LIMIT %s",
+                (box_embedding, article_id, published, box_embedding, max_distance,
+                 box_embedding, limit),
+            )
+            for iid, aid, d, ticker, title, insight, topic, label, sim in cur.fetchall():
+                sim = float(sim)
+                prior = best.get(iid)
+                if prior is None or sim > prior[0]:
+                    # collapse internal whitespace so an excerpt is a single line,
+                    # tag it with its classification label when there is text.
+                    body = " ".join((insight or topic or "").split())
+                    excerpt = (_label_tag(label) + body) if body else ""
+                    best[iid] = (sim, aid, d, ticker, title, excerpt)
+
+    ranked = sorted(best.values(), key=lambda r: r[0], reverse=True)[:limit]
+
+    # Group the top excerpts by source article, preserving similarity order so an
+    # article ranks by its strongest matching insight and its excerpts read best
+    # first. Each group renders as one prior article (the header line stays an
+    # article, so "SIMILAR PAST ARTICLES" remains accurate).
+    groups: dict[int, tuple[str, str | None, str | None, list[str]]] = {}
+    order: list[int] = []
+    for _sim, aid, d, ticker, title, excerpt in ranked:
+        if aid not in groups:
+            groups[aid] = (d, ticker, title, [])
+            order.append(aid)
+        groups[aid][3].append(excerpt)
+
+    lines: list[str] = []
+    for aid in order:
+        d, ticker, title, excerpts = groups[aid]
+        header = f"{d} [{ticker or '?'}] {(title or '').strip()}".rstrip()
+        excerpts = [e for e in excerpts if e]
+        if len(excerpts) == 1:
+            lines.append(f"{header} — {excerpts[0]}")
+        elif excerpts:
+            sub = "\n".join(f"    - {e}" for e in excerpts)
+            lines.append(f"{header}\n{sub}")
+        else:
+            lines.append(header)
+    return lines
+
+
+def gather_precedents(
+    conn: psycopg.Connection, article_id: int, source: str | None = None
+) -> list[str]:
+    """Historical-precedent lines for the analyst panel.
+
+    `source` ("article" | "insights" | "distilled-first" | "distilled-second")
+    overrides the configured default — the eval harness uses it to compare
+    retrieval strategies run-over-run without mutating process env. The insight
+    modes are the same flow over a corpus, differing only in labelling/filtering.
+    """
+    s = get_settings()
+    src = INSIGHT_SOURCES.get(source or s.precedent_source)
+    if src:
+        return insights_similarity(
+            conn, article_id, table=src.table, label_col=src.label_col,
+            filter_drop=src.filter_drop,
+            threshold=s.precedent_insights_threshold,
+            limit=s.precedent_insights_limit,
+        )
+    return article_similarity(conn, article_id)
+
+
+def own_article_insights(
+    conn: psycopg.Connection,
+    article_id: int,
+    table: str = "public.article_insights",
+    label_col: str | None = None,
+    filter_drop: bool = False,
+    limit: int = 40,
+) -> list[str]:
+    """The target article's own insights, in box order, from `table`.
+
+    Shown to the historical-precedent analyst under insight modes so it can
+    judge overlap against the matched precedent excerpts. Tagged + DROP-filtered
+    per the active source. Whitespace is collapsed so each insight is one line.
+    Capped at `limit` boxes: most articles have a handful, but the distilled
+    corpus has rare outliers (one article carries ~390 boxes) that would
+    otherwise flood the prompt.
+    """
+    label_sql = f"{label_col}" if label_col else "NULL::text"
+    drop_sql = (
+        f" AND {label_col} IS DISTINCT FROM 'DROP'" if filter_drop and label_col else ""
+    )
+    rows = conn.execute(
+        f"SELECT insight, topic, {label_sql} FROM {table} "
+        f"WHERE article_id = %s{drop_sql} ORDER BY box_index LIMIT %s",
+        (article_id, limit),
+    ).fetchall()
+    out = []
+    for insight, topic, label in rows:
+        text = " ".join((insight or topic or "").split())
+        if text:
+            out.append(_label_tag(label) + text)
+    return out
+
+
+def sentiment_stage(
+    conn: psycopg.Connection, url: str, precedent_source: str | None = None
+) -> dict | None:
     """Judge buy/sell/hold for the article's primary ticker.
 
     Policy: only 'real news' articles with a tagged primary_ticker are judged;
     everything else skips (cheap, idempotent). Returns a verdict summary dict,
-    or None when the article was skipped.
+    or None when the article was skipped. `precedent_source` overrides the
+    configured precedent-retrieval flow (used by the eval harness).
     """
     row = conn.execute(
         "SELECT id, title, content, category, primary_ticker, published_utc, "
@@ -271,7 +497,19 @@ def sentiment_stage(conn: psycopg.Connection, url: str) -> dict | None:
     if sentiment_store.has_verdict(conn, aid, ticker):
         conn.rollback()
         return None
-    precedents = similar_past_articles(conn, aid)
+    settings = get_settings()
+    mode = precedent_source or settings.precedent_source
+    precedents = gather_precedents(conn, aid, source=mode)
+    # Under an insight mode, also surface the target's OWN insights (from the same
+    # corpus, same labelling/filtering) so the analyst can judge overlap.
+    src = INSIGHT_SOURCES.get(mode)
+    own_insights = (
+        own_article_insights(
+            conn, aid, table=src.table, label_col=src.label_col,
+            filter_drop=src.filter_drop, limit=settings.precedent_insights_limit,
+        )
+        if src else []
+    )
     provider_sentiment = ""
     if provider and isinstance(provider, dict):
         entry = provider.get(ticker) or {}
@@ -283,6 +521,10 @@ def sentiment_stage(conn: psycopg.Connection, url: str) -> dict | None:
         "published_utc": published,
         "provider_sentiment": provider_sentiment,
         "precedents": precedents,
+        "own_insights": own_insights,
+        # drives the [label] legend in the historical-precedent prompt: only the
+        # labelled (distilled) corpora tag their excerpts.
+        "precedent_labelled": bool(src and src.label_col),
     }
     conn.rollback()  # release the read transaction; LLM calls can take minutes
     verdict, analyses = judge_article(article, config=obs.chain_config() or None)

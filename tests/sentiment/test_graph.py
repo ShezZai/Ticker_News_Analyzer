@@ -1,7 +1,7 @@
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
-from ticker_news.sentiment.analysts import ANALYST_PROMPTS
+from ticker_news.sentiment.analysts import ANALYST_PROMPTS, render_analyst
 from ticker_news.sentiment.graph import build_graph, judge_article
 from ticker_news.sentiment.schemas import Verdict
 
@@ -48,6 +48,34 @@ def test_precedents_reach_only_the_historical_analyst():
     graph.invoke({"article": ARTICLE, "analyses": [], "verdict": None})
     with_precedent = [p for p in prompts if "prior beat" in p]
     assert len(with_precedent) == 1
+
+
+def test_historical_prompt_shows_own_insights_when_present():
+    article = {**ARTICLE, "own_insights": ["DC revenue +90%", "guidance raised"]}
+    prompt = render_analyst("historical_precedent", article)
+    assert "THIS ARTICLE'S INSIGHTS" in prompt
+    assert "- DC revenue +90%" in prompt
+    assert "- guidance raised" in prompt
+    # other roles never get the section
+    assert "THIS ARTICLE'S INSIGHTS" not in render_analyst("fundamentals", article)
+
+
+def test_historical_prompt_omits_own_insights_when_absent():
+    prompt = render_analyst("historical_precedent", ARTICLE)  # no own_insights key
+    assert "THIS ARTICLE'S INSIGHTS" not in prompt
+    assert "SIMILAR PAST ARTICLES" in prompt
+
+
+def test_label_legend_only_when_precedents_are_labelled():
+    # unlabelled (article/insights) modes: no [label] legend
+    plain = render_analyst("historical_precedent", ARTICLE)
+    assert "CERTAINTY / CLOSURE" not in plain
+    # labelled (distilled) modes: legend present
+    labelled = render_analyst(
+        "historical_precedent", {**ARTICLE, "precedent_labelled": True}
+    )
+    assert "CERTAINTY / CLOSURE" in labelled
+    assert "evidance-event" in labelled
 
 
 def test_judge_article_returns_verdict_and_analyses():

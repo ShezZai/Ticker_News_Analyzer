@@ -32,10 +32,18 @@ _STAGE_COLUMNS = {
 
 
 def parse_skip_stages(raw: str | None) -> frozenset[str]:
-    """Validate a comma-separated --skip-stages value. ValueError on unknowns."""
+    """Validate a comma-separated --skip-stages value. ValueError on unknowns.
+
+    The sentinel ``all`` expands to every skippable stage (reuse all stable
+    upstream outputs, re-run only sentiment); it must stand alone.
+    """
     if not raw:
         return frozenset()
     stages = {s.strip() for s in raw.split(",") if s.strip()}
+    if "all" in stages:
+        if stages != {"all"}:
+            raise ValueError("'all' cannot be combined with other stages")
+        return frozenset(SKIPPABLE_STAGES)
     unknown = stages - set(SKIPPABLE_STAGES)
     if unknown:
         raise ValueError(
@@ -318,11 +326,16 @@ def _warn_failed_items(result, requested_ids: list[int]) -> None:
         )
 
 
-def make_task(dsn: str | None, skip_stages: frozenset[str] = frozenset()):
+def make_task(
+    dsn: str | None,
+    skip_stages: frozenset[str] = frozenset(),
+    precedent_source: str | None = None,
+):
     """Experiment task: reset the article, run the real stage chain, return the verdict.
 
     A fresh connection per invocation — sync psycopg connections must not be
     shared across the runner's concurrent task calls (same rule as the worker).
+    `precedent_source` selects the sentiment precedent flow for this run.
     """
 
     def run_pipeline_task(*, item, **kwargs) -> dict:
@@ -362,7 +375,9 @@ def make_task(dsn: str | None, skip_stages: frozenset[str] = frozenset()):
                 with obs.stage_span("insights"):
                     stages.insights_stage(conn, url, tag_ctx)
                 with obs.stage_span("sentiment"):
-                    verdict = stages.sentiment_stage(conn, url)
+                    verdict = stages.sentiment_stage(
+                        conn, url, precedent_source=precedent_source
+                    )
                 if verdict is None:
                     row = conn.execute(
                         "SELECT primary_ticker FROM public.articles WHERE id = %s",
@@ -399,6 +414,7 @@ def run_eval(
     dsn: str | None = None,
     run_name: str | None = None,
     skip_stages: frozenset[str] = frozenset(),
+    precedent_source: str | None = None,
 ):
     """Run the E2E pipeline experiment; returns the langfuse ExperimentResult.
 
@@ -441,11 +457,13 @@ def run_eval(
     metadata = {"entrypoint": "eval"}
     if skip_stages:
         metadata["skipped_stages"] = sorted(skip_stages)
+    if precedent_source:
+        metadata["precedent_source"] = precedent_source
     common = dict(
         name=EXPERIMENT_NAME,
         run_name=run_name,
         description=_DESCRIPTION,
-        task=make_task(dsn, skip_stages),
+        task=make_task(dsn, skip_stages, precedent_source),
         evaluators=[directional_agreement_evaluator, price_move_evaluator],
         run_evaluators=[avg_directional_agreement],
         # Sync tasks run serially in langfuse 4.7.1 (no to_thread); this only
