@@ -601,20 +601,102 @@ def insights_similarity(
     return lines
 
 
+# Box cap for the ticker-history precedent source: most-recent N insight boxes
+# from the ticker's own prior articles (no similarity floor, so kept tight).
+TICKER_HISTORY_BOX_LIMIT = 15
+
+
+def ticker_insights(
+    conn: psycopg.Connection,
+    article_id: int,
+    *,
+    limit: int = 40,
+    lookback_days: int | None = None,
+    real_news_only: bool = False,
+) -> list[str]:
+    """Insight boxes from the target ticker's OWN prior articles — SQL, not ANN.
+
+    The non-similarity alternative to the insight precedent modes: instead of
+    cosine-matching insight boxes, walk ticker -> articles -> article_insights
+    for the SAME primary/secondary ticker, newest earlier articles first, and
+    return their boxes under the usual precedent discipline (earlier-published,
+    lookback, optional real-news, self excluded). Capped at `limit` boxes total.
+    Empty when the target has no ticker or no published_utc.
+    """
+    target = conn.execute(
+        "SELECT primary_ticker, published_utc FROM public.articles WHERE id = %s",
+        (article_id,),
+    ).fetchone()
+    if target is None or target[0] is None or target[1] is None:
+        logger.debug("no ticker/published_utc for article %s; skipping ticker insights", article_id)
+        return []
+    ticker, published = target
+    lb_tmpl, lb_params = _lookback_clause(published, lookback_days)
+    lb_sql = lb_tmpl.format(col="a.published_utc")
+    cat_sql = f" AND {_actionable_sql('a')}" if real_news_only else ""
+    rows = conn.execute(
+        "SELECT ai.article_id, to_char(a.published_utc, 'YYYY-MM-DD'), "
+        "       a.primary_ticker, a.title, ai.insight, ai.topic "
+        "FROM public.article_insights ai "
+        "JOIN public.articles a ON a.id = ai.article_id "
+        "WHERE a.id != %s AND a.published_utc < %s "
+        "  AND (a.primary_ticker = %s OR %s = ANY(a.more_tickers))"
+        + cat_sql
+        + lb_sql
+        + " ORDER BY a.published_utc DESC, ai.box_index LIMIT %s",
+        (article_id, published, ticker, ticker, *lb_params, limit),
+    ).fetchall()
+
+    # Group boxes by source article, preserving the newest-first row order.
+    groups: dict[int, tuple[str, str | None, str | None, list[str]]] = {}
+    order: list[int] = []
+    for aid, d, tkr, title, insight, topic in rows:
+        if aid not in groups:
+            groups[aid] = (d, tkr, title, [])
+            order.append(aid)
+        body = " ".join((insight or topic or "").split())
+        if body:
+            groups[aid][3].append(body)
+
+    lines: list[str] = []
+    for aid in order:
+        d, tkr, title, excerpts = groups[aid]
+        header = f"{d} [{tkr or '?'}] {(title or '').strip()}".rstrip()
+        if len(excerpts) == 1:
+            lines.append(f"{header} — {excerpts[0]}")
+        elif excerpts:
+            sub = "\n".join(f"    - {e}" for e in excerpts)
+            lines.append(f"{header}\n{sub}")
+        else:
+            lines.append(header)
+    return lines
+
+
 def gather_precedents(
     conn: psycopg.Connection, article_id: int, source: str | None = None
 ) -> list[str]:
     """Historical-precedent lines for the analyst panel.
 
-    `source` ("article" | "insights" | "distilled-first" | "distilled-second")
-    overrides the configured default — the eval harness uses it to compare
-    retrieval strategies run-over-run without mutating process env. The insight
-    modes are the same flow over a corpus, differing only in labelling/filtering.
+    `source` ("article" | "insights" | "distilled-first" | "distilled-second" |
+    "ticker-history") overrides the configured default — the eval harness uses
+    it to compare retrieval strategies run-over-run without mutating process env.
+    The insight modes are the same flow over a corpus, differing only in
+    labelling/filtering; "ticker-history" pulls the ticker's own prior insights
+    by SQL join instead of similarity.
     """
     s = get_settings()
     lookback = s.precedent_lookback_days
     real_news_only = s.precedent_real_news_only
-    src = INSIGHT_SOURCES.get(source or s.precedent_source)
+    mode = source or s.precedent_source
+    if mode == "ticker-history":
+        # Pure-recency retrieval has no similarity floor, so cap tighter than the
+        # ANN modes' precedent_insights_limit to keep the prompt focused on the
+        # ticker's most recent insight boxes.
+        return ticker_insights(
+            conn, article_id, limit=TICKER_HISTORY_BOX_LIMIT,
+            lookback_days=lookback, real_news_only=real_news_only,
+        )
+    src = INSIGHT_SOURCES.get(mode)
     if src:
         restrict = None
         if src.hybrid:
