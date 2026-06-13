@@ -649,3 +649,23 @@ def eval_classify(
     for variant_name, result in results:
         typer.echo(f"=== {variant_name} ===")
         _echo_summary(result.format())
+
+
+@eval_app.command("clusters")
+def eval_clusters(
+    csv: str = typer.Option("docs/article_clusters.csv", "--csv", help="Labelled article-cluster table."),
+    out: str | None = typer.Option("docs/cluster_retrieval_eval.md", "--out", help="Markdown report path ('' to skip writing)."),
+    dsn: str | None = typer.Option(None, "--dsn", help="Target DB DSN (default: DATABASE_URL)."),
+    threshold: float = typer.Option(0.7, "--threshold", help="Cosine similarity floor for retrieval."),
+    limit: int = typer.Option(60, "--limit", min=1, help="Max insight boxes per query."),
+    lookback_plus: int = typer.Option(1, "--lookback-plus", help="Days added to each cluster's lookback column."),
+) -> None:
+    """Retrieval precision/recall over the cluster table: article_insights vs distilled corpora."""
+    from ticker_news.evals import cluster_eval
+
+    try:
+        cluster_eval.run(csv, out or None, dsn, threshold=threshold, limit=limit,
+                         lookback_plus=lookback_plus)
+    except (SystemExit, FileNotFoundError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1)

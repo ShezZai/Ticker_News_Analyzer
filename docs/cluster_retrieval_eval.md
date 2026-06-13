@@ -1,9 +1,7 @@
-# Cluster retrieval evaluation (refined ground truth)
+# Cluster retrieval evaluation
 
 Seed = each cluster's `later act` real-news article. lookback = cluster column **+1d**. threshold 0.7, limit 60, all categories.
-Retrieval core = `stages._ranked_insight_hits`; article-level hits. Ground truth refined: off-topic / other-company-primary
-members pruned (DeepSeek 2670/2682, Amazon 2506, Palantir 11099/11116, Dell 12644).
-
+Retrieval core = `stages._ranked_insight_hits`; article-level hits (a target is hit if ≥1 of its boxes is retrieved).
 `insight_orig` scored vs the article-insights column; distilled variants vs the distilled column.
 
 
@@ -121,6 +119,6 @@ members pruned (DeepSeek 2670/2682, Amazon 2506, Palantir 11099/11116, Dell 1264
 
 ## Caveats
 
-- Precision is vs. the curated set → lower bound on true relevance (some FPs are genuinely related but uncurated).
+- Precision is vs. the curated set → lower bound on true relevance.
 - Apples-to-apples uses the overlap set (retrievable by all methods); recall there is the cleanest comparison.
-- Many remaining misses sit at 0.60–0.70 similarity (just under the 0.7 floor), so recall is threshold-limited; see threshold sweep if run.
+- Many remaining misses sit at 0.60–0.70 similarity (just under the 0.7 floor) → recall is threshold-limited.
