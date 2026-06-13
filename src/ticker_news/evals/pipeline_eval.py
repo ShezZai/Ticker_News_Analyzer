@@ -26,7 +26,7 @@ SKIPPABLE_STAGES = ("embed", "classify", "tag", "insights")
 # stage -> articles columns nulled when the stage is NOT kept.
 _STAGE_COLUMNS = {
     "embed": ("embedding",),
-    "classify": ("category", "category_reason"),
+    "classify": ("category", "category_reason", "is_act"),
     "tag": ("primary_ticker", "primary_segment", "more_tickers", "more_segments"),
     "insights": ("insights_extracted_at",),
 }
@@ -90,6 +90,33 @@ def score_directional(
     return (1.0 if correct else 0.0), f"{action} with {gain_pct:+.2f}% by close -> {verdict}"
 
 
+def score_acceptable(
+    action: str | None,
+    acceptable: list[str] | None,
+    *,
+    skip_reason: str | None = None,
+) -> tuple[float | None, str]:
+    """Set-membership score for one verdict vs the acceptable-verdict set.
+
+    `acceptable` is the dataset item's expected list under the +-0.3% deadband
+    rule (e.g. ["buy", "hold"] for a small up-move, ["sell"] for a clear drop).
+    A verdict is correct iff it is in that set, so both the gain-direction call
+    AND hold count inside the deadband while the opposite-direction call does
+    not. Returns (value, comment): 1.0 / 0.0, or None when the item cannot be
+    scored — no verdict was produced, or there is no expected set (local --ids
+    runs carry no expected_output). None scores are excluded from aggregates.
+    """
+    if not acceptable:
+        return None, "no acceptable_verdicts (local run or missing expected output)"
+    if action is None:
+        return None, f"no verdict ({skip_reason or 'sentiment skipped'})"
+    a = action.lower()
+    ok = a in acceptable
+    return (1.0 if ok else 0.0), (
+        f"verdict '{a}' vs acceptable {acceptable} -> {'acceptable' if ok else 'wrong'}"
+    )
+
+
 def upsert_dataset_items(client, dataset_name: str, items: list[dict]) -> None:
     """Idempotently seed dataset items keyed on input.article_id.
 
@@ -151,7 +178,11 @@ def ensure_eval_schema(conn: psycopg.Connection) -> None:
             "WHERE table_schema = 'public' AND table_name = 'articles'"
         ).fetchall()
     }
-    wanted = {"insights_extracted_at": "timestamptz", "provider_sentiments": "jsonb"}
+    wanted = {
+        "insights_extracted_at": "timestamptz",
+        "provider_sentiments": "jsonb",
+        "is_act": "boolean",
+    }
     for column, pg_type in wanted.items():
         if column not in existing:
             conn.execute(
@@ -289,6 +320,28 @@ def price_move_evaluator(*, input, output, **kwargs) -> Evaluation:
     )
 
 
+def verdict_acceptable_evaluator(
+    *, input, output, expected_output=None, **kwargs
+) -> Evaluation:
+    """Langfuse item evaluator: is the produced verdict in the dataset item's
+    acceptable-verdict set (the +-0.3% deadband rule)?
+
+    Reads ``expected_output.acceptable_verdicts``, which is present only on
+    dataset runs (e.g. `400-articles-sentiment-verdict`); local --ids runs have
+    no expected output and are skipped. Langfuse rejects value=None, so
+    unscorable items become a categorical sibling score, matching
+    directional_agreement_evaluator.
+    """
+    out = output or {}
+    acceptable = (expected_output or {}).get("acceptable_verdicts")
+    value, comment = score_acceptable(
+        out.get("action"), acceptable, skip_reason=out.get("skip_reason")
+    )
+    if value is None:
+        return Evaluation(name="verdict_acceptable_skip", value=comment)
+    return Evaluation(name="verdict_acceptable", value=value, comment=comment)
+
+
 def avg_directional_agreement(*, item_results, **kwargs) -> Evaluation:
     values = [
         e.value
@@ -303,6 +356,24 @@ def avg_directional_agreement(*, item_results, **kwargs) -> Evaluation:
     avg = sum(values) / len(values)
     return Evaluation(
         name="avg_directional_agreement", value=avg,
+        comment=f"scored {len(values)}/{len(item_results)} items, avg {avg:.2f}",
+    )
+
+
+def avg_verdict_acceptable(*, item_results, **kwargs) -> Evaluation:
+    """Run-level accuracy under the deadband rule: fraction of scorable items
+    whose verdict was in the acceptable set."""
+    values = [
+        e.value
+        for r in item_results
+        for e in r.evaluations
+        if e.name == "verdict_acceptable" and e.value is not None
+    ]
+    if not values:
+        return Evaluation(name="avg_verdict_acceptable_skip", value="no scorable items")
+    avg = sum(values) / len(values)
+    return Evaluation(
+        name="avg_verdict_acceptable", value=avg,
         comment=f"scored {len(values)}/{len(item_results)} items, avg {avg:.2f}",
     )
 
@@ -388,12 +459,14 @@ def make_task(
                     )
                 if verdict is None:
                     row = conn.execute(
-                        "SELECT primary_ticker FROM public.articles WHERE id = %s",
+                        "SELECT primary_ticker, is_act FROM public.articles WHERE id = %s",
                         (article_id,),
                     ).fetchone()
                     ticker = row[0] if row else None
+                    is_act = row[1] if row else None
+                    actionable = bool(is_act) if is_act is not None else category == "real news"
                     reason = (
-                        f"category={category}" if category != "real news"
+                        f"not actionable (category={category})" if not actionable
                         else "no primary ticker" if not ticker
                         else "sentiment skipped"
                     )
@@ -475,8 +548,12 @@ def run_eval(
         run_name=run_name,
         description=_DESCRIPTION,
         task=make_task(dsn, skip_stages, precedent_source),
-        evaluators=[directional_agreement_evaluator, price_move_evaluator],
-        run_evaluators=[avg_directional_agreement],
+        evaluators=[
+            directional_agreement_evaluator,
+            price_move_evaluator,
+            verdict_acceptable_evaluator,
+        ],
+        run_evaluators=[avg_directional_agreement, avg_verdict_acceptable],
         # The async task offloads each item's stage chain to a thread, so this
         # genuinely caps concurrent items. Kept modest by default - every item
         # fans out ~7 LLM calls and hits the shared DB, so the real ceiling is

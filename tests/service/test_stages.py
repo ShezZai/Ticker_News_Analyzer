@@ -166,8 +166,9 @@ class _StubConn:
         pass
 
 
-async def test_sentiment_skips_non_real_news(monkeypatch):
-    conn = _StubConn([(1, "T", "body", "marketing fluff", "NVDA", None, None)])
+async def test_sentiment_skips_non_actionable_legacy(monkeypatch):
+    # is_act NULL -> legacy fallback to category != 'real news' -> skip
+    conn = _StubConn([(1, "T", "body", "marketing fluff", None, "NVDA", None, None)])
     called = {}
     monkeypatch.setattr(stages, "judge_article", lambda a, config=None: called.setdefault("x", True))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
@@ -175,33 +176,42 @@ async def test_sentiment_skips_non_real_news(monkeypatch):
     assert conn.rolled_back == 1
 
 
+async def test_sentiment_skips_non_act_finegrained(monkeypatch):
+    # is_act=False overrides even an actionable-looking finegrained category
+    conn = _StubConn([(1, "T", "body", "recap/review", False, "NVDA", None, None)])
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
+    assert stages.sentiment_stage(conn, "https://example.com/a") is None
+    assert conn.rolled_back == 1
+
+
 async def test_sentiment_skips_untagged(monkeypatch):
-    conn = _StubConn([(1, "T", "body", "real news", None, None, None)])
+    conn = _StubConn([(1, "T", "body", "real news", None, None, None, None)])
     monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
 
 async def test_sentiment_skips_empty_content(monkeypatch):
-    conn = _StubConn([(1, "T", "   ", "real news", "NVDA", None, None)])
+    conn = _StubConn([(1, "T", "   ", "real news", None, "NVDA", None, None)])
     monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
 
 async def test_sentiment_skips_existing_verdict(monkeypatch):
-    conn = _StubConn([(1, "T", "body", "real news", "NVDA", None, None)])
+    conn = _StubConn([(1, "T", "body", "real news", None, "NVDA", None, None)])
     monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: True)
     monkeypatch.setattr(stages, "judge_article", lambda a, config=None: (_ for _ in ()).throw(AssertionError))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
 
-async def test_sentiment_judges_real_news(monkeypatch):
+async def test_sentiment_judges_act_finegrained(monkeypatch):
+    # is_act=True on a finegrained category drives judging (new path)
     from ticker_news.sentiment.schemas import Verdict
 
     conn = _StubConn([
-        (1, "T", "body", "real news", "NVDA", None, {"NVDA": {"sentiment": "positive"}}),
+        (1, "T", "body", "news-event", True, "NVDA", None, {"NVDA": {"sentiment": "positive"}}),
     ])
     seen = {}
     monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: False)
@@ -375,25 +385,33 @@ def test_gather_precedents_dispatches_on_config(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-async def test_classify_returns_category(monkeypatch):
-    from types import SimpleNamespace
-
+async def test_classify_returns_finegrained_category_and_stores_is_act(monkeypatch):
     # Second queued row feeds the UPDATE execute (its cursor result is unused).
     conn = _StubConn([(1, "T", "body", None), None])
+    seen = {}
     monkeypatch.setattr(
-        stages, "classify_article",
-        lambda title, content, config=None: (
-            SimpleNamespace(category="real news", reason="solid"), True),
+        stages, "classify_article_finegrained",
+        lambda title, content, config=None: ("news-event", "solid", True),
     )
-    assert stages.classify_stage(conn, "https://example.com/a") == "real news"
+    # capture the UPDATE params to confirm is_act is persisted
+    orig_execute = conn.execute
+
+    def spy(sql, params=None):
+        if sql.strip().startswith("UPDATE"):
+            seen["params"] = params
+        return orig_execute(sql, params)
+
+    conn.execute = spy
+    assert stages.classify_stage(conn, "https://example.com/a") == "news-event"
+    assert seen["params"] == ("news-event", "solid", True, 1)
 
 
 async def test_classify_skip_paths_return_none(monkeypatch):
     monkeypatch.setattr(
-        stages, "classify_article",
+        stages, "classify_article_finegrained",
         lambda *a, **kw: (_ for _ in ()).throw(AssertionError),
     )
-    already = _StubConn([(1, "T", "body", "marketing fluff")])
+    already = _StubConn([(1, "T", "body", "news-event")])
     assert stages.classify_stage(already, "https://example.com/a") is None
     assert already.rolled_back == 1
     empty = _StubConn([(1, "T", "   ", None)])
@@ -426,9 +444,12 @@ def _fake_stage_span(record):
 
 
 def _stub_sentiment_conn():
-    """Minimal _StubConn for the judging path: real news + NVDA ticker."""
+    """Minimal _StubConn for the judging path: real news + NVDA ticker.
+
+    is_act NULL exercises the legacy COALESCE fallback (category == 'real news').
+    """
     return _StubConn([
-        (1, "T", "body", "real news", "NVDA", None, None),
+        (1, "T", "body", "real news", None, "NVDA", None, None),
     ])
 
 
@@ -452,6 +473,7 @@ def _patch_sentiment_deps(monkeypatch, precedents, own_insights, mode):
         precedent_insights_limit = 20
         precedent_lookback_days = 90
         precedent_real_news_only = False
+        sentiment_verdict_model = "gemini-2.5-flash-lite"
 
     monkeypatch.setattr(stages, "get_settings", lambda: _S())
     monkeypatch.setattr(

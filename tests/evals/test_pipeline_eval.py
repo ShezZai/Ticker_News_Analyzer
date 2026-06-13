@@ -11,14 +11,17 @@ from ticker_news.evals import pipeline_eval
 from ticker_news.evals.pipeline_eval import (
     SKIPPABLE_STAGES,
     avg_directional_agreement,
+    avg_verdict_acceptable,
     build_items,
     directional_agreement_evaluator,
     parse_ids_file,
     parse_skip_stages,
     price_move_evaluator,
     reset_article,
+    score_acceptable,
     score_directional,
     upsert_dataset_items,
+    verdict_acceptable_evaluator,
 )
 
 
@@ -68,6 +71,41 @@ class TestScoreDirectional:
         value, comment = score_directional("strong-buy", 1.0)
         assert value is None
         assert "strong-buy" in comment
+
+
+class TestScoreAcceptable:
+    def test_direction_call_inside_set_scores_one(self):
+        value, comment = score_acceptable("buy", ["buy", "hold"])
+        assert value == 1.0
+        assert "acceptable" in comment
+
+    def test_hold_inside_set_scores_one(self):
+        value, _ = score_acceptable("hold", ["sell", "hold"])
+        assert value == 1.0
+
+    def test_opposite_direction_scores_zero(self):
+        value, comment = score_acceptable("buy", ["sell", "hold"])
+        assert value == 0.0
+        assert "wrong" in comment
+
+    def test_hold_when_only_a_direction_is_acceptable_scores_zero(self):
+        value, _ = score_acceptable("hold", ["buy"])
+        assert value == 0.0
+
+    def test_case_insensitive(self):
+        value, _ = score_acceptable("BUY", ["buy"])
+        assert value == 1.0
+
+    def test_no_acceptable_set_is_excluded(self):
+        # local --ids runs carry no expected_output
+        value, comment = score_acceptable("buy", None)
+        assert value is None
+        assert "acceptable_verdicts" in comment
+
+    def test_no_verdict_is_excluded_with_reason(self):
+        value, comment = score_acceptable(None, ["buy"], skip_reason="category=recap/review")
+        assert value is None
+        assert "category=recap/review" in comment
 
 
 class FakeCursor:
@@ -216,6 +254,44 @@ class TestItemEvaluators:
         assert "no tradeable" in ev.value
 
 
+class TestVerdictAcceptableEvaluator:
+    def test_acceptable_verdict_scores_one(self):
+        ev = verdict_acceptable_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "hold", "ticker": "MRVL", "skip_reason": None},
+            expected_output={"acceptable_verdicts": ["sell", "hold"], "gain_pct": -0.1},
+        )
+        assert ev.name == "verdict_acceptable"
+        assert ev.value == 1.0
+
+    def test_wrong_verdict_scores_zero(self):
+        ev = verdict_acceptable_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
+            expected_output={"acceptable_verdicts": ["sell"], "gain_pct": -2.0},
+        )
+        assert ev.name == "verdict_acceptable"
+        assert ev.value == 0.0
+
+    def test_no_verdict_becomes_categorical_skip_score(self):
+        ev = verdict_acceptable_evaluator(
+            input=ITEM_INPUT,
+            output={"action": None, "ticker": None, "skip_reason": "no primary ticker"},
+            expected_output={"acceptable_verdicts": ["buy"]},
+        )
+        assert ev.name == "verdict_acceptable_skip"
+        assert "no primary ticker" in ev.value
+
+    def test_missing_expected_output_becomes_skip_score(self):
+        # local --ids mode: items have no expected_output
+        ev = verdict_acceptable_evaluator(
+            input=ITEM_INPUT,
+            output={"action": "buy", "ticker": "MRVL", "skip_reason": None},
+            expected_output=None,
+        )
+        assert ev.name == "verdict_acceptable_skip"
+
+
 def _result(*evals):
     return SimpleNamespace(evaluations=list(evals))
 
@@ -236,6 +312,25 @@ class TestRunEvaluator:
     def test_no_scorable_items(self):
         ev = avg_directional_agreement(item_results=[])
         assert ev.name == "avg_directional_agreement_skip"
+        assert ev.value == "no scorable items"
+
+
+class TestAvgVerdictAcceptable:
+    def test_averages_only_scored_items(self):
+        results = [
+            _result(SimpleNamespace(name="verdict_acceptable", value=1.0)),
+            _result(SimpleNamespace(name="verdict_acceptable", value=1.0)),
+            _result(SimpleNamespace(name="verdict_acceptable", value=0.0)),
+            _result(SimpleNamespace(name="verdict_acceptable_skip", value="no verdict")),
+        ]
+        ev = avg_verdict_acceptable(item_results=results)
+        assert ev.name == "avg_verdict_acceptable"
+        assert ev.value == pytest.approx(2 / 3)
+        assert "3/4" in ev.comment
+
+    def test_no_scorable_items(self):
+        ev = avg_verdict_acceptable(item_results=[])
+        assert ev.name == "avg_verdict_acceptable_skip"
         assert ev.value == "no scorable items"
 
 

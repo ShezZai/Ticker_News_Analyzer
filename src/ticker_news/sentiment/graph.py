@@ -1,9 +1,11 @@
-"""Sentiment orchestration: Send fan-out to fixed-role analysts, then a
-structured-output synthesis. No supervisor — roles are static, always all run.
+"""Sentiment orchestration: a single historical-precedent verdict node.
 
-Nodes are sync on purpose: the stage runs inside asyncio.to_thread, and
-LangGraph executes a superstep's parallel Send tasks on its background
-executor, so the three analysts still run concurrently.
+Simplified from the old three-analyst fan-out + synthesis judge: one
+structured-output call weighs the historical precedents and emits the
+buy/sell/hold Verdict directly. The model is configurable
+(SENTIMENT_VERDICT_MODEL, default gemini-2.5-flash-lite).
+
+The node is sync on purpose: the stage runs inside asyncio.to_thread.
 """
 
 from __future__ import annotations
@@ -13,15 +15,11 @@ from functools import lru_cache
 from typing import Annotated, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Send
 
-from ticker_news.sentiment.analysts import (
-    ANALYST_PROMPTS,
-    render_analyst,
-    render_synthesis,
-)
+from ticker_news.sentiment.analysts import render_verdict
 from ticker_news.sentiment.schemas import Verdict
-from ticker_news.shared.llm import GEMINI_FLASH, GEMINI_FLASH_LITE, gemini_chat
+from ticker_news.shared.config import get_settings
+from ticker_news.shared.llm import gemini_chat
 
 GEMINI_TIMEOUT_S = 90.0
 RETRIES = 3
@@ -33,46 +31,37 @@ class SentimentState(TypedDict):
     verdict: Optional[Verdict]
 
 
-def _default_analyst_llm():
-    return gemini_chat(GEMINI_FLASH_LITE, timeout_s=GEMINI_TIMEOUT_S).with_retry(
-        stop_after_attempt=RETRIES, wait_exponential_jitter=True
-    )
-
-
-def _default_judge():
+def _default_verdict_llm():
+    """Structured-output Gemini for the verdict, model from settings."""
+    model = get_settings().sentiment_verdict_model
     return (
-        gemini_chat(GEMINI_FLASH, timeout_s=GEMINI_TIMEOUT_S)
+        gemini_chat(model, timeout_s=GEMINI_TIMEOUT_S)
         .with_structured_output(Verdict)
         .with_retry(stop_after_attempt=RETRIES, wait_exponential_jitter=True)
     )
 
 
-def build_graph(*, analyst_llm=None, judge=None):
-    analyst_llm = analyst_llm if analyst_llm is not None else _default_analyst_llm()
-    judge = judge if judge is not None else _default_judge()
+def build_graph(*, verdict_llm=None):
+    verdict_llm = verdict_llm if verdict_llm is not None else _default_verdict_llm()
 
-    def fan_out(state: SentimentState):
-        return [
-            Send("analyst", {"article": state["article"], "role": role})
-            for role in ANALYST_PROMPTS
-        ]
-
-    def analyst(payload: dict) -> dict:
-        prompt = render_analyst(payload["role"], payload["article"])
-        message = analyst_llm.invoke(prompt, config={"run_name": f"analyst:{payload['role']}"})
-        text = getattr(message, "content", None) or str(message)
-        return {"analyses": [{"role": payload["role"], "analysis": text}]}
-
-    def synthesize(state: SentimentState) -> dict:
-        prompt = render_synthesis(state["article"], state["analyses"])
-        return {"verdict": judge.invoke(prompt, config={"run_name": "synthesize"})}
+    def verdict_node(state: SentimentState) -> dict:
+        prompt = render_verdict(state["article"])
+        # run_name kept as "synthesize" - the stable verdict-producing
+        # observation name in the eval contract.
+        verdict = verdict_llm.invoke(prompt, config={"run_name": "synthesize"})
+        # Preserve the (verdict, analyses) contract: the single historical-
+        # precedent rationale is recorded as the lone analysis for provenance.
+        return {
+            "verdict": verdict,
+            "analyses": [
+                {"role": "historical_precedent", "analysis": verdict.reasoning or ""}
+            ],
+        }
 
     g = StateGraph(SentimentState)
-    g.add_node("analyst", analyst)
-    g.add_node("synthesize", synthesize)
-    g.add_conditional_edges(START, fan_out, ["analyst"])
-    g.add_edge("analyst", "synthesize")
-    g.add_edge("synthesize", END)
+    g.add_node("verdict", verdict_node)
+    g.add_edge(START, "verdict")
+    g.add_edge("verdict", END)
     return g.compile()
 
 
@@ -82,7 +71,7 @@ def _default_graph():
 
 
 def judge_article(article: dict, *, graph=None, config=None) -> tuple[Verdict, list[dict]]:
-    """Run the full analyst panel + synthesis for one article/ticker."""
+    """Run the historical-precedent verdict for one article/ticker."""
     graph = graph if graph is not None else _default_graph()
     result = graph.invoke({"article": article, "analyses": [], "verdict": None}, config=config)
     return result["verdict"], result["analyses"]

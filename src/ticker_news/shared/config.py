@@ -68,6 +68,14 @@ class AppSettings(BaseSettings):
         default=False, validation_alias="SENTIMENT_PRECEDENT_REAL_NEWS_ONLY"
     )
 
+    # Gemini model that generates the buy/sell/hold verdict (the single
+    # historical-precedent verdict node). Default is flash-lite for cheap
+    # testing; set to "gemini-2.5-flash" for the stronger model. Literal string
+    # (not the llm.GEMINI_* constant) to avoid a config<-llm import cycle.
+    sentiment_verdict_model: str = Field(
+        default="gemini-2.5-flash-lite", validation_alias="SENTIMENT_VERDICT_MODEL"
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> AppSettings:

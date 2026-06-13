@@ -17,7 +17,7 @@ from typing import Callable, Optional
 import psycopg
 from psycopg.types.json import Jsonb
 
-from ticker_news.classification.chain import classify_article
+from ticker_news.classification.chain import classify_article_finegrained
 from ticker_news.embedding.embedder import build_text, embed_texts
 from ticker_news.enrichment.insights import _store_article_boxes, generate_boxes
 from ticker_news.enrichment.insights_text import DEFAULT_QUOTE_THRESHOLD
@@ -34,13 +34,26 @@ from ticker_news.sentiment.graph import judge_article
 from ticker_news.service.jobs import Job
 from ticker_news.shared import observability as obs
 from ticker_news.shared.config import get_settings
-from ticker_news.shared.llm import GEMINI_FLASH
 
 logger = logging.getLogger(__name__)
 
 
 class StageError(RuntimeError):
     """A stage failed in a way that should consume a retry attempt."""
+
+
+# An article is "actionable" — judged for sentiment, eligible as a precedent —
+# when the fine-grained classifier flagged it ACT (is_act = True). Rows
+# classified before the fine-grained switch have is_act NULL, so we fall back to
+# the legacy category == 'real news' label. Keep the SQL and Python forms in
+# sync; both encode the same COALESCE(is_act, category = 'real news') rule.
+def _actionable_sql(alias: str = "") -> str:
+    p = f"{alias}." if alias else ""
+    return f"COALESCE({p}is_act, {p}category = 'real news')"
+
+
+def _is_actionable(is_act: bool | None, category: str | None) -> bool:
+    return bool(is_act) if is_act is not None else category == "real news"
 
 
 class PermanentStageError(StageError):
@@ -120,7 +133,11 @@ def embed_stage(conn: psycopg.Connection, url: str) -> None:
 
 
 def classify_stage(conn: psycopg.Connection, url: str) -> str | None:
-    """Returns the assigned category, or None when the article was skipped."""
+    """Single-pass fine-grained classify; stores category + reason + is_act.
+
+    Returns the assigned fine-grained category, or None when the article was
+    skipped (already classified, or no content).
+    """
     row = conn.execute(
         "SELECT id, title, content, category FROM public.articles WHERE url = %s",
         (url,),
@@ -134,13 +151,16 @@ def classify_stage(conn: psycopg.Connection, url: str) -> str | None:
     if not (content or "").strip():
         conn.rollback()
         return None
-    verdict, _confirmed = classify_article(title, content or "", config=obs.chain_config() or None)
+    category, reason, is_act = classify_article_finegrained(
+        title, content or "", config=obs.chain_config() or None
+    )
     conn.execute(
-        "UPDATE public.articles SET category = %s, category_reason = %s WHERE id = %s",
-        (verdict.category, verdict.reason or None, aid),
+        "UPDATE public.articles SET category = %s, category_reason = %s, is_act = %s "
+        "WHERE id = %s",
+        (category, reason, is_act, aid),
     )
     conn.commit()
-    return verdict.category
+    return category
 
 
 @dataclass
@@ -263,7 +283,7 @@ def article_similarity(
         return []
     embedding, published = target
     lb_sql, lb_params = _lookback_clause(published, lookback_days)
-    cat_sql = " AND category = 'real news'" if real_news_only else ""
+    cat_sql = f" AND {_actionable_sql()}" if real_news_only else ""
     rows = conn.execute(
         "SELECT to_char(published_utc, 'YYYY-MM-DD'), primary_ticker, title "
         "FROM public.articles "
@@ -379,7 +399,7 @@ def _ranked_insight_hits(
     )
     lb_tmpl, lb_params = _lookback_clause(published, lookback_days)
     lb_sql = lb_tmpl.format(col="a.published_utc")
-    cat_sql = " AND a.category = 'real news'" if real_news_only else ""
+    cat_sql = f" AND {_actionable_sql('a')}" if real_news_only else ""
     # insight_id -> (sim, source_article_id, date, ticker, headline, excerpt)
     best: dict[int, tuple[float, int, str, str | None, str | None, str]] = {}
     with conn.cursor() as cur:
@@ -541,19 +561,21 @@ def sentiment_stage(
 ) -> dict | None:
     """Judge buy/sell/hold for the article's primary ticker.
 
-    Policy: only 'real news' articles with a tagged primary_ticker are judged;
-    everything else skips (cheap, idempotent). Returns a verdict summary dict,
-    or None when the article was skipped. `precedent_source` overrides the
-    configured precedent-retrieval flow (used by the eval harness).
+    Policy: only ACTIONABLE articles with a tagged primary_ticker are judged;
+    everything else skips (cheap, idempotent). Actionable = is_act (the
+    fine-grained ACT/no-ACT collapse), falling back to the legacy
+    category == 'real news' for rows classified before the fine-grained switch.
+    Returns a verdict summary dict, or None when the article was skipped.
+    `precedent_source` overrides the configured precedent-retrieval flow.
     """
     row = conn.execute(
-        "SELECT id, title, content, category, primary_ticker, published_utc, "
+        "SELECT id, title, content, category, is_act, primary_ticker, published_utc, "
         "provider_sentiments FROM public.articles WHERE url = %s", (url,),
     ).fetchone()
     if row is None:
         raise StageError(f"article row missing for {url}")
-    aid, title, content, category, ticker, published, provider = row
-    if category != "real news" or not ticker or not (content or "").strip():
+    aid, title, content, category, is_act, ticker, published, provider = row
+    if not _is_actionable(is_act, category) or not ticker or not (content or "").strip():
         conn.rollback()
         return None
     if sentiment_store.has_verdict(conn, aid, ticker):
@@ -601,6 +623,8 @@ def sentiment_stage(
     }
     conn.rollback()  # release the read transaction; LLM calls can take minutes
     verdict, analyses = judge_article(article, config=obs.chain_config() or None)
-    sentiment_store.save_verdict(conn, aid, ticker, verdict, analyses, GEMINI_FLASH)
+    sentiment_store.save_verdict(
+        conn, aid, ticker, verdict, analyses, settings.sentiment_verdict_model
+    )
     return {"ticker": ticker, "action": verdict.action,
             "confidence": verdict.confidence}
