@@ -374,6 +374,8 @@ def test_gather_precedents_dispatches_on_config(monkeypatch):
         precedent_insights_limit = 40
         precedent_lookback_days = 90
         precedent_real_news_only = False
+        precedent_ticker_history_limit = 15
+        precedent_ticker_fallback_min = 3
 
     monkeypatch.setattr(stages, "get_settings", lambda: _S())
     assert stages.gather_precedents(None, 1) == ["insight-line"]
@@ -389,6 +391,24 @@ def test_gather_precedents_dispatches_on_config(monkeypatch):
         "public.distilled_article_insights", "second_label", True)
     _S.precedent_source = "article"
     assert stages.gather_precedents(None, 1) == ["article-line"]
+    # new ticker-scoped modes dispatch to their helpers and pass the config cap
+    cap_seen = {}
+    monkeypatch.setattr(
+        stages, "ticker_history_fallback",
+        lambda c, a, *, limit, fallback_min, **kw: cap_seen.update(
+            limit=limit, fallback_min=fallback_min) or (["fb-line"], False),
+    )
+    monkeypatch.setattr(
+        stages, "ticker_blend_insights",
+        lambda c, a, *, limit, **kw: cap_seen.update(blend_limit=limit) or ["blend-line"],
+    )
+    _S.precedent_ticker_history_limit = 25
+    _S.precedent_source = "ticker-history-fallback"
+    assert stages.gather_precedents(None, 1) == ["fb-line"]
+    assert (cap_seen["limit"], cap_seen["fallback_min"]) == (25, 3)
+    _S.precedent_source = "ticker-blend"
+    assert stages.gather_precedents(None, 1) == ["blend-line"]
+    assert cap_seen["blend_limit"] == 25
 
 
 # ---------------------------------------------------------------------------
@@ -535,3 +555,82 @@ def test_sentiment_span_records_threshold_and_limit(monkeypatch):
     stages.sentiment_stage(conn, "https://example.com/a", precedent_source="insights")
     assert record["metadata"]["threshold"] == 0.75
     assert record["metadata"]["limit"] == 20
+
+
+# --- new ticker-scoped precedent helpers -----------------------------------
+
+def test_render_box_groups_inline_and_bulleted():
+    """One excerpt renders inline with an em-dash; multiple bullet under a header;
+    row order is preserved and boxes group by source article."""
+    rows = [
+        (10, "2026-06-01", "NVDA", "Beat", "DC rev +90%", None),
+        (10, "2026-06-01", "NVDA", "Beat", "guidance raised", None),
+        (11, "2026-05-20", "NVDA", "Deal", "signed supply deal", None),
+    ]
+    lines = stages._render_box_groups(rows)
+    assert lines[0].startswith("2026-06-01 [NVDA] Beat")
+    assert "    - DC rev +90%" in lines[0]
+    assert "    - guidance raised" in lines[0]
+    assert lines[1] == "2026-05-20 [NVDA] Deal — signed supply deal"
+
+
+def test_ticker_history_fallback_no_supplement_when_enough(monkeypatch):
+    """At/above fallback_min the ticker's own lines are returned untouched; no
+    cross-corpus call."""
+    monkeypatch.setattr(stages, "ticker_insights", lambda *a, **k: ["own1", "own2", "own3"])
+    monkeypatch.setattr(
+        stages, "article_similarity",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not supplement")),
+    )
+    lines, supplemented = stages.ticker_history_fallback(
+        object(), 1, limit=15, fallback_min=3,
+    )
+    assert lines == ["own1", "own2", "own3"]
+    assert supplemented is False
+
+
+def test_ticker_history_fallback_supplements_when_thin(monkeypatch):
+    """Below fallback_min the cross-corpus lines are appended after the ticker's own."""
+    monkeypatch.setattr(stages, "ticker_insights", lambda *a, **k: ["own1"])
+    monkeypatch.setattr(stages, "article_similarity", lambda *a, **k: ["xcorp1", "xcorp2"])
+    lines, supplemented = stages.ticker_history_fallback(
+        object(), 1, limit=15, fallback_min=3,
+    )
+    assert lines == ["own1", "xcorp1", "xcorp2"]
+    assert supplemented is True
+
+
+def test_ticker_history_fallback_thin_but_no_cross_corpus(monkeypatch):
+    """Thin history with no cross-corpus neighbours returns the (short) own list,
+    not-supplemented."""
+    monkeypatch.setattr(stages, "ticker_insights", lambda *a, **k: ["own1"])
+    monkeypatch.setattr(stages, "article_similarity", lambda *a, **k: [])
+    lines, supplemented = stages.ticker_history_fallback(
+        object(), 1, limit=15, fallback_min=3,
+    )
+    assert lines == ["own1"]
+    assert supplemented is False
+
+
+def test_ticker_blend_dedups_relevance_then_recency(monkeypatch):
+    """Relevance rows come first; recency rows for an already-seen article merge
+    into the same group (no duplicate line)."""
+    rel = [(20, "2026-06-02", "NVDA", "Relevant story", "echoes this event", None)]
+    rec = [
+        (20, "2026-06-02", "NVDA", "Relevant story", "echoes this event", None),  # dup article
+        (21, "2026-06-10", "NVDA", "Newest", "latest update", None),
+    ]
+    calls = []
+
+    def _fake_rows(conn, aid, *, order_by, limit, lookback_days, real_news_only, by_embedding):
+        calls.append(by_embedding)
+        return rel if by_embedding else rec
+
+    monkeypatch.setattr(stages, "_ticker_box_rows", _fake_rows)
+    lines = stages.ticker_blend_insights(object(), 1, limit=15)
+    # relevance fetched (by_embedding True) and recency fetched (False)
+    assert calls == [True, False]
+    # article 20 appears once (relevance-first), article 21 appended from recency
+    assert sum("Relevant story" in ln for ln in lines) == 1
+    assert any("Newest" in ln for ln in lines)
+    assert lines[0].startswith("2026-06-02 [NVDA] Relevant story")

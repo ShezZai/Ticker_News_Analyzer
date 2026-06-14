@@ -83,6 +83,19 @@ class AppSettings(BaseSettings):
     precedent_hybrid_box_threshold: float = Field(
         default=0.65, validation_alias="SENTIMENT_PRECEDENT_HYBRID_BOX_THRESHOLD"
     )
+    # Box cap for the ticker-scoped precedent modes (ticker-history / -relevant /
+    # -fallback / -blend). Default 15 matches the original TICKER_HISTORY_BOX_LIMIT
+    # constant — no behaviour change unless overridden. Tunable to sweep how much
+    # of the ticker's own history the verdict sees.
+    precedent_ticker_history_limit: int = Field(
+        default=15, validation_alias="SENTIMENT_PRECEDENT_TICKER_HISTORY_LIMIT"
+    )
+    # ticker-history-fallback: when the ticker's own prior boxes number fewer than
+    # this, supplement with cross-corpus article-similarity precedents so thin-
+    # history names aren't left with "(none found)".
+    precedent_ticker_fallback_min: int = Field(
+        default=3, validation_alias="SENTIMENT_PRECEDENT_TICKER_FALLBACK_MIN"
+    )
 
     # Gemini model that generates the buy/sell/hold verdict (the single
     # historical-precedent verdict node). Default is flash-lite for cheap

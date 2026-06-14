@@ -603,7 +603,44 @@ def insights_similarity(
 
 # Box cap for the ticker-history precedent source: most-recent N insight boxes
 # from the ticker's own prior articles (no similarity floor, so kept tight).
+# The runtime cap is `settings.precedent_ticker_history_limit` (default 15); this
+# constant is the historical default kept for back-compat / direct callers.
 TICKER_HISTORY_BOX_LIMIT = 15
+
+
+def _render_box_groups(
+    rows: list[tuple[int, str, str | None, str | None, str | None, str | None]],
+) -> list[str]:
+    """Group (article_id, date, ticker, title, insight, topic) rows into one
+    display line per source article, PRESERVING the input row order.
+
+    Shared by the ticker-scoped precedent modes: an article ranks by its first
+    appearing box, so the caller controls precedence purely by row ordering
+    (newest-first for recency, distance-first for relevance). Single-excerpt
+    articles render inline with an em-dash; multi-excerpt ones bullet the boxes.
+    """
+    groups: dict[int, tuple[str, str | None, str | None, list[str]]] = {}
+    order: list[int] = []
+    for aid, d, tkr, title, insight, topic in rows:
+        if aid not in groups:
+            groups[aid] = (d, tkr, title, [])
+            order.append(aid)
+        body = " ".join((insight or topic or "").split())
+        if body:
+            groups[aid][3].append(body)
+
+    lines: list[str] = []
+    for aid in order:
+        d, tkr, title, excerpts = groups[aid]
+        header = f"{d} [{tkr or '?'}] {(title or '').strip()}".rstrip()
+        if len(excerpts) == 1:
+            lines.append(f"{header} — {excerpts[0]}")
+        elif excerpts:
+            sub = "\n".join(f"    - {e}" for e in excerpts)
+            lines.append(f"{header}\n{sub}")
+        else:
+            lines.append(header)
+    return lines
 
 
 def ticker_insights(
@@ -646,30 +683,8 @@ def ticker_insights(
         + " ORDER BY a.published_utc DESC, ai.box_index LIMIT %s",
         (article_id, published, ticker, ticker, *lb_params, limit),
     ).fetchall()
-
-    # Group boxes by source article, preserving the newest-first row order.
-    groups: dict[int, tuple[str, str | None, str | None, list[str]]] = {}
-    order: list[int] = []
-    for aid, d, tkr, title, insight, topic in rows:
-        if aid not in groups:
-            groups[aid] = (d, tkr, title, [])
-            order.append(aid)
-        body = " ".join((insight or topic or "").split())
-        if body:
-            groups[aid][3].append(body)
-
-    lines: list[str] = []
-    for aid in order:
-        d, tkr, title, excerpts = groups[aid]
-        header = f"{d} [{tkr or '?'}] {(title or '').strip()}".rstrip()
-        if len(excerpts) == 1:
-            lines.append(f"{header} — {excerpts[0]}")
-        elif excerpts:
-            sub = "\n".join(f"    - {e}" for e in excerpts)
-            lines.append(f"{header}\n{sub}")
-        else:
-            lines.append(header)
-    return lines
+    # Newest-first row order is preserved by the shared renderer.
+    return _render_box_groups(rows)
 
 
 # Box cap for the ticker-relevant precedent source: similarity-ranked boxes from
@@ -728,31 +743,125 @@ def ticker_relevant_insights(
         + " ORDER BY ai.embedding <=> %s LIMIT %s",
         (article_id, published, ticker, ticker, *lb_params, embedding, limit),
     ).fetchall()
+    # Distance-ranked row order is preserved, so an article ranks by its single
+    # most relevant box.
+    return _render_box_groups(rows)
 
-    # Group boxes by source article, preserving the similarity-ranked row order so
-    # an article ranks by its single most relevant box.
-    groups: dict[int, tuple[str, str | None, str | None, list[str]]] = {}
-    order: list[int] = []
-    for aid, d, tkr, title, insight, topic in rows:
-        if aid not in groups:
-            groups[aid] = (d, tkr, title, [])
-            order.append(aid)
-        body = " ".join((insight or topic or "").split())
-        if body:
-            groups[aid][3].append(body)
 
-    lines: list[str] = []
-    for aid in order:
-        d, tkr, title, excerpts = groups[aid]
-        header = f"{d} [{tkr or '?'}] {(title or '').strip()}".rstrip()
-        if len(excerpts) == 1:
-            lines.append(f"{header} — {excerpts[0]}")
-        elif excerpts:
-            sub = "\n".join(f"    - {e}" for e in excerpts)
-            lines.append(f"{header}\n{sub}")
-        else:
-            lines.append(header)
-    return lines
+def _ticker_box_rows(
+    conn: psycopg.Connection,
+    article_id: int,
+    *,
+    order_by: str,
+    limit: int,
+    lookback_days: int | None,
+    real_news_only: bool,
+    by_embedding: bool,
+) -> list[tuple]:
+    """Raw ticker-scoped insight-box rows for the blend mode.
+
+    Returns rows shaped for `_render_box_groups`; `order_by` is a trusted literal
+    ("a.published_utc DESC, ai.box_index" for recency, "ai.embedding <=> %s" for
+    relevance). When `by_embedding`, the target embedding param is appended and an
+    `AND ai.embedding IS NOT NULL` guard is added. Empty when the target lacks a
+    ticker / published_utc / (for relevance) embedding.
+    """
+    target = conn.execute(
+        "SELECT embedding, primary_ticker, published_utc FROM public.articles "
+        "WHERE id = %s",
+        (article_id,),
+    ).fetchone()
+    if target is None or target[1] is None or target[2] is None:
+        return []
+    embedding, ticker, published = target
+    if by_embedding and embedding is None:
+        return []
+    lb_tmpl, lb_params = _lookback_clause(published, lookback_days)
+    lb_sql = lb_tmpl.format(col="a.published_utc")
+    cat_sql = f" AND {_actionable_sql('a')}" if real_news_only else ""
+    emb_guard = " AND ai.embedding IS NOT NULL" if by_embedding else ""
+    tail_params: list = [embedding, limit] if by_embedding else [limit]
+    return conn.execute(
+        "SELECT ai.article_id, to_char(a.published_utc, 'YYYY-MM-DD'), "
+        "       a.primary_ticker, a.title, ai.insight, ai.topic "
+        "FROM public.article_insights ai "
+        "JOIN public.articles a ON a.id = ai.article_id "
+        "WHERE a.id != %s AND a.published_utc < %s "
+        "  AND (a.primary_ticker = %s OR %s = ANY(a.more_tickers))"
+        + emb_guard
+        + cat_sql
+        + lb_sql
+        + f" ORDER BY {order_by} LIMIT %s",
+        (article_id, published, ticker, ticker, *lb_params, *tail_params),
+    ).fetchall()
+
+
+def ticker_blend_insights(
+    conn: psycopg.Connection,
+    article_id: int,
+    *,
+    limit: int,
+    lookback_days: int | None = None,
+    real_news_only: bool = False,
+) -> list[str]:
+    """Ticker's own boxes blended from BOTH signals: the most-relevant boxes
+    (cosine to this article) interleaved with the most-recent boxes, deduped by
+    source article.
+
+    ticker-history (pure recency) beat ticker-relevant (pure relevance) on the
+    400-article eval; this mode tests whether SEEDING the recency list with the
+    few most-relevant prior boxes — the specific past events this story echoes —
+    adds signal recency alone misses, without losing the "current narrative"
+    framing recency provides. Relevance-first ordering, recency fills the rest.
+    """
+    half = max(1, limit // 3)  # a relevance seed, then recency fills the remainder
+    rel = _ticker_box_rows(
+        conn, article_id, order_by="ai.embedding <=> %s", limit=half,
+        lookback_days=lookback_days, real_news_only=real_news_only, by_embedding=True,
+    )
+    rec = _ticker_box_rows(
+        conn, article_id, order_by="a.published_utc DESC, ai.box_index", limit=limit,
+        lookback_days=lookback_days, real_news_only=real_news_only, by_embedding=False,
+    )
+    seen: set[int] = set()
+    merged: list[tuple] = []
+    for row in [*rel, *rec]:
+        merged.append(row)
+        seen.add(row[0])
+        # cap distinct source articles by box budget via the renderer's grouping;
+        # the LIMITs above already bound the row count.
+    return _render_box_groups(merged)
+
+
+def ticker_history_fallback(
+    conn: psycopg.Connection,
+    article_id: int,
+    *,
+    limit: int,
+    fallback_min: int,
+    lookback_days: int | None = None,
+    real_news_only: bool = False,
+) -> tuple[list[str], bool]:
+    """ticker-history, but when the ticker's own prior boxes number fewer than
+    `fallback_min` source-article lines, SUPPLEMENT with cross-corpus
+    article-similarity precedents so thin-history names aren't left with
+    "(none found)".
+
+    Returns (lines, supplemented): `supplemented` is True when cross-corpus
+    fallback lines were appended, so the caller can pick an accurate header.
+    """
+    lines = ticker_insights(
+        conn, article_id, limit=limit,
+        lookback_days=lookback_days, real_news_only=real_news_only,
+    )
+    if len(lines) >= fallback_min:
+        return lines, False
+    extra = article_similarity(
+        conn, article_id, lookback_days=lookback_days, real_news_only=real_news_only,
+    )
+    if not extra:
+        return lines, False
+    return [*lines, *extra], True
 
 
 def gather_precedents(
@@ -770,20 +879,35 @@ def gather_precedents(
     s = get_settings()
     lookback = s.precedent_lookback_days
     real_news_only = s.precedent_real_news_only
+    cap = s.precedent_ticker_history_limit
     mode = source or s.precedent_source
     if mode == "ticker-history":
         # Pure-recency retrieval has no similarity floor, so cap tighter than the
         # ANN modes' precedent_insights_limit to keep the prompt focused on the
         # ticker's most recent insight boxes.
         return ticker_insights(
-            conn, article_id, limit=TICKER_HISTORY_BOX_LIMIT,
+            conn, article_id, limit=cap,
             lookback_days=lookback, real_news_only=real_news_only,
         )
     if mode == "ticker-relevant":
         # Same ticker as ticker-history, but ranked by relevance to this article
         # rather than recency, so the boxes that bear on this event surface first.
         return ticker_relevant_insights(
-            conn, article_id, limit=TICKER_RELEVANT_BOX_LIMIT,
+            conn, article_id, limit=cap,
+            lookback_days=lookback, real_news_only=real_news_only,
+        )
+    if mode == "ticker-history-fallback":
+        # Recency on the ticker's own boxes, but supplement thin-history names with
+        # cross-corpus article similarity instead of leaving them "(none found)".
+        lines, _supplemented = ticker_history_fallback(
+            conn, article_id, limit=cap, fallback_min=s.precedent_ticker_fallback_min,
+            lookback_days=lookback, real_news_only=real_news_only,
+        )
+        return lines
+    if mode == "ticker-blend":
+        # Seed the ticker's recency list with its few most-relevant prior boxes.
+        return ticker_blend_insights(
+            conn, article_id, limit=cap,
             lookback_days=lookback, real_news_only=real_news_only,
         )
     src = INSIGHT_SOURCES.get(mode)
@@ -919,6 +1043,8 @@ def sentiment_stage(
         "precedent_kind": (
             "ticker-recency" if mode == "ticker-history"
             else "ticker-relevance" if mode == "ticker-relevant"
+            else "ticker-recency-fallback" if mode == "ticker-history-fallback"
+            else "ticker-blend" if mode == "ticker-blend"
             else "similarity"
         ),
     }

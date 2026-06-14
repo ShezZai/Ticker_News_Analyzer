@@ -101,6 +101,15 @@ def test_precedents_header_is_mode_aware():
     relevance = render_verdict({**ARTICLE, "precedent_kind": "ticker-relevance"})
     assert "RELATED PAST NEWS ON NVDA" in relevance
     assert "most relevant to this story first" in relevance
+    # ticker-history-fallback -> recency header that also discloses the cross-name supplement
+    fallback = render_verdict({**ARTICLE, "precedent_kind": "ticker-recency-fallback"})
+    assert "RECENT NEWS ON NVDA" in fallback
+    assert "other names are appended" in fallback
+    assert "cosine-nearest" not in fallback
+    # ticker-blend -> relevance-then-recency header for the ticker
+    blend = render_verdict({**ARTICLE, "precedent_kind": "ticker-blend"})
+    assert "PAST NEWS ON NVDA" in blend
+    assert "most relevant to this story first, then the most recent" in blend
 
 
 def test_label_legend_only_when_precedents_are_labelled():

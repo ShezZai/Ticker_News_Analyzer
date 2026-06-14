@@ -59,6 +59,19 @@ PRECEDENT_HEADERS = {
         "RELATED PAST NEWS ON {ticker} ({ticker}'s own prior articles, most "
         "relevant to this story first)."
     ),
+    # ticker-history-fallback: ticker's own prior articles, newest first, with the
+    # most similar cross-name articles appended when its own history is thin.
+    "ticker-recency-fallback": (
+        "RECENT NEWS ON {ticker} ({ticker}'s own prior articles, newest first; "
+        "the most similar articles from other names are appended when {ticker}'s "
+        "own history is thin)."
+    ),
+    # ticker-blend: ticker's own prior articles, the most relevant to this story
+    # first, then the most recent.
+    "ticker-blend": (
+        "PAST NEWS ON {ticker} ({ticker}'s own prior articles — the most relevant "
+        "to this story first, then the most recent)."
+    ),
 }
 DEFAULT_PRECEDENT_KIND = "similarity"
 

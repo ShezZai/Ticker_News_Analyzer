@@ -598,12 +598,12 @@ def eval_pipeline(
     if precedent_source is not None and precedent_source not in (
         "article", "insights", "distilled-first", "distilled-second",
         "insights-hybrid", "distilled-hybrid", "distilled-hybrid-one-pass",
-        "ticker-history", "ticker-relevant",
+        "ticker-history", "ticker-relevant", "ticker-history-fallback", "ticker-blend",
     ):
         raise typer.BadParameter(
             "--precedent-source must be one of: article, insights, distilled-first, "
             "distilled-second, insights-hybrid, distilled-hybrid, distilled-hybrid-one-pass, "
-            "ticker-history, ticker-relevant"
+            "ticker-history, ticker-relevant, ticker-history-fallback, ticker-blend"
         )
     if not id_list and not dataset:
         raise typer.BadParameter("provide --ids/--ids-file, or --dataset with existing items")
