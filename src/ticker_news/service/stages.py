@@ -813,6 +813,11 @@ def ticker_blend_insights(
     few most-relevant prior boxes — the specific past events this story echoes —
     adds signal recency alone misses, without losing the "current narrative"
     framing recency provides. Relevance-first ordering, recency fills the rest.
+
+    NEGATIVE RESULT (400-article eval, 2026-06-14): verdict_score 0.384 vs
+    ticker-history 0.40 ± 0.01 — a small but real drop. Any relevance injection
+    dilutes pure recency. Kept as a documented negative result; ticker-history
+    remains champion.
     """
     half = max(1, limit // 3)  # a relevance seed, then recency fills the remainder
     rel = _ticker_box_rows(
@@ -849,6 +854,12 @@ def ticker_history_fallback(
 
     Returns (lines, supplemented): `supplemented` is True when cross-corpus
     fallback lines were appended, so the caller can pick an accurate header.
+
+    NEGATIVE RESULT (400-article eval, 2026-06-14): verdict_score 0.371 vs
+    ticker-history 0.40 ± 0.01 — a real drop. Padding a thin ticker history with
+    off-name cosine-similar articles is WORSE than leaving it thin: ticker-scoping
+    purity matters more than precedent quantity. Kept as a documented negative
+    result. See docs/AUTOPILOT_EXPERIMENTS_2026-06-14.md.
     """
     lines = ticker_insights(
         conn, article_id, limit=limit,
