@@ -74,7 +74,10 @@ def registry() -> dict[str, str]:
         FINEGRAINED_PROMPT_TEMPLATE,
     )
     from ticker_news.enrichment.insights import PROMPT_TEMPLATE as insights_prompt
-    from ticker_news.sentiment.analysts import SENTIMENT_VERDICT_PROMPT
+    from ticker_news.sentiment.analysts import (
+        ARTICLE_SUMMARY_PROMPT,
+        SENTIMENT_VERDICT_PROMPT,
+    )
 
     return {
         "classify-article": classify_prompt,
@@ -82,6 +85,7 @@ def registry() -> dict[str, str]:
         "classify-finegrained": FINEGRAINED_PROMPT_TEMPLATE,
         "extract-insights": insights_prompt,
         "sentiment-verdict": SENTIMENT_VERDICT_PROMPT,
+        "summarize-article": ARTICLE_SUMMARY_PROMPT,
     }
 
 

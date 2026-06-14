@@ -425,7 +425,7 @@ class TestRunPipelineTaskCategoryBackfill:
         monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
         monkeypatch.setattr(
             stages, "sentiment_stage",
-            lambda c, u, precedent_source=None, verdict_model=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
+            lambda c, u, precedent_source=None, verdict_model=None, summary_model=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None, skip_stages=frozenset({"classify"}))
         out = asyncio.run(task(item={"input": {"article_id": 20512, "url": "https://x/20512"}}))
@@ -449,7 +449,7 @@ class TestRunPipelineTaskCategoryBackfill:
         seen = {}
         monkeypatch.setattr(
             stages, "sentiment_stage",
-            lambda c, u, precedent_source=None, verdict_model=None: seen.update(src=precedent_source, model=verdict_model)
+            lambda c, u, precedent_source=None, verdict_model=None, summary_model=None: seen.update(src=precedent_source, model=verdict_model)
             or {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None, precedent_source="insights")
@@ -473,7 +473,7 @@ class TestRunPipelineTaskCategoryBackfill:
         seen = {}
         monkeypatch.setattr(
             stages, "sentiment_stage",
-            lambda c, u, precedent_source=None, verdict_model=None:
+            lambda c, u, precedent_source=None, verdict_model=None, summary_model=None:
                 seen.update(model=verdict_model)
                 or {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
@@ -507,7 +507,7 @@ class TestRunPipelineTaskCategoryBackfill:
         monkeypatch.setattr(stages, "insights_stage", lambda c, u, t: None)
         monkeypatch.setattr(
             stages, "sentiment_stage",
-            lambda c, u, precedent_source=None, verdict_model=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
+            lambda c, u, precedent_source=None, verdict_model=None, summary_model=None: {"ticker": "NVDA", "action": "buy", "confidence": 0.8},
         )
         task = pipeline_eval.make_task(dsn=None)
         asyncio.run(task(item={"input": {"article_id": 20512, "url": "https://x/20512"}}))
@@ -555,6 +555,7 @@ class TestRunEvalMetadata:
         openai_api_key = "oak"
         precedent_source = "article"  # the settings default
         sentiment_verdict_model = "gemini-2.5-flash-lite"
+        sentiment_summary_model = None  # summarization off by default
 
     class _FakeLFClient:
         def __init__(self):

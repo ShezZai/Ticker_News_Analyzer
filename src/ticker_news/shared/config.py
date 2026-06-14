@@ -92,6 +92,16 @@ class AppSettings(BaseSettings):
         default="gemini-2.5-flash-lite", validation_alias="SENTIMENT_VERDICT_MODEL"
     )
 
+    # Optional cheap-model pass that distills the (often long, multi-language,
+    # boilerplate-heavy) article body into a decision-relevant brief BEFORE the
+    # verdict node, so the verdict prompt's ARTICLE BODY is the summary, not the
+    # raw text. None => disabled (raw body fed to the verdict, the historical
+    # default); set a Gemini id (e.g. "gemini-2.5-flash-lite") to enable. Per-run
+    # override in the eval harness: `eval pipeline --summary-model`.
+    sentiment_summary_model: str | None = Field(
+        default=None, validation_alias="SENTIMENT_SUMMARY_MODEL"
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> AppSettings:

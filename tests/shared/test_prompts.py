@@ -52,7 +52,7 @@ def test_registry_covers_all_llm_prompts(monkeypatch):
     assert set(reg) == {
         "classify-article", "extract-insights",
         "classify-binary", "classify-finegrained",
-        "sentiment-verdict",
+        "sentiment-verdict", "summarize-article",
     }
     assert all(isinstance(v, str) and v for v in reg.values())
 

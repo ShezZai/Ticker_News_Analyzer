@@ -672,6 +672,89 @@ def ticker_insights(
     return lines
 
 
+# Box cap for the ticker-relevant precedent source: similarity-ranked boxes from
+# the ticker's own prior articles. NOTE (400-article eval): relevance-ordering
+# UNDERperformed plain recency on this dataset — ticker-history (recency, cap 15)
+# scored verdict 0.392 vs ticker-relevant 0.367 (cap 20) / 0.351 (cap 15). The
+# mode is kept as a documented negative result; recency (ticker-history) remains
+# the champion. 20 was the better of the two caps tried here.
+TICKER_RELEVANT_BOX_LIMIT = 20
+
+
+def ticker_relevant_insights(
+    conn: psycopg.Connection,
+    article_id: int,
+    *,
+    limit: int = TICKER_RELEVANT_BOX_LIMIT,
+    lookback_days: int | None = None,
+    real_news_only: bool = False,
+) -> list[str]:
+    """Insight boxes from the target ticker's OWN prior articles, ranked by cosine
+    similarity to *this* article — the intersection of ticker-history (same
+    company) and the insight ANN modes (on-topic).
+
+    Walks ticker -> articles -> article_insights for the SAME primary/secondary
+    ticker under the usual precedent discipline (earlier-published, lookback,
+    optional real-news, self excluded), but orders the boxes by distance to the
+    target article's stored embedding rather than by date, so the boxes that
+    actually relate to this event surface first. One query: the ticker filter
+    makes the candidate set small enough that the ORDER BY <=> is an exact scan,
+    no per-box fan-out and no HNSW tuning needed. Empty when the target has no
+    embedding, no ticker, or no published_utc.
+    """
+    target = conn.execute(
+        "SELECT embedding, primary_ticker, published_utc FROM public.articles "
+        "WHERE id = %s AND embedding IS NOT NULL",
+        (article_id,),
+    ).fetchone()
+    if target is None or target[1] is None or target[2] is None:
+        logger.debug(
+            "no embedding/ticker/published_utc for article %s; skipping ticker-relevant", article_id
+        )
+        return []
+    embedding, ticker, published = target
+    lb_tmpl, lb_params = _lookback_clause(published, lookback_days)
+    lb_sql = lb_tmpl.format(col="a.published_utc")
+    cat_sql = f" AND {_actionable_sql('a')}" if real_news_only else ""
+    rows = conn.execute(
+        "SELECT ai.article_id, to_char(a.published_utc, 'YYYY-MM-DD'), "
+        "       a.primary_ticker, a.title, ai.insight, ai.topic "
+        "FROM public.article_insights ai "
+        "JOIN public.articles a ON a.id = ai.article_id "
+        "WHERE a.id != %s AND a.published_utc < %s AND ai.embedding IS NOT NULL "
+        "  AND (a.primary_ticker = %s OR %s = ANY(a.more_tickers))"
+        + cat_sql
+        + lb_sql
+        + " ORDER BY ai.embedding <=> %s LIMIT %s",
+        (article_id, published, ticker, ticker, *lb_params, embedding, limit),
+    ).fetchall()
+
+    # Group boxes by source article, preserving the similarity-ranked row order so
+    # an article ranks by its single most relevant box.
+    groups: dict[int, tuple[str, str | None, str | None, list[str]]] = {}
+    order: list[int] = []
+    for aid, d, tkr, title, insight, topic in rows:
+        if aid not in groups:
+            groups[aid] = (d, tkr, title, [])
+            order.append(aid)
+        body = " ".join((insight or topic or "").split())
+        if body:
+            groups[aid][3].append(body)
+
+    lines: list[str] = []
+    for aid in order:
+        d, tkr, title, excerpts = groups[aid]
+        header = f"{d} [{tkr or '?'}] {(title or '').strip()}".rstrip()
+        if len(excerpts) == 1:
+            lines.append(f"{header} — {excerpts[0]}")
+        elif excerpts:
+            sub = "\n".join(f"    - {e}" for e in excerpts)
+            lines.append(f"{header}\n{sub}")
+        else:
+            lines.append(header)
+    return lines
+
+
 def gather_precedents(
     conn: psycopg.Connection, article_id: int, source: str | None = None
 ) -> list[str]:
@@ -694,6 +777,13 @@ def gather_precedents(
         # ticker's most recent insight boxes.
         return ticker_insights(
             conn, article_id, limit=TICKER_HISTORY_BOX_LIMIT,
+            lookback_days=lookback, real_news_only=real_news_only,
+        )
+    if mode == "ticker-relevant":
+        # Same ticker as ticker-history, but ranked by relevance to this article
+        # rather than recency, so the boxes that bear on this event surface first.
+        return ticker_relevant_insights(
+            conn, article_id, limit=TICKER_RELEVANT_BOX_LIMIT,
             lookback_days=lookback, real_news_only=real_news_only,
         )
     src = INSIGHT_SOURCES.get(mode)
@@ -757,7 +847,7 @@ def own_article_insights(
 
 def sentiment_stage(
     conn: psycopg.Connection, url: str, precedent_source: str | None = None,
-    verdict_model: str | None = None,
+    verdict_model: str | None = None, summary_model: str | None = None,
 ) -> dict | None:
     """Judge buy/sell/hold for the article's primary ticker.
 
@@ -767,15 +857,17 @@ def sentiment_stage(
     category == 'real news' for rows classified before the fine-grained switch.
     Returns a verdict summary dict, or None when the article was skipped.
     `precedent_source` overrides the configured precedent-retrieval flow;
-    `verdict_model` overrides the configured Gemini verdict model.
+    `verdict_model` overrides the configured Gemini verdict model;
+    `summary_model` enables/overrides the cheap pre-verdict summarization pass
+    (None => the configured `sentiment_summary_model`, default off).
     """
     row = conn.execute(
-        "SELECT id, title, content, category, is_act, primary_ticker, published_utc, "
-        "provider_sentiments FROM public.articles WHERE url = %s", (url,),
+        "SELECT id, title, content, category, is_act, primary_ticker, published_utc "
+        "FROM public.articles WHERE url = %s", (url,),
     ).fetchone()
     if row is None:
         raise StageError(f"article row missing for {url}")
-    aid, title, content, category, is_act, ticker, published, provider = row
+    aid, title, content, category, is_act, ticker, published = row
     if not _is_actionable(is_act, category) or not ticker or not (content or "").strip():
         conn.rollback()
         return None
@@ -812,26 +904,29 @@ def sentiment_stage(
                     "limit": settings.precedent_insights_limit,
                 },
             )
-    provider_sentiment = ""
-    if provider and isinstance(provider, dict):
-        entry = provider.get(ticker) or {}
-        provider_sentiment = entry.get("sentiment") or ""
     article = {
         "ticker": ticker,
         "title": title,
         "content": content,
         "published_utc": published,
-        "provider_sentiment": provider_sentiment,
         "precedents": precedents,
         "own_insights": own_insights,
         # drives the [label] legend in the historical-precedent prompt: only the
         # labelled (distilled) corpora tag their excerpts.
         "precedent_labelled": bool(src and src.label_col),
+        # drives the mode-aware precedents header: the ticker-scoped modes are NOT
+        # cosine-similar cross-corpus matches, so describe them accurately.
+        "precedent_kind": (
+            "ticker-recency" if mode == "ticker-history"
+            else "ticker-relevance" if mode == "ticker-relevant"
+            else "similarity"
+        ),
     }
     conn.rollback()  # release the read transaction; LLM calls can take minutes
     model = verdict_model or settings.sentiment_verdict_model
     verdict, analyses = judge_article(
-        article, config=obs.chain_config() or None, model=verdict_model
+        article, config=obs.chain_config() or None, model=verdict_model,
+        summary_model=summary_model,
     )
     sentiment_store.save_verdict(conn, aid, ticker, verdict, analyses, model)
     return {"ticker": ticker, "action": verdict.action,

@@ -168,9 +168,9 @@ class _StubConn:
 
 async def test_sentiment_skips_non_actionable_legacy(monkeypatch):
     # is_act NULL -> legacy fallback to category != 'real news' -> skip
-    conn = _StubConn([(1, "T", "body", "marketing fluff", None, "NVDA", None, None)])
+    conn = _StubConn([(1, "T", "body", "marketing fluff", None, "NVDA", None)])
     called = {}
-    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None: called.setdefault("x", True))
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None, summary_model=None: called.setdefault("x", True))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert "x" not in called
     assert conn.rolled_back == 1
@@ -178,30 +178,30 @@ async def test_sentiment_skips_non_actionable_legacy(monkeypatch):
 
 async def test_sentiment_skips_non_act_finegrained(monkeypatch):
     # is_act=False overrides even an actionable-looking finegrained category
-    conn = _StubConn([(1, "T", "body", "recap/review", False, "NVDA", None, None)])
-    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None: (_ for _ in ()).throw(AssertionError))
+    conn = _StubConn([(1, "T", "body", "recap/review", False, "NVDA", None)])
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None, summary_model=None: (_ for _ in ()).throw(AssertionError))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
 
 async def test_sentiment_skips_untagged(monkeypatch):
-    conn = _StubConn([(1, "T", "body", "real news", None, None, None, None)])
-    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None: (_ for _ in ()).throw(AssertionError))
+    conn = _StubConn([(1, "T", "body", "real news", None, None, None)])
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None, summary_model=None: (_ for _ in ()).throw(AssertionError))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
 
 async def test_sentiment_skips_empty_content(monkeypatch):
-    conn = _StubConn([(1, "T", "   ", "real news", None, "NVDA", None, None)])
-    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None: (_ for _ in ()).throw(AssertionError))
+    conn = _StubConn([(1, "T", "   ", "real news", None, "NVDA", None)])
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None, summary_model=None: (_ for _ in ()).throw(AssertionError))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
 
 async def test_sentiment_skips_existing_verdict(monkeypatch):
-    conn = _StubConn([(1, "T", "body", "real news", None, "NVDA", None, None)])
+    conn = _StubConn([(1, "T", "body", "real news", None, "NVDA", None)])
     monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: True)
-    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None: (_ for _ in ()).throw(AssertionError))
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None, summary_model=None: (_ for _ in ()).throw(AssertionError))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
@@ -209,10 +209,10 @@ async def test_sentiment_skips_existing_verdict(monkeypatch):
 async def test_sentiment_skips_no_insights(monkeypatch):
     # actionable + tagged + has content, but the insights stage extracted no
     # boxes -> skip the verdict, ending the pipeline for the item.
-    conn = _StubConn([(1, "T", "body", "real news", None, "NVDA", None, None)])
+    conn = _StubConn([(1, "T", "body", "real news", None, "NVDA", None)])
     monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: False)
     monkeypatch.setattr(stages, "_has_insights", lambda c, a: False)
-    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None: (_ for _ in ()).throw(AssertionError))
+    monkeypatch.setattr(stages, "judge_article", lambda a, config=None, model=None, summary_model=None: (_ for _ in ()).throw(AssertionError))
     assert stages.sentiment_stage(conn, "https://example.com/a") is None
     assert conn.rolled_back == 1
 
@@ -222,7 +222,7 @@ async def test_sentiment_judges_act_finegrained(monkeypatch):
     from ticker_news.sentiment.schemas import Verdict
 
     conn = _StubConn([
-        (1, "T", "body", "news-event", True, "NVDA", None, {"NVDA": {"sentiment": "positive"}}),
+        (1, "T", "body", "news-event", True, "NVDA", None),
     ])
     seen = {}
     monkeypatch.setattr(stages.sentiment_store, "has_verdict", lambda c, a, t: False)
@@ -230,7 +230,7 @@ async def test_sentiment_judges_act_finegrained(monkeypatch):
     monkeypatch.setattr(stages, "gather_precedents", lambda c, a, source=None: ["p1"])
     monkeypatch.setattr(
         stages, "judge_article",
-        lambda article, config=None, model=None: (seen.update(article) or
+        lambda article, config=None, model=None, summary_model=None: (seen.update(article) or
                                       (Verdict(action="hold", confidence=0.5, reasoning=""), [])),
     )
     saved = {}
@@ -239,7 +239,6 @@ async def test_sentiment_judges_act_finegrained(monkeypatch):
         lambda c, aid, t, v, an, m: saved.update(aid=aid, ticker=t, action=v.action),
     )
     result = stages.sentiment_stage(conn, "https://example.com/a")
-    assert seen["provider_sentiment"] == "positive"
     assert seen["precedents"] == ["p1"]
     assert saved == {"aid": 1, "ticker": "NVDA", "action": "hold"}
     assert result == {"ticker": "NVDA", "action": "hold", "confidence": 0.5}
@@ -461,7 +460,7 @@ def _stub_sentiment_conn():
     is_act NULL exercises the legacy COALESCE fallback (category == 'real news').
     """
     return _StubConn([
-        (1, "T", "body", "real news", None, "NVDA", None, None),
+        (1, "T", "body", "real news", None, "NVDA", None),
     ])
 
 
@@ -491,7 +490,7 @@ def _patch_sentiment_deps(monkeypatch, precedents, own_insights, mode):
     monkeypatch.setattr(stages, "get_settings", lambda: _S())
     monkeypatch.setattr(
         stages, "judge_article",
-        lambda article, config=None, model=None: (
+        lambda article, config=None, model=None, summary_model=None: (
             Verdict(action="buy", confidence=0.8, reasoning=""), []
         ),
     )

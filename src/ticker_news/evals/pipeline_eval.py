@@ -446,6 +446,7 @@ def make_task(
     precedent_source: str | None = None,
     verdict_model: str | None = None,
     classify_model: str | None = None,
+    summary_model: str | None = None,
 ):
     """Experiment task: reset the article, run the real stage chain, return the verdict.
 
@@ -502,7 +503,7 @@ def make_task(
                 with obs.stage_span("sentiment"):
                     verdict = stages.sentiment_stage(
                         conn, url, precedent_source=precedent_source,
-                        verdict_model=verdict_model,
+                        verdict_model=verdict_model, summary_model=summary_model,
                     )
                 if verdict is None:
                     row = conn.execute(
@@ -549,6 +550,7 @@ def run_eval(
     precedent_source: str | None = None,
     verdict_model: str | None = None,
     classify_model: str | None = None,
+    summary_model: str | None = None,
     concurrency: int = 4,
 ):
     """Run the E2E pipeline experiment; returns the langfuse ExperimentResult.
@@ -593,13 +595,17 @@ def run_eval(
         metadata["skipped_stages"] = sorted(skip_stages)
     metadata["precedent_source"] = precedent_source or s.precedent_source
     metadata["verdict_model"] = verdict_model or s.sentiment_verdict_model
+    metadata["summary_model"] = summary_model or s.sentiment_summary_model or "off"
     if classify_model:
         metadata["classify_model"] = classify_model
     common = dict(
         name=EXPERIMENT_NAME,
         run_name=run_name,
         description=_DESCRIPTION,
-        task=make_task(dsn, skip_stages, precedent_source, verdict_model, classify_model),
+        task=make_task(
+            dsn, skip_stages, precedent_source, verdict_model, classify_model,
+            summary_model,
+        ),
         evaluators=[
             act_decision_evaluator,
             verdict_evaluator,

@@ -16,8 +16,6 @@ ARTICLE BODY:
 \"\"\"
 {content}
 \"\"\"
-
-NEWS-PROVIDER SENTIMENT FOR {ticker} (third-party, may be wrong): {provider_sentiment}
 """
 
 # Inserted (via {label_legend}) only when the precedent excerpts carry "[label]"
@@ -41,26 +39,102 @@ Weight settled evidance-event overlaps more heavily than soft informative ones.
 
 """
 
+# The precedents block header is mode-aware: the retrieval strategy decides both
+# WHAT the prior articles are and HOW they are ordered, and the verdict model must
+# be told accurately — calling ticker-history's plain recency list "cosine-nearest
+# similar articles" misdirects the distinctiveness judgement. render_verdict picks
+# one of these by the article's `precedent_kind` ("{ticker}" is filled in).
+PRECEDENT_HEADERS = {
+    # cosine ANN over the whole corpus: article / insights / distilled / hybrid modes
+    "similarity": (
+        "SIMILAR PAST ARTICLES (cosine-nearest prior articles from the corpus, "
+        "published earlier; most similar first)."
+    ),
+    # ticker-history: the ticker's OWN prior articles, newest first (no similarity)
+    "ticker-recency": (
+        "RECENT NEWS ON {ticker} ({ticker}'s own prior articles, newest first)."
+    ),
+    # ticker-relevant: the ticker's OWN prior articles, ranked by relevance to this story
+    "ticker-relevance": (
+        "RELATED PAST NEWS ON {ticker} ({ticker}'s own prior articles, most "
+        "relevant to this story first)."
+    ),
+}
+DEFAULT_PRECEDENT_KIND = "similarity"
+
 # Single prompt: historical-precedent framing + the buy/sell/hold decision.
 SENTIMENT_VERDICT_PROMPT = ARTICLE_BLOCK + """
-{own_insights}SIMILAR PAST ARTICLES (same corpus, published earlier; cosine-nearest first).
+{own_insights}{precedents_header}
 Each entry is one prior article; any indented "- " lines beneath it are the
-specific insight excerpts from that article that matched this news:
+specific insight excerpts from that article that overlap this news:
 {precedents}
 
 {label_legend}You are a quantitative analyst of historical precedent. First judge how
-distinctive this news actually is versus the precedents above: is it a recurring
+distinctive this news actually is versus the prior articles above: is it a recurring
 news pattern for this name/sector (likely already understood and priced), or
 genuinely new information? When this article's own insights are listed above,
-treat the indented precedent excerpts as the concrete points of overlap with
-them. If the precedent list is empty or weak, say so.
+treat the indented excerpts as the concrete points of overlap with them. If the
+list is empty or weak, say so.
 
 Then decide buy / sell / hold for {ticker} at the moment of publication, and give
-a confidence in [0,1] proportional to how strong and distinctive the precedent
-evidence is. Cite the specific precedent overlaps (or their absence) that drove
-your decision in the reasoning. When the precedent signal is weak or ambiguous,
-prefer hold unless the article itself is decisively material.
+a confidence in [0,1] proportional to how strong and distinctive the evidence is.
+Cite the specific overlaps (or their absence) that drove your decision in the
+reasoning. When the signal is weak or ambiguous, prefer hold unless the article
+itself is decisively material.
 """
+
+
+# Pre-verdict summarizer: a cheap model distills the raw (often long,
+# multi-language, boilerplate-heavy) article body into a decision-relevant brief
+# that REPLACES the body in the verdict prompt. Kept factual/neutral so it never
+# leaks a recommendation into the downstream verdict.
+ARTICLE_SUMMARY_PROMPT = """\
+You are a financial news analyst preparing a noise-free brief for a buy / sell /
+hold decision on {ticker} at the moment this article was published.
+
+Distill the article below to ONLY what bears on {ticker}'s near-term stock
+reaction. DISCARD boilerplate: legal / safe-harbor / forward-looking-statement
+disclaimers, "About <company>" descriptions, media and investor contact details,
+generic market-size / CAGR filler, and repeated marketing language.
+
+Preserve and make explicit:
+- The core event or catalyst — what concretely happened or was announced.
+- Hard figures: revenue, guidance, deal size and terms, units, % growth, dates.
+- {ticker}'s ROLE: is it the central subject, or only incidental (its chip is a
+  component, it is one name in a list)? State this plainly.
+- Whether the event is SETTLED (happened / reported) or SOFT (announced,
+  proposed, planned, self-reported, no terms).
+- Named competitors, customers or partners and the relationship.
+
+Rules:
+- Write in ENGLISH even when the article is in another language.
+- Be factual and neutral. Do NOT give a recommendation or predict the price.
+- 120 words maximum. Terse prose or bullet lines. No preamble.
+
+TICKER: {ticker}
+HEADLINE: {title}
+PUBLISHED (UTC): {published_utc}
+
+ARTICLE:
+\"\"\"
+{content}
+\"\"\"
+"""
+
+
+def render_summary(article: dict) -> str:
+    """Render the pre-verdict article-summary prompt (Langfuse copy if available,
+    in-repo template otherwise)."""
+    from ticker_news.shared.prompts import get_prompt, safe_format
+
+    kwargs = {
+        "ticker": article.get("ticker") or "?",
+        "title": (article.get("title") or "").strip(),
+        "published_utc": str(article.get("published_utc") or "unknown"),
+        "content": article.get("content") or "",
+    }
+    template = get_prompt("summarize-article", ARTICLE_SUMMARY_PROMPT)
+    return safe_format(template, ARTICLE_SUMMARY_PROMPT, **kwargs)
 
 
 def render_article(article: dict) -> dict:
@@ -70,7 +144,6 @@ def render_article(article: dict) -> dict:
         "published_utc": str(article.get("published_utc") or "unknown"),
         "title": (article.get("title") or "").strip(),
         "content": article.get("content") or "",
-        "provider_sentiment": article.get("provider_sentiment") or "none given",
     }
 
 
@@ -100,5 +173,11 @@ def render_verdict(article: dict) -> str:
     # Only show the [label] legend when the excerpts are actually tagged
     # (distilled modes set precedent_labelled); article/insights have no tags.
     kwargs["label_legend"] = LABEL_LEGEND if article.get("precedent_labelled") else ""
+    # Mode-aware precedents header: describe how the prior articles were actually
+    # selected/ordered (cosine vs ticker recency vs ticker relevance) so the model
+    # judges distinctiveness against an accurate description of the list.
+    kind = article.get("precedent_kind") or DEFAULT_PRECEDENT_KIND
+    header = PRECEDENT_HEADERS.get(kind, PRECEDENT_HEADERS[DEFAULT_PRECEDENT_KIND])
+    kwargs["precedents_header"] = header.format(ticker=kwargs["ticker"])
     template = get_prompt("sentiment-verdict", SENTIMENT_VERDICT_PROMPT)
     return safe_format(template, SENTIMENT_VERDICT_PROMPT, **kwargs)
